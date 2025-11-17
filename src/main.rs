@@ -1,5 +1,6 @@
 use std::collections::HashMap;
-use std::io::{self, Write};
+use std::fs::File;
+use std::io::{self, Read, Write};
 
 /// Simple representation of CLI commands.
 #[derive(Debug)]
@@ -15,7 +16,8 @@ enum Command {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    print_banner();
+    let node_id = generate_random_node_id()?;
+    print_banner(&node_id);
 
     let mut store: HashMap<String, String> = HashMap::new();
     let stdin = io::stdin();
@@ -67,9 +69,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Generate a random 20-byte NodeId by reading from /dev/urandom.
+/// Returns [u8; 20].
+fn generate_random_node_id() -> Result<[u8; 20], Box<dyn std::error::Error>> {
+    let mut file = File::open("/dev/urandom")?;
+    let mut buf = [0u8; 20];
+    file.read_exact(&mut buf)?;
+    Ok(buf)
+}
+
+/// Convert a 20-byte ID into uppercase hexadecimal and return as String.
+fn node_id_to_hex(id: &[u8; 20]) -> String {
+    let mut out = String::with_capacity(40);
+    for byte in id {
+        out.push_str(&format!("{:02X}", byte));
+    }
+    out
+}
+
 /// Print the Tesseras banner.
-fn print_banner() {
-    const BANNER: &str = r#"
+fn print_banner(node_id: &[u8; 20]) {
+    let banner = format!(r#"
      ████████╗███████╗███████╗███████╗███████╗██████╗  █████╗ ███████╗
      ╚══██╔══╝██╔════╝██╔════╝██╔════╝██╔════╝██╔══██╗██╔══██╗██╔════╝
         ██║   █████╗  ███████╗███████╗█████╗  ██████╔╝███████║███████╗
@@ -77,11 +97,17 @@ fn print_banner() {
         ██║   ███████╗███████║███████║███████╗██║  ██║██║  ██║███████║
         ╚═╝   ╚══════╝╚══════╝╚══════╝╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝
 
+                    ID: {}
+             PUBLIC IP: 123.456.789.101:1222
+               STORAGE: 5GB
+"#, node_id_to_hex(node_id));
+
+    const HELP: &str = r#"
 Tesseras Networking CLI
 Type /help for information or /quit to exit.
 "#;
 
-    println!("{BANNER}");
+    println!("{banner}{HELP}");
 }
 
 /// Parse a raw input line into a Command.
@@ -165,7 +191,11 @@ fn handle_stats(store: &HashMap<String, String>) {
 }
 
 /// Handle `/put` command.
-fn handle_put(store: &mut HashMap<String, String>, key: String, value: String) {
+fn handle_put(
+    store: &mut HashMap<String, String>,
+    key: String,
+    value: String,
+) {
     store.insert(key.clone(), value.clone());
     println!("Stored (mock): key='{key}', value='{value}'");
 }
@@ -186,4 +216,3 @@ fn handle_get(store: &HashMap<String, String>, key: String) {
 fn handle_ping() {
     println!("PONG (mock)");
 }
-
