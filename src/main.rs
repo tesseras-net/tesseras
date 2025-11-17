@@ -89,7 +89,8 @@ fn node_id_to_hex(id: &[u8; 20]) -> String {
 
 /// Print the Tesseras banner.
 fn print_banner(node_id: &[u8; 20]) {
-    let banner = format!(r#"
+    let banner = format!(
+        r#"
      ████████╗███████╗███████╗███████╗███████╗██████╗  █████╗ ███████╗
      ╚══██╔══╝██╔════╝██╔════╝██╔════╝██╔════╝██╔══██╗██╔══██╗██╔════╝
         ██║   █████╗  ███████╗███████╗█████╗  ██████╔╝███████║███████╗
@@ -100,7 +101,9 @@ fn print_banner(node_id: &[u8; 20]) {
                     ID: {}
              PUBLIC IP: 123.456.789.101:1222
                STORAGE: 5GB
-"#, node_id_to_hex(node_id));
+"#,
+        node_id_to_hex(node_id)
+    );
 
     const HELP: &str = r#"
 Tesseras Networking CLI
