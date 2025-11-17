@@ -35,8 +35,8 @@ sha1 = "0.10.6"
 #
 
 [[bin]]
-name = "rendzvous"
-path = "src/bin/rendzvous.rs"
+name = "rendezvous"
+path = "src/bin/rendezvous.rs"
 doc = false
 test = false
 
