@@ -17,6 +17,18 @@ install:
 test-embedded:
     cargo test -p tesseras-embedded
 
+# Build Flutter app for Linux desktop
+build-linux:
+    cd apps/flutter && flutter build linux --debug
+
+# Build Flutter app for Android
+build-android:
+    cd apps/flutter && flutter build apk --debug
+
+# Run Flutter widget tests
+test-flutter:
+    cd apps/flutter && flutter test
+
 [private]
 _install-completions:
     #!/usr/bin/env sh
