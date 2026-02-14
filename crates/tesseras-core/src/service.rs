@@ -97,6 +97,7 @@ impl TesseraService {
 
         // 3. Build manifest entries and store blobs
         let mut manifest_entries = Vec::new();
+        let mut memory_records = Vec::new();
 
         for (memory_hash, data, media_name, mime_type, file) in &memory_entries {
             let path = format!("memories/{memory_hash}/{media_name}");
@@ -135,8 +136,8 @@ impl TesseraService {
                 .write(&content_hash, memory_hash, "meta.json", meta_json.as_bytes())
                 .await?;
 
-            // Store memory record in DB
-            let memory_record = MemoryRecord {
+            // Collect memory record for DB (stored after tessera)
+            memory_records.push(MemoryRecord {
                 hash: *memory_hash,
                 tessera_hash: content_hash,
                 memory_type: serde_json::to_string(&file.memory_type)
@@ -150,8 +151,7 @@ impl TesseraService {
                     .map(|_| format!("memories/{memory_hash}/context.txt")),
                 meta_json: Some(meta_json),
                 created_at: chrono::Utc::now(),
-            };
-            self.memory_repo.store(&memory_record).await?;
+            });
         }
 
         // 4. Build and sign manifest
@@ -180,7 +180,7 @@ impl TesseraService {
             .write(&content_hash, &content_hash, "ed25519.sig", &sig_bytes)
             .await?;
 
-        // 5. Store tessera record in DB
+        // 5. Store tessera record in DB first (FK parent)
         let total_size: u64 = memory_entries
             .iter()
             .map(|(_, data, _, _, _)| data.len() as u64)
@@ -200,6 +200,11 @@ impl TesseraService {
             is_mine: true,
         };
         self.repo.store(&tessera_record).await?;
+
+        // 6. Store memory records in DB (FK children)
+        for record in &memory_records {
+            self.memory_repo.store(record).await?;
+        }
 
         Ok(content_hash)
     }
