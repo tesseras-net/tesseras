@@ -15,5 +15,9 @@ thiserror = { workspace = true }
 rusqlite = { workspace = true }
 toml = { workspace = true }
 
+[features]
+default = []
+bundled-sqlite = ["rusqlite/bundled"]
+
 [dev-dependencies]
 tempfile = { workspace = true }

@@ -22,3 +22,7 @@ tracing = { workspace = true }
 rusqlite = { workspace = true }
 chrono = { workspace = true }
 ed25519-dalek = { workspace = true }
+
+[features]
+default = []
+bundled-sqlite = ["tesseras-storage/bundled-sqlite", "rusqlite/bundled"]
