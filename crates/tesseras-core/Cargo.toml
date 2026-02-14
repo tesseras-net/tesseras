@@ -23,6 +23,8 @@ blake3 = { workspace = true }
 ed25519-dalek = { workspace = true, features = ["rand_core"] }
 rand = { workspace = true }
 tempfile = { workspace = true }
+tesseras-storage = { workspace = true }
+sqlx = { workspace = true }
 
 [features]
 default = []
