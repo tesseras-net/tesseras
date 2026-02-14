@@ -9,6 +9,7 @@ members = [
     "crates/tesseras-dht",
     "crates/tesseras-daemon",
     "crates/tesseras-replication",
+    "crates/tesseras-embedded",
 ]
 
 [workspace.package]
