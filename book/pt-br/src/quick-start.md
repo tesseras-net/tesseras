@@ -7,7 +7,7 @@ Este tutorial guia você por um fluxo completo: criar uma identidade, construir 
 Primeiro, configure sua identidade local e banco de dados:
 
 ```bash
-tesseras init
+tes init
 ```
 
 ```
@@ -42,13 +42,13 @@ Formatos suportados: `.jpg`, `.jpeg`, `.png` (imagens), `.wav` (áudio), `.webm`
 Veja o que seria incluído sem criar nada:
 
 ```bash
-tesseras create minhas-memorias --dry-run
+tes create minhas-memorias --dry-run
 ```
 
 ## 4. Criar uma tessera
 
 ```bash
-tesseras create minhas-memorias --tags "familia,domingo" --location "Casa"
+tes create minhas-memorias --tags "familia,domingo" --location "Casa"
 ```
 
 A saída inclui o hash de conteúdo — uma string hexadecimal de 64 caracteres que identifica unicamente sua tessera. Copie-o para os próximos passos.
@@ -56,7 +56,7 @@ A saída inclui o hash de conteúdo — uma string hexadecimal de 64 caracteres 
 ## 5. Listar suas tesseras
 
 ```bash
-tesseras list
+tes list
 ```
 
 ```
@@ -69,7 +69,7 @@ Hash             Created     Memories  Size    Visibility
 Use o hash de conteúdo para verificar que todos os arquivos estão intactos e a assinatura é válida:
 
 ```bash
-tesseras verify 9f2c4a1b3e7d8f0c...
+tes verify 9f2c4a1b3e7d8f0c...
 ```
 
 ```
@@ -86,7 +86,7 @@ Verification: PASSED
 Exporte a tessera para um diretório que pode ser lido sem o Tesseras:
 
 ```bash
-tesseras export 9f2c4a1b3e7d8f0c... ./backup
+tes export 9f2c4a1b3e7d8f0c... ./backup
 ```
 
 ```

@@ -7,7 +7,7 @@ This tutorial walks you through a complete workflow: creating an identity, build
 First, set up your local identity and database:
 
 ```bash
-tesseras init
+tes init
 ```
 
 ```
@@ -42,13 +42,13 @@ Supported formats: `.jpg`, `.jpeg`, `.png` (images), `.wav` (audio), `.webm` (vi
 See what would be included without creating anything:
 
 ```bash
-tesseras create my-memories --dry-run
+tes create my-memories --dry-run
 ```
 
 ## 4. Create a tessera
 
 ```bash
-tesseras create my-memories --tags "family,sunday" --location "Home"
+tes create my-memories --tags "family,sunday" --location "Home"
 ```
 
 The output includes the content hash — a 64-character hex string that uniquely identifies your tessera. Copy it for the next steps.
@@ -56,7 +56,7 @@ The output includes the content hash — a 64-character hex string that uniquely
 ## 5. List your tesseras
 
 ```bash
-tesseras list
+tes list
 ```
 
 ```
@@ -69,7 +69,7 @@ Hash             Created     Memories  Size    Visibility
 Use the content hash to verify that all files are intact and the signature is valid:
 
 ```bash
-tesseras verify 9f2c4a1b3e7d8f0c...
+tes verify 9f2c4a1b3e7d8f0c...
 ```
 
 ```
@@ -86,7 +86,7 @@ Verification: PASSED
 Export the tessera to a directory that can be read without Tesseras:
 
 ```bash
-tesseras export 9f2c4a1b3e7d8f0c... ./backup
+tes export 9f2c4a1b3e7d8f0c... ./backup
 ```
 
 ```

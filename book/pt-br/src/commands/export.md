@@ -1,11 +1,11 @@
-# tesseras export
+# tes export
 
 Exportar uma tessera como um diretório autocontido.
 
 ## Uso
 
 ```bash
-tesseras export <HASH> <DESTINO>
+tes export <HASH> <DESTINO>
 ```
 
 ## Argumentos
@@ -50,7 +50,7 @@ tessera-9f2c4a1b.../
 ## Exemplo
 
 ```bash
-tesseras export 9f2c4a1b3e7d8f0cabc123def4567890... ./backup
+tes export 9f2c4a1b3e7d8f0cabc123def4567890... ./backup
 ```
 
 ```

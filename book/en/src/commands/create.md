@@ -1,11 +1,11 @@
-# tesseras create
+# tes create
 
 Create a tessera from a directory of files.
 
 ## Usage
 
 ```bash
-tesseras create <PATH> [OPTIONS]
+tes create <PATH> [OPTIONS]
 ```
 
 ## Arguments
@@ -50,13 +50,13 @@ The command automatically assigns a memory type based on the file format:
 ### Preview before creating
 
 ```bash
-tesseras create ./my-photos --dry-run
+tes create ./my-photos --dry-run
 ```
 
 ### Create with metadata
 
 ```bash
-tesseras create ./vacation-2026 \
+tes create ./vacation-2026 \
     --tags "vacation,summer,beach" \
     --location "Florianópolis, Brazil" \
     --language pt-BR \
@@ -66,7 +66,7 @@ tesseras create ./vacation-2026 \
 ### Non-interactive mode
 
 ```bash
-tesseras create ./daily-log --non-interactive --tags "daily"
+tes create ./daily-log --non-interactive --tags "daily"
 ```
 
 ## Visibility levels

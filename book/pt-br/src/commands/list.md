@@ -1,11 +1,11 @@
-# tesseras list
+# tes list
 
 Listar todas as tesseras locais.
 
 ## Uso
 
 ```bash
-tesseras list
+tes list
 ```
 
 ## Opções
@@ -29,7 +29,7 @@ Exibe uma tabela com as seguintes colunas:
 ## Exemplo
 
 ```bash
-tesseras list
+tes list
 ```
 
 ```
@@ -44,7 +44,7 @@ f8e7d6c5b4a39201 2026-01-28        12    4 MB  public
 Se nenhuma tessera foi criada ainda:
 
 ```bash
-tesseras list
+tes list
 ```
 
 ```

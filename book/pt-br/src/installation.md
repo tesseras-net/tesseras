@@ -20,13 +20,13 @@ cargo install --path crates/tesseras-daemon
 
 Isso instala dois binários em `~/.cargo/bin/`:
 
-- `tesseras` — ferramenta CLI para criar, verificar e exportar tesseras
+- `tes` — ferramenta CLI para criar, verificar e exportar tesseras
 - `tesseras-daemon` — daemon de nó completo que participa da rede P2P
 
 ## Verificar a instalação
 
 ```bash
-tesseras --help
+tes --help
 ```
 
 Você deverá ver:
@@ -34,7 +34,7 @@ Você deverá ver:
 ```
 Create and preserve human memories
 
-Usage: tesseras [OPTIONS] <COMMAND>
+Usage: tes [OPTIONS] <COMMAND>
 
 Commands:
   init    Initialize identity and local database

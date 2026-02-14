@@ -1,11 +1,11 @@
-# tesseras init
+# tes init
 
 Inicializar identidade e banco de dados local.
 
 ## Uso
 
 ```bash
-tesseras init
+tes init
 ```
 
 ## Descrição
@@ -32,7 +32,7 @@ O comando cria:
 Executar `init` novamente é seguro. Se uma identidade já existe, ela é preservada:
 
 ```bash
-tesseras init
+tes init
 ```
 
 ```
@@ -44,7 +44,7 @@ Tesseras initialized at /home/user/.tesseras
 ## Diretório de dados personalizado
 
 ```bash
-tesseras --data-dir /mnt/usb/tesseras init
+tes --data-dir /mnt/usb/tesseras init
 ```
 
 Isso cria toda a estrutura de diretórios em `/mnt/usb/tesseras/` ao invés do local padrão.

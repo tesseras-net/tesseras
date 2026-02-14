@@ -1,11 +1,11 @@
-# tesseras list
+# tes list
 
 List all local tesseras.
 
 ## Usage
 
 ```bash
-tesseras list
+tes list
 ```
 
 ## Options
@@ -29,7 +29,7 @@ Displays a table with the following columns:
 ## Example
 
 ```bash
-tesseras list
+tes list
 ```
 
 ```
@@ -44,7 +44,7 @@ f8e7d6c5b4a39201 2026-01-28        12    4 MB  public
 If no tesseras have been created yet:
 
 ```bash
-tesseras list
+tes list
 ```
 
 ```

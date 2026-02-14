@@ -1,11 +1,11 @@
-# tesseras verify
+# tes verify
 
 Verificar integridade de uma tessera armazenada.
 
 ## Uso
 
 ```bash
-tesseras verify <HASH>
+tes verify <HASH>
 ```
 
 ## Argumentos
@@ -37,7 +37,7 @@ tesseras verify <HASH>
 ### Verificação bem-sucedida
 
 ```bash
-tesseras verify 9f2c4a1b3e7d8f0cabc123def456789012345678abcdef0123456789abcdef01
+tes verify 9f2c4a1b3e7d8f0cabc123def456789012345678abcdef0123456789abcdef01
 ```
 
 ```
