@@ -1,7 +1,7 @@
 use tesseras_core::ports::{BlobStore, DhtPort, FragmentStore, ReciprocityLedger};
 use tesseras_core::replication::{
-    Attestation, AttestationEntry, FragmentEnvelope, FragmentId, FragmentationTier, ReplicateAck,
-    MAX_TESSERA_SIZE,
+    Attestation, AttestationEntry, FragmentEnvelope, FragmentId, FragmentationTier,
+    MAX_TESSERA_SIZE, ReplicateAck,
 };
 use tesseras_core::types::NodeId;
 use tesseras_core::{ContentHash, NodeIdentity};
@@ -122,9 +122,7 @@ impl ReplicationService {
             .record_stored_for_peer(sender, envelope.data.len() as u64)?;
 
         // 7. Return ack with list of all fragments we hold for this tessera
-        let held = self
-            .fragments
-            .list_fragments(&envelope.id.tessera_hash)?;
+        let held = self.fragments.list_fragments(&envelope.id.tessera_hash)?;
         let held_indices: Vec<u16> = held.iter().map(|f| f.index).collect();
 
         Ok(ReplicateAck {
@@ -374,10 +372,10 @@ impl ReplicationService {
 mod tests {
     use super::*;
     use crate::config::ReplicationConfig;
-    use tesseras_core::replication::{FragmentId, FragmentPlan};
-    use tesseras_core::*;
     use mockall::mock;
     use std::net::SocketAddr;
+    use tesseras_core::replication::{FragmentId, FragmentPlan};
+    use tesseras_core::*;
 
     mock! {
         pub Dht {}
@@ -499,7 +497,10 @@ mod tests {
         );
 
         let envelope = make_valid_envelope();
-        let ack = service.receive_fragment(envelope, &node(0x01)).await.unwrap();
+        let ack = service
+            .receive_fragment(envelope, &node(0x01))
+            .await
+            .unwrap();
         assert!(ack.accepted);
     }
 
@@ -549,7 +550,10 @@ mod tests {
         );
 
         let envelope = make_valid_envelope();
-        let ack = service.receive_fragment(envelope, &node(0x01)).await.unwrap();
+        let ack = service
+            .receive_fragment(envelope, &node(0x01))
+            .await
+            .unwrap();
         assert!(!ack.accepted);
     }
 
@@ -568,21 +572,17 @@ mod tests {
     #[tokio::test]
     async fn replicate_small_tessera_pushes_to_r_peers() {
         let mut dht = MockDht::new();
-        let peers: Vec<NodeInfo> = (1..=7)
-            .map(|i| make_node_info(i, 4433))
-            .collect();
+        let peers: Vec<NodeInfo> = (1..=7).map(|i| make_node_info(i, 4433)).collect();
         let peers_clone = peers.clone();
         dht.expect_find_closest_nodes()
             .once()
             .returning(move |_| peers_clone.clone());
-        dht.expect_replicate_fragment()
-            .times(7)
-            .returning(|_, _| {
-                Ok(ReplicateAck {
-                    accepted: true,
-                    fragments_held: vec![],
-                })
-            });
+        dht.expect_replicate_fragment().times(7).returning(|_, _| {
+            Ok(ReplicateAck {
+                accepted: true,
+                fragments_held: vec![],
+            })
+        });
 
         let mut ledger = MockLedger::new();
         ledger
@@ -605,7 +605,10 @@ mod tests {
 
         let data = vec![0xaa; 1000]; // 1KB — small tier
         let tessera_hash = hash(0x01);
-        let report = service.replicate_tessera(&tessera_hash, &data).await.unwrap();
+        let report = service
+            .replicate_tessera(&tessera_hash, &data)
+            .await
+            .unwrap();
         assert_eq!(report.peers_accepted, 7);
         assert_eq!(report.fragments_distributed, 7);
     }
@@ -613,9 +616,7 @@ mod tests {
     #[tokio::test]
     async fn replicate_medium_tessera_encodes_and_distributes() {
         let mut dht = MockDht::new();
-        let peers: Vec<NodeInfo> = (1..=7)
-            .map(|i| make_node_info(i, 4433))
-            .collect();
+        let peers: Vec<NodeInfo> = (1..=7).map(|i| make_node_info(i, 4433)).collect();
         let peers_clone = peers.clone();
         dht.expect_find_closest_nodes()
             .once()
@@ -656,7 +657,10 @@ mod tests {
 
         let data = vec![0xbb; 10 * 1024 * 1024]; // 10 MB — medium tier
         let tessera_hash = hash(0x02);
-        let report = service.replicate_tessera(&tessera_hash, &data).await.unwrap();
+        let report = service
+            .replicate_tessera(&tessera_hash, &data)
+            .await
+            .unwrap();
         assert_eq!(report.fragments_distributed, 24);
     }
 }

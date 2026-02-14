@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::{Mutex, oneshot};
 
 use tesseras_core::*;
 use tesseras_net::codec::{self as wire_codec, WireBody, WireMessage};

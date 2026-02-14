@@ -23,8 +23,8 @@ pub use metadata::{Location, MemoryMetadata, Person};
 pub use network::*;
 #[cfg(feature = "service")]
 pub use ports::*;
+pub use replication::*;
 #[cfg(feature = "service")]
 pub use service::{CreateInput, FileInput, FileVerification, TesseraService, VerifyReport};
 pub use tessera::{Tessera, TesseraIdentity};
-pub use replication::*;
 pub use types::{ContentHash, HashPrefix, NodeId};

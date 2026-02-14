@@ -1,5 +1,5 @@
-use tesseras_core::{ContentHash, CoreError};
 use tesseras_core::types::NodeId;
+use tesseras_core::{ContentHash, CoreError};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ReplicationError {

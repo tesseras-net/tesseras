@@ -17,9 +17,7 @@ const MEDIUM_LARGE_BOUNDARY: u64 = 256 * 1024 * 1024;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FragmentationTier {
     /// Tesseras < 4 MB: replicate whole file, no erasure coding.
-    Small {
-        replication_factor: u8,
-    },
+    Small { replication_factor: u8 },
     /// Tesseras 4 MB..256 MB: 16 data + 8 parity shards.
     Medium {
         data_shards: u16,

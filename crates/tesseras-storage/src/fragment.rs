@@ -134,10 +134,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let conn = rusqlite::Connection::open_in_memory().unwrap();
         run_migrations(&conn).unwrap();
-        let store = FsFragmentStore::new(
-            Arc::new(Mutex::new(conn)),
-            dir.path().join("fragments"),
-        );
+        let store = FsFragmentStore::new(Arc::new(Mutex::new(conn)), dir.path().join("fragments"));
         (store, dir)
     }
 

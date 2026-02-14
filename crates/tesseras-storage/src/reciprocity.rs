@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex};
 
+use tesseras_core::CoreError;
 use tesseras_core::ports::ReciprocityLedger;
 use tesseras_core::types::NodeId;
-use tesseras_core::CoreError;
 
 /// SQLite-backed reciprocity ledger for bilateral storage tracking.
 pub struct SqliteReciprocityLedger {
@@ -131,9 +131,7 @@ mod tests {
     fn bilateral_balance() {
         let ledger = setup();
         ledger.record_stored_for_peer(&node(0x01), 1000).unwrap();
-        ledger
-            .record_peer_stores_for_us(&node(0x01), 700)
-            .unwrap();
+        ledger.record_peer_stores_for_us(&node(0x01), 700).unwrap();
         assert_eq!(ledger.balance(&node(0x01)).unwrap(), -300); // 700 - 1000
     }
 
@@ -141,15 +139,11 @@ mod tests {
     fn best_peers_ordered_by_balance_descending() {
         let ledger = setup();
         // peer_a: balance +500
-        ledger
-            .record_peer_stores_for_us(&node(0x01), 500)
-            .unwrap();
+        ledger.record_peer_stores_for_us(&node(0x01), 500).unwrap();
         // peer_b: balance -200
         ledger.record_stored_for_peer(&node(0x02), 200).unwrap();
         // peer_c: balance +100
-        ledger
-            .record_peer_stores_for_us(&node(0x03), 100)
-            .unwrap();
+        ledger.record_peer_stores_for_us(&node(0x03), 100).unwrap();
 
         let best = ledger.best_peers_for_replication(3).unwrap();
         assert_eq!(best.len(), 3);

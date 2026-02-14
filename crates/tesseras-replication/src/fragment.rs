@@ -1,5 +1,5 @@
-use tesseras_core::replication::{FragmentId, FragmentPlan, FragmentationTier};
 use tesseras_core::ContentHash;
+use tesseras_core::replication::{FragmentId, FragmentPlan, FragmentationTier};
 
 use crate::error::ReplicationError;
 
@@ -41,18 +41,15 @@ pub fn encode_tessera(
             let ds = *data_shards as usize;
             let ps = *parity_shards as usize;
 
-            let coded = tesseras_crypto::erasure::ReedSolomonCoder::encode(data, ds, ps)
-                .map_err(|e| ReplicationError::Core(tesseras_core::CoreError::InvalidTessera(e.to_string())))?;
+            let coded =
+                tesseras_crypto::erasure::ReedSolomonCoder::encode(data, ds, ps).map_err(|e| {
+                    ReplicationError::Core(tesseras_core::CoreError::InvalidTessera(e.to_string()))
+                })?;
 
             let mut fragments = Vec::with_capacity(coded.len());
             for frag in &coded {
                 let checksum = ContentHash::new(blake3::hash(&frag.data).into());
-                let id = FragmentId::new(
-                    *tessera_hash,
-                    frag.index as u16,
-                    *data_shards,
-                    checksum,
-                );
+                let id = FragmentId::new(*tessera_hash, frag.index as u16, *data_shards, checksum);
                 fragments.push((id, frag.data.clone()));
             }
 
@@ -78,10 +75,7 @@ mod tests {
     fn encode_small_tier_returns_no_fragments() {
         let data = vec![0xaa; 1000]; // 1KB — well under 4MB
         let result = encode_tessera(&hash(0x01), &data).unwrap();
-        assert!(matches!(
-            result.plan.tier,
-            FragmentationTier::Small { .. }
-        ));
+        assert!(matches!(result.plan.tier, FragmentationTier::Small { .. }));
         assert!(result.fragments.is_empty());
         assert_eq!(result.raw_data, data);
     }
@@ -90,10 +84,7 @@ mod tests {
     fn encode_medium_tier_produces_24_fragments() {
         let data = vec![0xbb; 10 * 1024 * 1024]; // 10 MB
         let result = encode_tessera(&hash(0x02), &data).unwrap();
-        assert!(matches!(
-            result.plan.tier,
-            FragmentationTier::Medium { .. }
-        ));
+        assert!(matches!(result.plan.tier, FragmentationTier::Medium { .. }));
         assert_eq!(result.fragments.len(), 24); // 16 data + 8 parity
         assert!(result.raw_data.is_empty());
     }

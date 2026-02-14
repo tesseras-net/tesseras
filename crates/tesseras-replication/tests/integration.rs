@@ -117,13 +117,15 @@ async fn replicate_and_receive_medium_tessera() {
     // Collect received envelopes to forward to receiver
     let received_envelopes: Arc<Mutex<Vec<FragmentEnvelope>>> = Arc::new(Mutex::new(Vec::new()));
     let envelopes_clone = Arc::clone(&received_envelopes);
-    owner_dht.expect_replicate_fragment().returning(move |_, frag| {
-        envelopes_clone.lock().unwrap().push(frag.clone());
-        Ok(ReplicateAck {
-            accepted: true,
-            fragments_held: vec![frag.id.index],
-        })
-    });
+    owner_dht
+        .expect_replicate_fragment()
+        .returning(move |_, frag| {
+            envelopes_clone.lock().unwrap().push(frag.clone());
+            Ok(ReplicateAck {
+                accepted: true,
+                fragments_held: vec![frag.id.index],
+            })
+        });
 
     let owner = create_service_with_real_storage(0xff, owner_dht, MockBlobs::new(), dir.path());
 
@@ -171,14 +173,12 @@ async fn replicate_small_tessera_whole_file() {
     let peers_clone = peers.clone();
     dht.expect_find_closest_nodes()
         .returning(move |_| peers_clone.clone());
-    dht.expect_replicate_fragment()
-        .times(7)
-        .returning(|_, _| {
-            Ok(ReplicateAck {
-                accepted: true,
-                fragments_held: vec![],
-            })
-        });
+    dht.expect_replicate_fragment().times(7).returning(|_, _| {
+        Ok(ReplicateAck {
+            accepted: true,
+            fragments_held: vec![],
+        })
+    });
 
     let service = create_service_with_real_storage(0xff, dht, MockBlobs::new(), dir.path());
 
@@ -186,7 +186,10 @@ async fn replicate_small_tessera_whole_file() {
     let data = vec![0xaa; 1000];
     let tessera_hash = hash(0x02);
 
-    let report = service.replicate_tessera(&tessera_hash, &data).await.unwrap();
+    let report = service
+        .replicate_tessera(&tessera_hash, &data)
+        .await
+        .unwrap();
     assert_eq!(report.peers_accepted, 7);
     assert_eq!(report.fragments_distributed, 7);
     // No erasure coding — fragments should be empty in owner's local store

@@ -70,9 +70,7 @@ pub fn decode(data: &[u8]) -> Result<Message, String> {
 mod tests {
     use super::*;
     use std::net::SocketAddr;
-    use tesseras_core::replication::{
-        AttestationEntry, FragmentId, FragmentPlan,
-    };
+    use tesseras_core::replication::{AttestationEntry, FragmentId, FragmentPlan};
     use tesseras_core::{HolderInfo, Visibility};
 
     fn test_identity() -> NodeIdentity {

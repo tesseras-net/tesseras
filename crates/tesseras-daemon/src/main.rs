@@ -136,10 +136,8 @@ async fn main() -> Result<()> {
     let conn = Arc::new(Mutex::new(conn));
 
     // 7c. Create storage instances
-    let fragment_store = FsFragmentStore::new(
-        Arc::clone(&conn),
-        config.node.data_dir.join("fragments"),
-    );
+    let fragment_store =
+        FsFragmentStore::new(Arc::clone(&conn), config.node.data_dir.join("fragments"));
     let reciprocity_ledger = SqliteReciprocityLedger::new(Arc::clone(&conn));
     let blob_store = FsBlobStore::new(config.node.data_dir.join("blobs"));
 

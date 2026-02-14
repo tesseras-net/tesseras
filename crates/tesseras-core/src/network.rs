@@ -25,7 +25,14 @@ impl Capabilities {
 
     /// Phase 2 default: Phase 1 + REPLICATE | ATTEST
     pub fn phase2_default() -> Self {
-        Self(Self::PING | Self::FIND_NODE | Self::FIND_VALUE | Self::STORE | Self::REPLICATE | Self::ATTEST)
+        Self(
+            Self::PING
+                | Self::FIND_NODE
+                | Self::FIND_VALUE
+                | Self::STORE
+                | Self::REPLICATE
+                | Self::ATTEST,
+        )
     }
 
     pub fn has(&self, cap: u64) -> bool {

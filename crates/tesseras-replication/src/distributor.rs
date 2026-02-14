@@ -38,9 +38,9 @@ pub fn apply_subnet_diversity(peers: &[NodeInfo], max_per_subnet: usize) -> Vec<
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::net::SocketAddr;
     use tesseras_core::types::NodeId;
     use tesseras_core::{Capabilities, NodeIdentity};
-    use std::net::SocketAddr;
 
     fn node(fill: u8) -> NodeId {
         NodeId::new([fill; 20])

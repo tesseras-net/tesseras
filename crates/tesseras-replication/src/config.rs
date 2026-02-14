@@ -21,8 +21,8 @@ impl Default for ReplicationConfig {
             repair_interval: Duration::from_secs(24 * 60 * 60),
             repair_jitter: Duration::from_secs(2 * 60 * 60),
             max_concurrent_transfers: 4,
-            min_free_space_bytes: 1024 * 1024 * 1024,      // 1 GB
-            accept_deficit_up_to_bytes: 256 * 1024 * 1024,  // 256 MB
+            min_free_space_bytes: 1024 * 1024 * 1024, // 1 GB
+            accept_deficit_up_to_bytes: 256 * 1024 * 1024, // 256 MB
             max_storage_per_peer_bytes: 1024 * 1024 * 1024, // 1 GB
         }
     }

@@ -125,8 +125,8 @@ mod tests {
 
                 // Drop exactly parity_shards (max tolerable) — should succeed
                 let mut partial: Vec<Option<Fragment>> = fragments.iter().cloned().map(Some).collect();
-                for i in 0..parity_shards {
-                    partial[i] = None;
+                for shard in partial.iter_mut().take(parity_shards) {
+                    *shard = None;
                 }
                 let recovered = ReedSolomonCoder::decode(&partial, data_shards, parity_shards).unwrap();
                 prop_assert_eq!(&recovered[..data.len()], &data[..]);
