@@ -1810,6 +1810,7 @@ dependencies = [
 name = "tesseras-core"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "blake3",
  "chrono",
  "ed25519-dalek",
@@ -1844,15 +1845,18 @@ name = "tesseras-daemon"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "chrono",
  "clap",
  "dirs",
  "rand 0.8.5",
+ "rusqlite",
  "serde",
  "tesseras-core",
  "tesseras-crypto",
  "tesseras-dht",
  "tesseras-net",
+ "tesseras-replication",
  "tesseras-storage",
  "tokio",
  "toml",
@@ -1896,9 +1900,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "tesseras-replication"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "blake3",
+ "chrono",
+ "mockall",
+ "proptest",
+ "rand 0.8.5",
+ "rusqlite",
+ "tempfile",
+ "tesseras-core",
+ "tesseras-crypto",
+ "tesseras-storage",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "tesseras-storage"
 version = "0.1.0"
 dependencies = [
+ "blake3",
  "chrono",
  "rusqlite",
  "serde",

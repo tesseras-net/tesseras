@@ -12,4 +12,5 @@
 - [Executando um No](./running-a-node.md)
 - [Configuracao](./configuration.md)
 - [Conceitos de Rede](./network-concepts.md)
+- [Replicação e Reparo](./replication.md)
 - [Docker](./docker.md)

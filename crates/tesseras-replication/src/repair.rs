@@ -77,9 +77,7 @@ pub async fn check_tessera_health(
 mod tests {
     use super::*;
     use mockall::mock;
-    use tesseras_core::replication::{
-        Attestation, FragmentEnvelope, FragmentId, ReplicateAck,
-    };
+    use tesseras_core::replication::{Attestation, FragmentEnvelope, FragmentId, ReplicateAck};
     use tesseras_core::types::NodeId;
     use tesseras_core::{Capabilities, CoreError, NodeIdentity};
 
@@ -155,18 +153,14 @@ mod tests {
                 }
             });
         // Ping fallback also fails for 4-7
-        dht.expect_ping()
-            .returning(|_| false);
+        dht.expect_ping().returning(|_| false);
 
         let mut fragments = MockFragments::new();
-        fragments
-            .expect_list_fragments()
-            .returning(|_| Ok(vec![]));
+        fragments.expect_list_fragments().returning(|_| Ok(vec![]));
 
         let holders: Vec<NodeInfo> = (1..=7).map(make_holder).collect();
 
-        let action =
-            check_tessera_health(&dht, &fragments, &hash(0x01), &holders, 7).await;
+        let action = check_tessera_health(&dht, &fragments, &hash(0x01), &holders, 7).await;
 
         assert!(matches!(
             action,
@@ -177,26 +171,21 @@ mod tests {
     #[tokio::test]
     async fn repair_check_healthy_tessera_is_noop() {
         let mut dht = MockDht::new();
-        dht.expect_request_attestation()
-            .times(7)
-            .returning(|_, _| {
-                Ok(Attestation {
-                    tessera_hash: ContentHash::new([0x01; 32]),
-                    entries: vec![],
-                    timestamp: chrono::Utc::now(),
-                    signature: vec![],
-                })
-            });
+        dht.expect_request_attestation().times(7).returning(|_, _| {
+            Ok(Attestation {
+                tessera_hash: ContentHash::new([0x01; 32]),
+                entries: vec![],
+                timestamp: chrono::Utc::now(),
+                signature: vec![],
+            })
+        });
 
         let mut fragments = MockFragments::new();
-        fragments
-            .expect_list_fragments()
-            .returning(|_| Ok(vec![]));
+        fragments.expect_list_fragments().returning(|_| Ok(vec![]));
 
         let holders: Vec<NodeInfo> = (1..=7).map(make_holder).collect();
 
-        let action =
-            check_tessera_health(&dht, &fragments, &hash(0x01), &holders, 7).await;
+        let action = check_tessera_health(&dht, &fragments, &hash(0x01), &holders, 7).await;
 
         assert_eq!(action, RepairAction::Healthy);
     }
@@ -211,18 +200,10 @@ mod tests {
         fragments
             .expect_list_fragments()
             .returning(move |_| Ok(vec![frag_id_clone.clone()]));
-        fragments
-            .expect_verify_fragment()
-            .returning(|_| Ok(false)); // corrupt!
+        fragments.expect_verify_fragment().returning(|_| Ok(false)); // corrupt!
 
-        let action =
-            check_tessera_health(&dht, &fragments, &hash(0x01), &[], 7).await;
+        let action = check_tessera_health(&dht, &fragments, &hash(0x01), &[], 7).await;
 
-        assert_eq!(
-            action,
-            RepairAction::CorruptLocal {
-                fragment_index: 5
-            }
-        );
+        assert_eq!(action, RepairAction::CorruptLocal { fragment_index: 5 });
     }
 }

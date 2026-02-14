@@ -1,3 +1,5 @@
+alias i := install
+
 [private]
 default:
     @just --list --unsorted
