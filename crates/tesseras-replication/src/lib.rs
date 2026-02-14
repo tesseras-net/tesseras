@@ -3,6 +3,10 @@
 pub mod config;
 pub mod error;
 pub mod fragment;
+pub mod service;
 
 pub use config::ReplicationConfig;
 pub use error::ReplicationError;
+pub use service::{
+    ReplicationHealth, ReplicationReport, ReplicationService, TesseraReplicationStatus,
+};
