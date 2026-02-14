@@ -3,8 +3,18 @@ mod commands;
 use std::io;
 
 use anyhow::Result;
+use clap::builder::styling::{AnsiColor, Effects, Styles};
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
+
+const STYLES: Styles = Styles::styled()
+    .header(AnsiColor::Green.on_default().effects(Effects::BOLD))
+    .usage(AnsiColor::Green.on_default().effects(Effects::BOLD))
+    .literal(AnsiColor::Cyan.on_default().effects(Effects::BOLD))
+    .placeholder(AnsiColor::Cyan.on_default())
+    .valid(AnsiColor::Cyan.on_default().effects(Effects::BOLD))
+    .invalid(AnsiColor::Yellow.on_default().effects(Effects::BOLD))
+    .error(AnsiColor::Red.on_default().effects(Effects::BOLD));
 
 const VERSION: &str = concat!(
     env!("CARGO_PKG_VERSION"),
@@ -28,6 +38,7 @@ The source code for tesseras is available at: https://github.com/tesseras-net/te
     after_help = AFTER_HELP,
     subcommand_required = true,
     arg_required_else_help = true,
+    styles = STYLES,
 )]
 struct Cli {
     /// Use verbose output (-vv very verbose)
@@ -87,6 +98,7 @@ enum Commands {
     List,
 
     /// Generate shell completions for your shell to stdout
+    #[command(hide = true)]
     Completions {
         /// Shell to generate completions for
         #[arg(value_enum)]
