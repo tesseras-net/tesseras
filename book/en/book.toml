@@ -10,3 +10,6 @@ build-dir = "book"
 [output.html]
 site-url = "/book/en/"
 git-repository-url = "https://git.sr.ht/~ijanc/tesseras"
+additional-css = ["theme/custom.css"]
+smart-punctuation = true
+default-theme = "light"
