@@ -5,6 +5,9 @@ edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
+[lib]
+crate-type = ["lib", "cdylib", "staticlib"]
+
 [dependencies]
 tesseras-core = { workspace = true, features = ["service"] }
 tesseras-crypto = { workspace = true, features = ["classical", "service"] }
