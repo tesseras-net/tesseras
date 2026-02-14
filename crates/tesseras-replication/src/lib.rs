@@ -4,6 +4,7 @@ pub mod config;
 pub mod distributor;
 pub mod error;
 pub mod fragment;
+pub mod repair;
 pub mod service;
 
 pub use config::ReplicationConfig;

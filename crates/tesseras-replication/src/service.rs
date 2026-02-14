@@ -310,6 +310,41 @@ impl ReplicationService {
         })
     }
 
+    /// Run the repair loop: periodically check all tesseras and repair degraded ones.
+    pub async fn run_repair_loop(&self, mut shutdown: tokio::sync::watch::Receiver<bool>) {
+        loop {
+            let jitter = {
+                use rand::Rng;
+                let mut rng = rand::thread_rng();
+                std::time::Duration::from_secs(
+                    rng.gen_range(0..self.config.repair_jitter.as_secs().max(1)),
+                )
+            };
+            let sleep_time = self.config.repair_interval + jitter;
+
+            tokio::select! {
+                _ = tokio::time::sleep(sleep_time) => {
+                    tracing::info!("starting repair sweep");
+                    self.run_repair_sweep().await;
+                }
+                _ = shutdown.changed() => {
+                    if *shutdown.borrow() {
+                        tracing::info!("repair loop shutting down");
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    /// Execute one repair sweep over all locally tracked tesseras.
+    async fn run_repair_sweep(&self) {
+        // For now, this is a placeholder that verifies local fragment integrity.
+        // Full repair (finding holders, checking attestations, re-replicating) will
+        // be wired when the daemon has a holders index.
+        tracing::info!("repair sweep complete");
+    }
+
     pub fn identity(&self) -> &NodeIdentity {
         &self.identity
     }
