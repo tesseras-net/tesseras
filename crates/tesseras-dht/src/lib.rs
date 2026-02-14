@@ -5,5 +5,6 @@ pub mod error;
 pub mod message;
 pub mod pow;
 pub mod routing;
+pub mod store;
 
 pub use error::DhtError;
