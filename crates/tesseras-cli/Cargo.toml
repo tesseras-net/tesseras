@@ -1,0 +1,21 @@
+[package]
+name = "tesseras-cli"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "tesseras"
+path = "src/main.rs"
+
+[dependencies]
+tesseras-core = { workspace = true, features = ["service"] }
+tesseras-crypto = { workspace = true }
+tesseras-storage = { workspace = true }
+anyhow = { workspace = true }
+tokio = { workspace = true }
+clap = { workspace = true }
+dialoguer = { workspace = true }
+comfy-table = { workspace = true }
+tracing = { workspace = true }
