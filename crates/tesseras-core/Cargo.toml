@@ -13,6 +13,7 @@ thiserror = { workspace = true }
 
 # Optional: application service layer
 tokio = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
@@ -28,4 +29,4 @@ rmp-serde = { workspace = true }
 
 [features]
 default = []
-service = ["dep:tokio"]
+service = ["dep:tokio", "dep:async-trait"]

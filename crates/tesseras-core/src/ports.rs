@@ -1,4 +1,6 @@
-use crate::{ContentHash, CoreError};
+use crate::replication::{Attestation, FragmentEnvelope, FragmentId, ReplicateAck};
+use crate::types::NodeId;
+use crate::{ContentHash, CoreError, NodeInfo};
 
 /// Tessera metadata persistence.
 pub trait TesseraRepository: Send + Sync {
@@ -73,6 +75,40 @@ pub trait Hasher: Send + Sync {
 pub trait ManifestSigner: Send + Sync {
     /// Sign manifest bytes, return (ed25519_sig_bytes, public_key_hex).
     fn sign(&self, manifest: &[u8]) -> (Vec<u8>, String);
+}
+
+/// Network operations needed by the replication engine.
+#[async_trait::async_trait]
+pub trait DhtPort: Send + Sync {
+    async fn find_closest_nodes(&self, target: &NodeId) -> Vec<NodeInfo>;
+    async fn replicate_fragment(
+        &self,
+        target: &NodeInfo,
+        fragment: &FragmentEnvelope,
+    ) -> Result<ReplicateAck, CoreError>;
+    async fn request_attestation(
+        &self,
+        target: &NodeInfo,
+        tessera_hash: &ContentHash,
+    ) -> Result<Attestation, CoreError>;
+    async fn ping(&self, target: &NodeInfo) -> bool;
+}
+
+/// Local storage for erasure-coded fragments. Sync (consistent with existing storage traits).
+pub trait FragmentStore: Send + Sync {
+    fn store_fragment(&self, id: &FragmentId, data: &[u8]) -> Result<(), CoreError>;
+    fn read_fragment(&self, id: &FragmentId) -> Result<Vec<u8>, CoreError>;
+    fn delete_fragment(&self, id: &FragmentId) -> Result<(), CoreError>;
+    fn list_fragments(&self, tessera_hash: &ContentHash) -> Result<Vec<FragmentId>, CoreError>;
+    fn verify_fragment(&self, id: &FragmentId) -> Result<bool, CoreError>;
+}
+
+/// Bilateral reciprocity tracking. Sync.
+pub trait ReciprocityLedger: Send + Sync {
+    fn record_stored_for_peer(&self, peer: &NodeId, bytes: u64) -> Result<(), CoreError>;
+    fn record_peer_stores_for_us(&self, peer: &NodeId, bytes: u64) -> Result<(), CoreError>;
+    fn balance(&self, peer: &NodeId) -> Result<i64, CoreError>;
+    fn best_peers_for_replication(&self, count: usize) -> Result<Vec<NodeId>, CoreError>;
 }
 
 /// Manifest verification port.
