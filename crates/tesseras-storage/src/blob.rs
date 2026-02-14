@@ -82,7 +82,10 @@ mod tests {
         let t_hash = ContentHash::new([0x01; 32]);
         let m_hash = ContentHash::new([0x02; 32]);
         let data = b"JPEG image data here";
-        store.write(&t_hash, &m_hash, "media.jpg", data).await.unwrap();
+        store
+            .write(&t_hash, &m_hash, "media.jpg", data)
+            .await
+            .unwrap();
         let read = store.read(&t_hash, &m_hash, "media.jpg").await.unwrap();
         assert_eq!(read, data);
     }
@@ -104,7 +107,10 @@ mod tests {
         let t_hash = ContentHash::new([0x01; 32]);
         let m_hash = ContentHash::new([0x02; 32]);
         assert!(!store.exists(&t_hash, &m_hash, "media.jpg").await.unwrap());
-        store.write(&t_hash, &m_hash, "media.jpg", b"data").await.unwrap();
+        store
+            .write(&t_hash, &m_hash, "media.jpg", b"data")
+            .await
+            .unwrap();
         assert!(store.exists(&t_hash, &m_hash, "media.jpg").await.unwrap());
     }
 
@@ -114,7 +120,10 @@ mod tests {
         let store = FsBlobStore::new(dir.path().join("blobs"));
         let t_hash = ContentHash::new([0x01; 32]);
         let m_hash = ContentHash::new([0x02; 32]);
-        store.write(&t_hash, &m_hash, "media.jpg", b"data").await.unwrap();
+        store
+            .write(&t_hash, &m_hash, "media.jpg", b"data")
+            .await
+            .unwrap();
         store.delete_tessera(&t_hash).await.unwrap();
         assert!(!store.exists(&t_hash, &m_hash, "media.jpg").await.unwrap());
     }

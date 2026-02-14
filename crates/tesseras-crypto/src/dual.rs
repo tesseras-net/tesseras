@@ -1,7 +1,7 @@
 use ed25519_dalek::{Signature as Ed25519Sig, VerifyingKey};
 
-use crate::ed25519::{Ed25519KeyPair, Ed25519Signer, Ed25519Verifier};
 use crate::CryptoError;
+use crate::ed25519::{Ed25519KeyPair, Ed25519Signer, Ed25519Verifier};
 
 pub struct DualKeyPair {
     pub ed25519: Ed25519KeyPair,

@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use async_trait::async_trait;
-use tesseras_core::ports::{IdentityStore, KeyAlgorithm, KeyMaterial};
 use tesseras_core::CoreError;
+use tesseras_core::ports::{IdentityStore, KeyAlgorithm, KeyMaterial};
 
 pub struct FsIdentityStore {
     base_path: PathBuf,

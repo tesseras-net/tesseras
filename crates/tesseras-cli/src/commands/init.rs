@@ -19,10 +19,7 @@ pub async fn run(data_dir: &str) -> Result<()> {
 
     // 2. Generate Ed25519 keypair
     let identity_store = FsIdentityStore::new(base.clone());
-    if !identity_store
-        .keypair_exists(KeyAlgorithm::Ed25519)
-        .await?
-    {
+    if !identity_store.keypair_exists(KeyAlgorithm::Ed25519).await? {
         let keypair = Ed25519KeyGenerator::generate();
         let material: tesseras_core::ports::KeyMaterial = (&keypair).into();
         identity_store.save_keypair(&material).await?;

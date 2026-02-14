@@ -133,7 +133,12 @@ impl TesseraService {
             };
             let meta_json = serde_json::to_string_pretty(&meta)?;
             self.blobs
-                .write(&content_hash, memory_hash, "meta.json", meta_json.as_bytes())
+                .write(
+                    &content_hash,
+                    memory_hash,
+                    "meta.json",
+                    meta_json.as_bytes(),
+                )
                 .await?;
 
             // Collect memory record for DB (stored after tessera)
@@ -220,11 +225,10 @@ impl TesseraService {
         let _memories = self.memory_repo.list_by_tessera(hash).await?;
 
         // 2. Read manifest from well-known location: content_hash/content_hash/MANIFEST
-        let manifest_data = self
-            .blobs
-            .read(hash, hash, "MANIFEST")
-            .await
-            .map_err(|_| CoreError::InvalidTessera("manifest not found in blob store".into()))?;
+        let manifest_data =
+            self.blobs.read(hash, hash, "MANIFEST").await.map_err(|_| {
+                CoreError::InvalidTessera("manifest not found in blob store".into())
+            })?;
         let manifest_text = String::from_utf8_lossy(&manifest_data).to_string();
 
         // 3. Parse manifest
@@ -247,9 +251,7 @@ impl TesseraService {
             if parts.len() >= 3 {
                 let memory_hash_str = parts[1];
                 let filename = parts[2..].join("/");
-                if let Ok(memory_hash) =
-                    ContentHash::from_str(memory_hash_str)
-                {
+                if let Ok(memory_hash) = ContentHash::from_str(memory_hash_str) {
                     match self.blobs.read(hash, &memory_hash, &filename).await {
                         Ok(data) => {
                             let actual_hash = self.hasher.hash(&data);
@@ -477,17 +479,12 @@ mod tests {
             name: &str,
         ) -> Result<Vec<u8>, CoreError> {
             let key = Self::key(tessera_hash, memory_hash, name);
-            self.data
-                .lock()
-                .unwrap()
-                .get(&key)
-                .cloned()
-                .ok_or_else(|| {
-                    CoreError::Io(std::io::Error::new(
-                        std::io::ErrorKind::NotFound,
-                        "not found",
-                    ))
-                })
+            self.data.lock().unwrap().get(&key).cloned().ok_or_else(|| {
+                CoreError::Io(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "not found",
+                ))
+            })
         }
         async fn exists(
             &self,

@@ -54,24 +54,34 @@ impl TesseraRepository for SqliteTesseraRepository {
             .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?;
 
         match row {
-            Some((hash, creator_pubkey, created_at, size_bytes, memory_count, visibility, sealed_until, is_mine)) => {
-                Ok(Some(TesseraRecord {
-                    hash: ContentHash::from_str(&hash)
-                        .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?,
-                    creator_pubkey,
-                    created_at: chrono::DateTime::parse_from_rfc3339(&created_at)
-                        .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?
-                        .with_timezone(&chrono::Utc),
-                    size_bytes: size_bytes as u64,
-                    memory_count: memory_count as u32,
-                    visibility,
-                    sealed_until: sealed_until
-                        .map(|s| chrono::DateTime::parse_from_rfc3339(&s).map(|dt| dt.with_timezone(&chrono::Utc)))
-                        .transpose()
-                        .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?,
-                    is_mine,
-                }))
-            }
+            Some((
+                hash,
+                creator_pubkey,
+                created_at,
+                size_bytes,
+                memory_count,
+                visibility,
+                sealed_until,
+                is_mine,
+            )) => Ok(Some(TesseraRecord {
+                hash: ContentHash::from_str(&hash)
+                    .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?,
+                creator_pubkey,
+                created_at: chrono::DateTime::parse_from_rfc3339(&created_at)
+                    .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?
+                    .with_timezone(&chrono::Utc),
+                size_bytes: size_bytes as u64,
+                memory_count: memory_count as u32,
+                visibility,
+                sealed_until: sealed_until
+                    .map(|s| {
+                        chrono::DateTime::parse_from_rfc3339(&s)
+                            .map(|dt| dt.with_timezone(&chrono::Utc))
+                    })
+                    .transpose()
+                    .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?,
+                is_mine,
+            })),
             None => Ok(None),
         }
     }
@@ -87,24 +97,38 @@ impl TesseraRepository for SqliteTesseraRepository {
             .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?;
 
         rows.into_iter()
-            .map(|(hash, creator_pubkey, created_at, size_bytes, memory_count, visibility, sealed_until, is_mine)| {
-                Ok(TesseraRecord {
-                    hash: ContentHash::from_str(&hash)
-                        .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?,
+            .map(
+                |(
+                    hash,
                     creator_pubkey,
-                    created_at: chrono::DateTime::parse_from_rfc3339(&created_at)
-                        .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?
-                        .with_timezone(&chrono::Utc),
-                    size_bytes: size_bytes as u64,
-                    memory_count: memory_count as u32,
+                    created_at,
+                    size_bytes,
+                    memory_count,
                     visibility,
-                    sealed_until: sealed_until
-                        .map(|s| chrono::DateTime::parse_from_rfc3339(&s).map(|dt| dt.with_timezone(&chrono::Utc)))
-                        .transpose()
-                        .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?,
+                    sealed_until,
                     is_mine,
-                })
-            })
+                )| {
+                    Ok(TesseraRecord {
+                        hash: ContentHash::from_str(&hash)
+                            .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?,
+                        creator_pubkey,
+                        created_at: chrono::DateTime::parse_from_rfc3339(&created_at)
+                            .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?
+                            .with_timezone(&chrono::Utc),
+                        size_bytes: size_bytes as u64,
+                        memory_count: memory_count as u32,
+                        visibility,
+                        sealed_until: sealed_until
+                            .map(|s| {
+                                chrono::DateTime::parse_from_rfc3339(&s)
+                                    .map(|dt| dt.with_timezone(&chrono::Utc))
+                            })
+                            .transpose()
+                            .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?,
+                        is_mine,
+                    })
+                },
+            )
             .collect()
     }
 
@@ -120,12 +144,11 @@ impl TesseraRepository for SqliteTesseraRepository {
 
     async fn exists(&self, hash: &ContentHash) -> Result<bool, CoreError> {
         let hash_str = hash.to_string();
-        let row: Option<(i32,)> =
-            sqlx::query_as("SELECT 1 FROM tesseras WHERE hash = ?")
-                .bind(&hash_str)
-                .fetch_optional(&self.pool)
-                .await
-                .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?;
+        let row: Option<(i32,)> = sqlx::query_as("SELECT 1 FROM tesseras WHERE hash = ?")
+            .bind(&hash_str)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?;
         Ok(row.is_some())
     }
 }
@@ -176,21 +199,27 @@ impl MemoryRepository for SqliteMemoryRepository {
             .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?;
 
         match row {
-            Some((hash, tessera_hash, memory_type, media_path, context_path, meta_json, created_at)) => {
-                Ok(Some(MemoryRecord {
-                    hash: ContentHash::from_str(&hash)
-                        .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?,
-                    tessera_hash: ContentHash::from_str(&tessera_hash)
-                        .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?,
-                    memory_type,
-                    media_path,
-                    context_path,
-                    meta_json,
-                    created_at: chrono::DateTime::parse_from_rfc3339(&created_at)
-                        .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?
-                        .with_timezone(&chrono::Utc),
-                }))
-            }
+            Some((
+                hash,
+                tessera_hash,
+                memory_type,
+                media_path,
+                context_path,
+                meta_json,
+                created_at,
+            )) => Ok(Some(MemoryRecord {
+                hash: ContentHash::from_str(&hash)
+                    .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?,
+                tessera_hash: ContentHash::from_str(&tessera_hash)
+                    .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?,
+                memory_type,
+                media_path,
+                context_path,
+                meta_json,
+                created_at: chrono::DateTime::parse_from_rfc3339(&created_at)
+                    .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?
+                    .with_timezone(&chrono::Utc),
+            })),
             None => Ok(None),
         }
     }
@@ -211,21 +240,31 @@ impl MemoryRepository for SqliteMemoryRepository {
             .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?;
 
         rows.into_iter()
-            .map(|(hash, tessera_hash, memory_type, media_path, context_path, meta_json, created_at)| {
-                Ok(MemoryRecord {
-                    hash: ContentHash::from_str(&hash)
-                        .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?,
-                    tessera_hash: ContentHash::from_str(&tessera_hash)
-                        .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?,
+            .map(
+                |(
+                    hash,
+                    tessera_hash,
                     memory_type,
                     media_path,
                     context_path,
                     meta_json,
-                    created_at: chrono::DateTime::parse_from_rfc3339(&created_at)
-                        .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?
-                        .with_timezone(&chrono::Utc),
-                })
-            })
+                    created_at,
+                )| {
+                    Ok(MemoryRecord {
+                        hash: ContentHash::from_str(&hash)
+                            .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?,
+                        tessera_hash: ContentHash::from_str(&tessera_hash)
+                            .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?,
+                        memory_type,
+                        media_path,
+                        context_path,
+                        meta_json,
+                        created_at: chrono::DateTime::parse_from_rfc3339(&created_at)
+                            .map_err(|e| CoreError::Io(std::io::Error::other(e.to_string())))?
+                            .with_timezone(&chrono::Utc),
+                    })
+                },
+            )
             .collect()
     }
 

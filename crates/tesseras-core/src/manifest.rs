@@ -85,8 +85,8 @@ impl Manifest {
             }
         }
 
-        let created_at = created_at
-            .ok_or_else(|| CoreError::InvalidManifest("missing created field".into()))?;
+        let created_at =
+            created_at.ok_or_else(|| CoreError::InvalidManifest("missing created field".into()))?;
         let creator =
             creator.ok_or_else(|| CoreError::InvalidManifest("missing creator field".into()))?;
         let content_hash = content_hash
@@ -117,9 +117,9 @@ impl Manifest {
                 )));
             }
             let path = parts[0].to_string();
-            let hash_str = parts[1]
-                .strip_prefix("blake3:")
-                .ok_or_else(|| CoreError::InvalidManifest(format!("invalid hash prefix: {}", parts[1])))?;
+            let hash_str = parts[1].strip_prefix("blake3:").ok_or_else(|| {
+                CoreError::InvalidManifest(format!("invalid hash prefix: {}", parts[1]))
+            })?;
             let hash = ContentHash::from_str(hash_str)
                 .map_err(|e| CoreError::InvalidManifest(format!("invalid hash: {e}")))?;
             let mime_type = parts[2].to_string();
@@ -277,8 +277,8 @@ mod tests {
 
     mod proptests {
         use super::*;
-        use proptest::prelude::*;
         use crate::SchemaVersion;
+        use proptest::prelude::*;
 
         fn arb_manifest_entry() -> impl Strategy<Value = ManifestEntry> {
             (

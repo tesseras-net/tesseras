@@ -17,12 +17,8 @@ pub enum Visibility {
     Private,
     Circle,
     Public,
-    PublicAfterDeath {
-        inactive_years: u32,
-    },
-    Sealed {
-        open_after: DateTime<Utc>,
-    },
+    PublicAfterDeath { inactive_years: u32 },
+    Sealed { open_after: DateTime<Utc> },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

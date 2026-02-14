@@ -71,6 +71,23 @@ pub enum KeyAlgorithm {
     MlDsa,
 }
 
+/// Content hasher port (abstracts BLAKE3 or other hash).
+pub trait Hasher: Send + Sync {
+    fn hash(&self, data: &[u8]) -> ContentHash;
+}
+
+/// Manifest signing port.
+pub trait ManifestSigner: Send + Sync {
+    /// Sign manifest bytes, return (ed25519_sig_bytes, public_key_hex).
+    fn sign(&self, manifest: &[u8]) -> (Vec<u8>, String);
+}
+
+/// Manifest verification port.
+pub trait ManifestVerifier: Send + Sync {
+    /// Verify manifest bytes against signature and public key.
+    fn verify(&self, manifest: &[u8], signature: &[u8], public_key_hex: &str) -> bool;
+}
+
 /// Flat record for DB storage (not the domain aggregate).
 #[derive(Debug, Clone)]
 pub struct TesseraRecord {

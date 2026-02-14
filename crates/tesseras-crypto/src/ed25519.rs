@@ -121,8 +121,7 @@ mod tests {
         let secret_bytes = keypair.signing_key.to_bytes();
         let public_bytes = keypair.verifying_key.to_bytes();
         let restored_signing = ed25519_dalek::SigningKey::from_bytes(&secret_bytes);
-        let restored_verifying =
-            ed25519_dalek::VerifyingKey::from_bytes(&public_bytes).unwrap();
+        let restored_verifying = ed25519_dalek::VerifyingKey::from_bytes(&public_bytes).unwrap();
         let sig = Ed25519Signer::sign(b"test", &restored_signing);
         assert!(Ed25519Verifier::verify(b"test", &sig, &restored_verifying).is_ok());
     }

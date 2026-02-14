@@ -19,12 +19,11 @@ mod tests {
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
         sqlx::migrate!("./migrations").run(&pool).await.unwrap();
         // Verify tables exist
-        let result = sqlx::query(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='tesseras'",
-        )
-        .fetch_optional(&pool)
-        .await
-        .unwrap();
+        let result =
+            sqlx::query("SELECT name FROM sqlite_master WHERE type='table' AND name='tesseras'")
+                .fetch_optional(&pool)
+                .await
+                .unwrap();
         assert!(result.is_some());
         let result =
             sqlx::query("SELECT name FROM sqlite_master WHERE type='table' AND name='memories'")

@@ -44,11 +44,7 @@ pub async fn run(args: &CreateArgs, data_dir: &str) -> Result<()> {
         println!("Dry run — files that would be included:");
         for f in &files {
             let mt = infer_memory_type(f);
-            println!(
-                "  {} ({:?})",
-                f.display(),
-                mt
-            );
+            println!("  {} ({:?})", f.display(), mt);
         }
         return Ok(());
     }
@@ -70,10 +66,13 @@ pub async fn run(args: &CreateArgs, data_dir: &str) -> Result<()> {
         .as_deref()
         .map(|t| t.split(',').map(|s| s.trim().to_string()).collect())
         .unwrap_or_default();
-    let location = args.location.as_ref().map(|l| tesseras_core::metadata::Location {
-        description: l.clone(),
-        coordinates: None,
-    });
+    let location = args
+        .location
+        .as_ref()
+        .map(|l| tesseras_core::metadata::Location {
+            description: l.clone(),
+            coordinates: None,
+        });
 
     let input = CreateInput {
         files: file_inputs,
@@ -130,9 +129,7 @@ fn parse_visibility(s: &str) -> Result<Visibility> {
     }
 }
 
-pub async fn build_service(
-    base: &Path,
-) -> Result<tesseras_core::TesseraService> {
+pub async fn build_service(base: &Path) -> Result<tesseras_core::TesseraService> {
     let db_path = base.join("db/tesseras.db");
     let pool = sqlx::SqlitePool::connect(&format!("sqlite:{}?mode=rwc", db_path.display()))
         .await
