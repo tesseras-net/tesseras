@@ -62,6 +62,7 @@ impl Transport for MemTransport {
                     addr: self.addr,
                 },
                 payload: data.to_vec(),
+                response_tx: None,
             })
             .await
             .map_err(|_| NetError::SendFailed("channel closed".into()))

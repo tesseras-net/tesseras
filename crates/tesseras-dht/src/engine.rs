@@ -128,8 +128,14 @@ impl DhtEngine {
                     return;
                 }
             };
-            if let Err(e) = self.transport.send(&envelope.peer, &wire_bytes).await {
-                tracing::warn!("failed to send response: {e}");
+            if let Some(resp_tx) = envelope.response_tx {
+                // Reply on the same bidirectional stream (QUIC transport).
+                let _ = resp_tx.send(wire_bytes);
+            } else {
+                // Fallback for transports without a response channel (e.g. MemTransport).
+                if let Err(e) = self.transport.send(&envelope.peer, &wire_bytes).await {
+                    tracing::warn!("failed to send response: {e}");
+                }
             }
         }
     }

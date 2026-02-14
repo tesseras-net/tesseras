@@ -164,9 +164,24 @@ async fn main() -> Result<()> {
 
     if !bootstrap_addrs.is_empty() {
         tracing::info!(seeds = ?bootstrap_addrs, "bootstrapping DHT");
-        match engine.bootstrap(&bootstrap_addrs).await {
-            Ok(()) => tracing::info!("bootstrap successful"),
-            Err(e) => tracing::warn!("bootstrap failed: {e}"),
+        let mut bootstrap_ok = false;
+        for attempt in 0..3u32 {
+            if attempt > 0 {
+                let delay = std::time::Duration::from_secs(2u64.pow(attempt));
+                tracing::info!(?delay, attempt, "retrying bootstrap");
+                tokio::time::sleep(delay).await;
+            }
+            match engine.bootstrap(&bootstrap_addrs).await {
+                Ok(()) => {
+                    tracing::info!("bootstrap successful");
+                    bootstrap_ok = true;
+                    break;
+                }
+                Err(e) => tracing::warn!(attempt, "bootstrap failed: {e}"),
+            }
+        }
+        if !bootstrap_ok {
+            tracing::warn!("all bootstrap attempts failed, running with empty routing table");
         }
     } else {
         tracing::info!("no bootstrap nodes configured, running as seed");

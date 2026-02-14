@@ -98,10 +98,11 @@ impl QuinnTransport {
 
             // Spawn a task to handle streams from this connection
             tokio::spawn(async move {
-                while let Ok((_, mut recv)) = conn.accept_bi().await {
+                while let Ok((send_stream, mut recv)) = conn.accept_bi().await {
                     let tx = tx.clone();
                     tokio::spawn(async move {
                         if let Ok(data) = read_message(&mut recv).await {
+                            let (resp_tx, resp_rx) = tokio::sync::oneshot::channel();
                             let _ = tx
                                 .send(Envelope {
                                     peer: PeerAddr {
@@ -109,8 +110,15 @@ impl QuinnTransport {
                                         addr: remote,
                                     },
                                     payload: data,
+                                    response_tx: Some(resp_tx),
                                 })
                                 .await;
+                            // Wait for the response and write it back on the same stream
+                            let mut send = send_stream;
+                            if let Ok(response_data) = resp_rx.await {
+                                let _ = write_message(&mut send, &response_data).await;
+                                let _ = send.finish();
+                            }
                         }
                     });
                 }
@@ -143,7 +151,7 @@ impl QuinnTransport {
 impl Transport for QuinnTransport {
     async fn send(&self, peer: &PeerAddr, data: &[u8]) -> Result<(), NetError> {
         let conn = self.get_connection(peer.addr).await?;
-        let (mut send, mut recv) = conn
+        let (mut send, recv_stream) = conn
             .open_bi()
             .await
             .map_err(|e| NetError::SendFailed(e.to_string()))?;
@@ -152,19 +160,26 @@ impl Transport for QuinnTransport {
         send.finish()
             .map_err(|e| NetError::SendFailed(e.to_string()))?;
 
-        // Read the response and enqueue it
-        if let Ok(response_data) = read_message(&mut recv).await {
-            let _ = self
-                .incoming_tx
-                .send(Envelope {
-                    peer: PeerAddr {
-                        node_id: peer.node_id,
-                        addr: peer.addr,
-                    },
-                    payload: response_data,
-                })
-                .await;
-        }
+        // Read the response asynchronously so we don't block the caller.
+        // The server writes its response on the same bidirectional stream.
+        let tx = self.incoming_tx.clone();
+        let peer_addr = peer.addr;
+        let node_id = peer.node_id;
+        tokio::spawn(async move {
+            let mut recv = recv_stream;
+            if let Ok(response_data) = read_message(&mut recv).await {
+                let _ = tx
+                    .send(Envelope {
+                        peer: PeerAddr {
+                            node_id,
+                            addr: peer_addr,
+                        },
+                        payload: response_data,
+                        response_tx: None,
+                    })
+                    .await;
+            }
+        });
 
         Ok(())
     }

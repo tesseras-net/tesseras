@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use tesseras_core::NodeId;
+use tokio::sync::oneshot;
 
 use crate::error::NetError;
 
@@ -14,10 +15,25 @@ pub struct PeerAddr {
 }
 
 /// Incoming message envelope.
-#[derive(Debug, Clone)]
+///
+/// When received from a bidirectional stream (QUIC), `response_tx` allows the
+/// handler to write a response back on the **same** stream instead of opening a
+/// new connection.
 pub struct Envelope {
     pub peer: PeerAddr,
     pub payload: Vec<u8>,
+    /// Optional channel for sending a response on the same bidirectional stream.
+    pub response_tx: Option<oneshot::Sender<Vec<u8>>>,
+}
+
+impl std::fmt::Debug for Envelope {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Envelope")
+            .field("peer", &self.peer)
+            .field("payload_len", &self.payload.len())
+            .field("has_response_tx", &self.response_tx.is_some())
+            .finish()
+    }
 }
 
 /// Transport port for the DHT engine.
