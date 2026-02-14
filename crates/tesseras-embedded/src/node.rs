@@ -14,7 +14,15 @@ use tesseras_replication::ReplicationService;
 use tesseras_storage::{FsBlobStore, FsFragmentStore, SqliteReciprocityLedger};
 
 use crate::error::TesserasError;
-use crate::types::NetworkEvent;
+use crate::types::{IdentityInfo, NetworkEvent};
+
+/// Profile stored as JSON alongside cryptographic identity.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct UserProfile {
+    name: String,
+    avatar_path: Option<String>,
+    created_at: String,
+}
 
 pub struct EmbeddedNode {
     runtime: tokio::runtime::Runtime,
@@ -159,6 +167,63 @@ impl EmbeddedNode {
         &self.event_tx
     }
 
+    pub fn create_identity(
+        &self,
+        name: String,
+        avatar_path: Option<String>,
+    ) -> Result<IdentityInfo, TesserasError> {
+        let profile_path = self.data_dir.join("profile.json");
+        if profile_path.exists() {
+            return Err(TesserasError::IdentityAlreadyExists);
+        }
+
+        let now = chrono::Utc::now().to_rfc3339();
+        let profile = UserProfile {
+            name: name.clone(),
+            avatar_path: avatar_path.clone(),
+            created_at: now.clone(),
+        };
+        let json = serde_json::to_string_pretty(&profile)
+            .map_err(|e| TesserasError::Storage(e.to_string()))?;
+        std::fs::write(&profile_path, json)?;
+
+        Ok(IdentityInfo {
+            name,
+            avatar_path,
+            public_key_hex: self
+                .identity
+                .public_key
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect(),
+            node_id_hex: self.identity.node_id.to_string(),
+            created_at: now,
+        })
+    }
+
+    pub fn get_identity(&self) -> Result<Option<IdentityInfo>, TesserasError> {
+        let profile_path = self.data_dir.join("profile.json");
+        if !profile_path.exists() {
+            return Ok(None);
+        }
+        let json = std::fs::read_to_string(&profile_path)?;
+        let profile: UserProfile =
+            serde_json::from_str(&json).map_err(|e| TesserasError::Storage(e.to_string()))?;
+
+        Ok(Some(IdentityInfo {
+            name: profile.name,
+            avatar_path: profile.avatar_path,
+            public_key_hex: self
+                .identity
+                .public_key
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect(),
+            node_id_hex: self.identity.node_id.to_string(),
+            created_at: profile.created_at,
+        }))
+    }
+
     fn load_or_generate_identity(data_dir: &PathBuf) -> Result<NodeIdentity, TesserasError> {
         let identity_path = data_dir.join("identity.key");
         if identity_path.exists() {
@@ -207,6 +272,49 @@ mod tests {
             .expect("node should start");
         assert!(node.is_running());
         node.stop().expect("node should stop cleanly");
+    }
+
+    #[test]
+    fn create_and_get_identity() {
+        let dir = TempDir::new().unwrap();
+        let node = EmbeddedNode::start(dir.path().to_str().unwrap().to_string()).unwrap();
+
+        // No identity initially
+        let id = node.get_identity().unwrap();
+        assert!(id.is_none());
+
+        // Create identity
+        let id = node
+            .create_identity("Alice".to_string(), None)
+            .unwrap();
+        assert_eq!(id.name, "Alice");
+        assert!(!id.public_key_hex.is_empty());
+        assert!(!id.node_id_hex.is_empty());
+
+        // Get identity returns same data
+        let id2 = node.get_identity().unwrap().expect("should exist now");
+        assert_eq!(id2.name, id.name);
+        assert_eq!(id2.public_key_hex, id.public_key_hex);
+
+        node.stop().unwrap();
+    }
+
+    #[test]
+    fn identity_persists_across_restart() {
+        let dir = TempDir::new().unwrap();
+        let data_dir = dir.path().to_str().unwrap().to_string();
+
+        let node = EmbeddedNode::start(data_dir.clone()).unwrap();
+        let id = node.create_identity("Bob".to_string(), None).unwrap();
+        let pubkey = id.public_key_hex.clone();
+        node.stop().unwrap();
+
+        // Restart — identity should persist
+        let node = EmbeddedNode::start(data_dir).unwrap();
+        let id2 = node.get_identity().unwrap().expect("should persist");
+        assert_eq!(id2.name, "Bob");
+        assert_eq!(id2.public_key_hex, pubkey);
+        node.stop().unwrap();
     }
 
     #[test]
