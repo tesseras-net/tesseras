@@ -274,4 +274,55 @@ mod tests {
         assert!(line.contains("image/jpeg"));
         assert!(line.contains("142032"));
     }
+
+    mod proptests {
+        use super::*;
+        use proptest::prelude::*;
+        use crate::SchemaVersion;
+
+        fn arb_manifest_entry() -> impl Strategy<Value = ManifestEntry> {
+            (
+                "[a-z]{3,10}/[a-z]{3,10}\\.[a-z]{3}",
+                proptest::array::uniform32(any::<u8>()),
+                prop_oneof![
+                    Just("image/jpeg".to_string()),
+                    Just("text/plain".to_string()),
+                    Just("audio/wav".to_string()),
+                    Just("video/webm".to_string()),
+                ],
+                1u64..10_000_000,
+            )
+                .prop_map(|(path, hash_bytes, mime, size)| ManifestEntry {
+                    path,
+                    hash: ContentHash::new(hash_bytes),
+                    mime_type: mime,
+                    size,
+                })
+        }
+
+        proptest! {
+            #[test]
+            fn manifest_serialize_parse_roundtrip_prop(
+                entries in proptest::collection::vec(arb_manifest_entry(), 1..5),
+                content_hash in proptest::array::uniform32(any::<u8>()),
+            ) {
+                let manifest = Manifest {
+                    version: SchemaVersion::V1,
+                    created_at: chrono::Utc::now(),
+                    creator: "aa".repeat(32),
+                    content_hash: ContentHash::new(content_hash),
+                    entries,
+                };
+                let text = manifest.to_string();
+                let reparsed = Manifest::parse(&text).unwrap();
+                prop_assert_eq!(manifest.entries.len(), reparsed.entries.len());
+                for (a, b) in manifest.entries.iter().zip(reparsed.entries.iter()) {
+                    prop_assert_eq!(&a.path, &b.path);
+                    prop_assert_eq!(a.hash, b.hash);
+                    prop_assert_eq!(&a.mime_type, &b.mime_type);
+                    prop_assert_eq!(a.size, b.size);
+                }
+            }
+        }
+    }
 }

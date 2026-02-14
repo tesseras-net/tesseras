@@ -114,4 +114,27 @@ mod tests {
         let parsed: NodeId = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed, id);
     }
+
+    mod proptests {
+        use super::*;
+        use proptest::prelude::*;
+
+        proptest! {
+            #[test]
+            fn content_hash_hex_roundtrip(bytes in proptest::array::uniform32(any::<u8>())) {
+                let hash = ContentHash::new(bytes);
+                let hex = hash.to_string();
+                let parsed: ContentHash = hex.parse().unwrap();
+                prop_assert_eq!(parsed, hash);
+            }
+
+            #[test]
+            fn node_id_hex_roundtrip(bytes in proptest::array::uniform20(any::<u8>())) {
+                let id = NodeId::new(bytes);
+                let hex = id.to_string();
+                let parsed: NodeId = hex.parse().unwrap();
+                prop_assert_eq!(parsed, id);
+            }
+        }
+    }
 }

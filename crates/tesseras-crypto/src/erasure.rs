@@ -107,4 +107,30 @@ mod tests {
         let result = ReedSolomonCoder::decode(&partial, 4, 2);
         assert!(result.is_err());
     }
+
+    mod proptests {
+        use super::*;
+        use proptest::prelude::*;
+
+        proptest! {
+            #[test]
+            fn erasure_boundary_roundtrip(
+                data in proptest::collection::vec(any::<u8>(), 100..1000),
+                data_shards in 2usize..8,
+                parity_shards in 1usize..4,
+            ) {
+                let fragments = ReedSolomonCoder::encode(&data, data_shards, parity_shards).unwrap();
+                let total = data_shards + parity_shards;
+                prop_assert_eq!(fragments.len(), total);
+
+                // Drop exactly parity_shards (max tolerable) — should succeed
+                let mut partial: Vec<Option<Fragment>> = fragments.iter().cloned().map(Some).collect();
+                for i in 0..parity_shards {
+                    partial[i] = None;
+                }
+                let recovered = ReedSolomonCoder::decode(&partial, data_shards, parity_shards).unwrap();
+                prop_assert_eq!(&recovered[..data.len()], &data[..]);
+            }
+        }
+    }
 }

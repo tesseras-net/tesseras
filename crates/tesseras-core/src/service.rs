@@ -88,7 +88,7 @@ impl TesseraService {
         // 2. Sort memory hashes, concatenate, hash → content_hash
         let mut sorted_hashes: Vec<ContentHash> =
             memory_entries.iter().map(|(h, _, _, _, _)| *h).collect();
-        sorted_hashes.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
+        sorted_hashes.sort_by_key(|a| a.to_string());
         let mut hash_concat = Vec::new();
         for h in &sorted_hashes {
             hash_concat.extend_from_slice(h.as_bytes());
@@ -312,7 +312,7 @@ impl TesseraService {
             let mem_dir = memories_dir.join(mem.hash.to_string());
             tokio::fs::create_dir_all(&mem_dir).await?;
 
-            let media_filename = mem.media_path.split('/').last().unwrap_or("media.bin");
+            let media_filename = mem.media_path.split('/').next_back().unwrap_or("media.bin");
             if let Ok(data) = self.blobs.read(hash, &mem.hash, media_filename).await {
                 tokio::fs::write(mem_dir.join(media_filename), &data).await?;
             }
