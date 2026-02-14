@@ -9,3 +9,7 @@
     - [verify](./commands/verify.md)
     - [export](./commands/export.md)
     - [list](./commands/list.md)
+- [Running a Node](./running-a-node.md)
+- [Configuration](./configuration.md)
+- [Network Concepts](./network-concepts.md)
+- [Docker](./docker.md)

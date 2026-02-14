@@ -21,17 +21,20 @@ Uma tessera contém:
 - **Criptografia mínima** — apenas conteúdo privado e selado é criptografado; todo o resto é aberto
 - **Resistente a computadores quânticos** — assinaturas duplas (Ed25519 + ML-DSA) protegem a integridade mesmo contra futuros computadores quânticos
 
-## Status atual: Fase 0
+## Status atual: Fase 1
 
-Tesseras está na **Fase 0** — a fundação local. Você pode criar tesseras, verificar sua integridade e exportá-las como diretórios autocontidos. Rede, replicação e funcionalidades peer-to-peer virão em fases posteriores.
+Tesseras completou a **Fase 1** — a camada de rede básica. Sobre a fundação local da Fase 0, os nós agora se descobrem, formam uma rede peer-to-peer e publicam ponteiros de tesseras que qualquer nó na rede pode encontrar.
 
-A Fase 0 oferece:
+O que está disponível hoje:
 
-- Geração de identidade (par de chaves Ed25519)
+- Geração de identidade (par de chaves Ed25519 com prova de trabalho)
 - Criação de tesseras a partir de arquivos locais
 - Armazenamento endereçado por conteúdo (hashing BLAKE3)
-- Verificação de integridade
-- Exportação autocontida
+- Verificação de integridade e exportação autocontida
+- **Daemon de nó completo** com transporte QUIC
+- **Descoberta de pares** via DHT Kademlia
+- **Publicação e busca de ponteiros de tesseras** pela rede
+- **Bootstrap** a partir de nós semente ou descoberta local
 
 ## Conceitos-chave
 
@@ -43,3 +46,6 @@ A Fase 0 oferece:
 | **Visibilidade** | Controla quem pode acessar uma tessera: pública, privada ou círculo |
 | **MANIFEST** | Um índice em texto puro listando cada arquivo na tessera com seu checksum |
 | **Tipo de memória** | Categoriza uma memória: momento, reflexão, cotidiano, relação ou objeto |
+| **Nó** | Um dispositivo executando o daemon Tesseras, participando da rede P2P |
+| **DHT** | Tabela hash distribuída — como os nós encontram ponteiros de tesseras sem um servidor central |
+| **Bootstrap** | O processo de entrar na rede contactando nós semente conhecidos |

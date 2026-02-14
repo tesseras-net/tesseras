@@ -21,17 +21,20 @@ A tessera contains:
 - **Minimal encryption** — only private and sealed content is encrypted; everything else is open
 - **Quantum-resistant** — dual signatures (Ed25519 + ML-DSA) protect integrity even against future quantum computers
 
-## Current status: Phase 0
+## Current status: Phase 1
 
-Tesseras is in **Phase 0** — the local-only foundation. You can create tesseras, verify their integrity, and export them as self-contained directories. Networking, replication, and peer-to-peer features are coming in later phases.
+Tesseras has completed **Phase 1** — the basic networking layer. On top of the local foundation from Phase 0, nodes can now discover each other, form a peer-to-peer network, and publish tessera pointers that any node on the network can find.
 
-Phase 0 gives you:
+What's available today:
 
-- Identity generation (Ed25519 keypair)
+- Identity generation (Ed25519 keypair with proof-of-work)
 - Tessera creation from local files
 - Content-addressed storage (BLAKE3 hashing)
-- Integrity verification
-- Self-contained export
+- Integrity verification and self-contained export
+- **Full node daemon** with QUIC transport
+- **Peer discovery** via Kademlia DHT
+- **Tessera pointer publishing and lookup** across the network
+- **Bootstrap** from seed nodes or local discovery
 
 ## Key concepts
 
@@ -43,3 +46,6 @@ Phase 0 gives you:
 | **Visibility** | Controls who can access a tessera: public, private, or circle |
 | **MANIFEST** | A plain-text index listing every file in the tessera with its checksum |
 | **Memory type** | Categorizes a memory: moment, reflection, daily, relation, or object |
+| **Node** | A device running the Tesseras daemon, participating in the P2P network |
+| **DHT** | Distributed hash table — how nodes find tessera pointers without a central server |
+| **Bootstrap** | The process of joining the network by contacting known seed nodes |

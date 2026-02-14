@@ -9,15 +9,19 @@ Tesseras está disponível atualmente através de compilação a partir do códi
 
 ## Compilar a partir do código-fonte
 
-Clone o repositório e instale o binário CLI:
+Clone o repositório e instale os binários:
 
 ```bash
 git clone https://git.sr.ht/~ijanc/tesseras
 cd tesseras
 cargo install --path crates/tesseras-cli
+cargo install --path crates/tesseras-daemon
 ```
 
-Isso instala o binário `tesseras` em `~/.cargo/bin/`.
+Isso instala dois binários em `~/.cargo/bin/`:
+
+- `tesseras` — ferramenta CLI para criar, verificar e exportar tesseras
+- `tesseras-daemon` — daemon de nó completo que participa da rede P2P
 
 ## Verificar a instalação
 

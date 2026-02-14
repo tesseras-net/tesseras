@@ -2,6 +2,10 @@
 default:
     @just --list --unsorted
 
+# serve the site
+serve:
+    zola serve
+
 # build the site
 build:
     zola build

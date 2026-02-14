@@ -9,15 +9,19 @@ Tesseras is currently available by building from source.
 
 ## Build from source
 
-Clone the repository and install the CLI binary:
+Clone the repository and install the binaries:
 
 ```bash
 git clone https://git.sr.ht/~ijanc/tesseras
 cd tesseras
 cargo install --path crates/tesseras-cli
+cargo install --path crates/tesseras-daemon
 ```
 
-This installs the `tesseras` binary to `~/.cargo/bin/`.
+This installs two binaries to `~/.cargo/bin/`:
+
+- `tesseras` — CLI tool for creating, verifying, and exporting tesseras
+- `tesseras-daemon` — full node daemon that participates in the P2P network
 
 ## Verify installation
 
