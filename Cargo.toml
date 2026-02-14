@@ -6,6 +6,7 @@ members = [
     "crates/tesseras-storage",
     "crates/tesseras-cli",
     "crates/tesseras-net",
+    "crates/tesseras-dht",
 ]
 
 [workspace.package]
@@ -54,5 +55,6 @@ tempfile = "3"
 # Internal
 tesseras-core = { path = "crates/tesseras-core" }
 tesseras-crypto = { path = "crates/tesseras-crypto" }
+tesseras-dht = { path = "crates/tesseras-dht" }
 tesseras-net = { path = "crates/tesseras-net" }
 tesseras-storage = { path = "crates/tesseras-storage" }
