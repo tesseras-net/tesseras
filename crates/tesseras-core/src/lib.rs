@@ -7,6 +7,8 @@ pub mod memory;
 pub mod metadata;
 #[cfg(feature = "service")]
 pub mod ports;
+#[cfg(feature = "service")]
+pub mod service;
 pub mod tessera;
 pub mod types;
 
@@ -17,5 +19,7 @@ pub use memory::Memory;
 pub use metadata::{Location, MemoryMetadata, Person};
 #[cfg(feature = "service")]
 pub use ports::*;
+#[cfg(feature = "service")]
+pub use service::{CreateInput, FileInput, FileVerification, TesseraService, VerifyReport};
 pub use tessera::{Tessera, TesseraIdentity};
 pub use types::{ContentHash, NodeId};
