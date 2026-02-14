@@ -20,6 +20,7 @@ rand = { workspace = true }
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
 proptest = { workspace = true }
+chrono = { workspace = true }
 
 [features]
 default = []

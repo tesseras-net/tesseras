@@ -2,6 +2,7 @@
 
 pub mod distance;
 pub mod error;
+pub mod message;
 pub mod pow;
 pub mod routing;
 
