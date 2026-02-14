@@ -86,7 +86,7 @@ pub async fn run(args: &CreateArgs, data_dir: &str) -> Result<()> {
     // 5. Build service and create tessera
     let service = build_service(&base)?;
     let content_hash = service.create(input).await?;
-    println!("Created tessera: {content_hash}");
+    println!("Created tessera: {}", content_hash.to_base32());
     Ok(())
 }
 

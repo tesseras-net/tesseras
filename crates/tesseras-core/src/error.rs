@@ -15,6 +15,15 @@ pub enum CoreError {
     #[error("serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
 
+    #[error("invalid hash prefix: {0}")]
+    InvalidHashPrefix(String),
+
+    #[error("ambiguous hash prefix '{prefix}': matches {count} tesseras")]
+    AmbiguousPrefix { prefix: String, count: usize },
+
+    #[error("no tessera found matching prefix: {0}")]
+    PrefixNotFound(String),
+
     #[error("database error: {0}")]
     Database(String),
 

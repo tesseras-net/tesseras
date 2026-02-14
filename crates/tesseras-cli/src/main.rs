@@ -69,14 +69,14 @@ enum Commands {
     /// Verify integrity of a stored tessera
     #[command(visible_alias = "v")]
     Verify {
-        /// Tessera content hash (64 hex chars)
+        /// Tessera hash or prefix (base32 or hex)
         hash: String,
     },
 
     /// Export tessera to a self-contained directory
     #[command(visible_alias = "e")]
     Export {
-        /// Tessera content hash (64 hex chars)
+        /// Tessera hash or prefix (base32 or hex)
         hash: String,
         /// Destination directory
         dest: String,

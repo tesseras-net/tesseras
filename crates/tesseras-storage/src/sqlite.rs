@@ -15,6 +15,52 @@ impl SqliteTesseraRepository {
     }
 }
 
+type TesseraRow = (
+    String,
+    String,
+    String,
+    i64,
+    i32,
+    String,
+    Option<String>,
+    bool,
+);
+
+fn row_to_tuple(row: &rusqlite::Row) -> rusqlite::Result<TesseraRow> {
+    Ok((
+        row.get(0)?,
+        row.get(1)?,
+        row.get(2)?,
+        row.get(3)?,
+        row.get(4)?,
+        row.get(5)?,
+        row.get(6)?,
+        row.get(7)?,
+    ))
+}
+
+fn tuple_to_tessera_record(
+    (hash, creator_pubkey, created_at, size_bytes, memory_count, visibility, sealed_until, is_mine): TesseraRow,
+) -> Result<TesseraRecord, CoreError> {
+    Ok(TesseraRecord {
+        hash: ContentHash::from_str(&hash).map_err(|e| CoreError::Database(e.to_string()))?,
+        creator_pubkey,
+        created_at: chrono::DateTime::parse_from_rfc3339(&created_at)
+            .map_err(|e| CoreError::Database(e.to_string()))?
+            .with_timezone(&chrono::Utc),
+        size_bytes: size_bytes as u64,
+        memory_count: memory_count as u32,
+        visibility,
+        sealed_until: sealed_until
+            .map(|s| {
+                chrono::DateTime::parse_from_rfc3339(&s).map(|dt| dt.with_timezone(&chrono::Utc))
+            })
+            .transpose()
+            .map_err(|e| CoreError::Database(e.to_string()))?,
+        is_mine,
+    })
+}
+
 impl TesseraRepository for SqliteTesseraRepository {
     fn store(&self, tessera: &TesseraRecord) -> Result<(), CoreError> {
         let hash = tessera.hash.to_string();
@@ -52,52 +98,36 @@ impl TesseraRepository for SqliteTesseraRepository {
             .map_err(|e| CoreError::Database(e.to_string()))?;
 
         let mut rows = stmt
-            .query_map(rusqlite::params![hash_str], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, i64>(3)?,
-                    row.get::<_, i32>(4)?,
-                    row.get::<_, String>(5)?,
-                    row.get::<_, Option<String>>(6)?,
-                    row.get::<_, bool>(7)?,
-                ))
-            })
+            .query_map(rusqlite::params![hash_str], row_to_tuple)
             .map_err(|e| CoreError::Database(e.to_string()))?;
 
         match rows.next() {
-            Some(Ok((
-                hash,
-                creator_pubkey,
-                created_at,
-                size_bytes,
-                memory_count,
-                visibility,
-                sealed_until,
-                is_mine,
-            ))) => Ok(Some(TesseraRecord {
-                hash: ContentHash::from_str(&hash)
-                    .map_err(|e| CoreError::Database(e.to_string()))?,
-                creator_pubkey,
-                created_at: chrono::DateTime::parse_from_rfc3339(&created_at)
-                    .map_err(|e| CoreError::Database(e.to_string()))?
-                    .with_timezone(&chrono::Utc),
-                size_bytes: size_bytes as u64,
-                memory_count: memory_count as u32,
-                visibility,
-                sealed_until: sealed_until
-                    .map(|s| {
-                        chrono::DateTime::parse_from_rfc3339(&s)
-                            .map(|dt| dt.with_timezone(&chrono::Utc))
-                    })
-                    .transpose()
-                    .map_err(|e| CoreError::Database(e.to_string()))?,
-                is_mine,
-            })),
+            Some(Ok(tuple)) => Ok(Some(tuple_to_tessera_record(tuple)?)),
             Some(Err(e)) => Err(CoreError::Database(e.to_string())),
             None => Ok(None),
         }
+    }
+
+    fn find_by_hex_prefix(&self, hex_prefix: &str) -> Result<Vec<TesseraRecord>, CoreError> {
+        let pattern = format!("{hex_prefix}%");
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn
+            .prepare(
+                "SELECT hash, creator_pubkey, created_at, size_bytes, memory_count, visibility, sealed_until, is_mine
+                 FROM tesseras WHERE hash LIKE ?1",
+            )
+            .map_err(|e| CoreError::Database(e.to_string()))?;
+
+        let rows = stmt
+            .query_map(rusqlite::params![pattern], row_to_tuple)
+            .map_err(|e| CoreError::Database(e.to_string()))?;
+
+        rows.into_iter()
+            .map(|r| {
+                let tuple = r.map_err(|e| CoreError::Database(e.to_string()))?;
+                tuple_to_tessera_record(tuple)
+            })
+            .collect()
     }
 
     fn list(&self) -> Result<Vec<TesseraRecord>, CoreError> {
@@ -110,51 +140,13 @@ impl TesseraRepository for SqliteTesseraRepository {
             .map_err(|e| CoreError::Database(e.to_string()))?;
 
         let rows = stmt
-            .query_map([], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, i64>(3)?,
-                    row.get::<_, i32>(4)?,
-                    row.get::<_, String>(5)?,
-                    row.get::<_, Option<String>>(6)?,
-                    row.get::<_, bool>(7)?,
-                ))
-            })
+            .query_map([], row_to_tuple)
             .map_err(|e| CoreError::Database(e.to_string()))?;
 
         rows.into_iter()
             .map(|r| {
-                let (
-                    hash,
-                    creator_pubkey,
-                    created_at,
-                    size_bytes,
-                    memory_count,
-                    visibility,
-                    sealed_until,
-                    is_mine,
-                ) = r.map_err(|e| CoreError::Database(e.to_string()))?;
-                Ok(TesseraRecord {
-                    hash: ContentHash::from_str(&hash)
-                        .map_err(|e| CoreError::Database(e.to_string()))?,
-                    creator_pubkey,
-                    created_at: chrono::DateTime::parse_from_rfc3339(&created_at)
-                        .map_err(|e| CoreError::Database(e.to_string()))?
-                        .with_timezone(&chrono::Utc),
-                    size_bytes: size_bytes as u64,
-                    memory_count: memory_count as u32,
-                    visibility,
-                    sealed_until: sealed_until
-                        .map(|s| {
-                            chrono::DateTime::parse_from_rfc3339(&s)
-                                .map(|dt| dt.with_timezone(&chrono::Utc))
-                        })
-                        .transpose()
-                        .map_err(|e| CoreError::Database(e.to_string()))?,
-                    is_mine,
-                })
+                let tuple = r.map_err(|e| CoreError::Database(e.to_string()))?;
+                tuple_to_tessera_record(tuple)
             })
             .collect()
     }
@@ -439,5 +431,27 @@ mod tests {
         m_repo.store(&mem).unwrap();
         let list = m_repo.list_by_tessera(&tessera.hash).unwrap();
         assert_eq!(list.len(), 1);
+    }
+
+    #[test]
+    fn tessera_find_by_hex_prefix() {
+        let conn = setup_conn();
+        let repo = SqliteTesseraRepository::new(conn);
+        let record = sample_tessera_record();
+        repo.store(&record).unwrap();
+        // Hash is [0x01; 32] → hex starts with "0101..."
+        let matches = repo.find_by_hex_prefix("0101").unwrap();
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].hash, record.hash);
+    }
+
+    #[test]
+    fn tessera_find_by_hex_prefix_no_match() {
+        let conn = setup_conn();
+        let repo = SqliteTesseraRepository::new(conn);
+        let record = sample_tessera_record();
+        repo.store(&record).unwrap();
+        let matches = repo.find_by_hex_prefix("ffff").unwrap();
+        assert!(matches.is_empty());
     }
 }

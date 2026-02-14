@@ -325,6 +325,44 @@ impl TesseraService {
     pub async fn list(&self) -> Result<Vec<TesseraRecord>, CoreError> {
         self.repo.list()
     }
+
+    pub fn resolve_prefix(
+        &self,
+        prefix: &crate::types::HashPrefix,
+    ) -> Result<TesseraRecord, CoreError> {
+        match prefix {
+            crate::types::HashPrefix::Exact(hash) => self
+                .repo
+                .find_by_hash(hash)?
+                .ok_or_else(|| CoreError::PrefixNotFound(hash.to_base32())),
+            crate::types::HashPrefix::HexPrefix(hex_prefix) => {
+                let matches = self.repo.find_by_hex_prefix(hex_prefix)?;
+                Self::disambiguate(matches, hex_prefix)
+            }
+            crate::types::HashPrefix::Base32Prefix {
+                hex_prefix,
+                base32_prefix,
+            } => {
+                let candidates = self.repo.find_by_hex_prefix(hex_prefix)?;
+                let matches: Vec<_> = candidates
+                    .into_iter()
+                    .filter(|t| t.hash.to_base32().starts_with(base32_prefix))
+                    .collect();
+                Self::disambiguate(matches, base32_prefix)
+            }
+        }
+    }
+
+    fn disambiguate(matches: Vec<TesseraRecord>, prefix: &str) -> Result<TesseraRecord, CoreError> {
+        match matches.len() {
+            0 => Err(CoreError::PrefixNotFound(prefix.to_string())),
+            1 => Ok(matches.into_iter().next().unwrap()),
+            n => Err(CoreError::AmbiguousPrefix {
+                prefix: prefix.to_string(),
+                count: n,
+            }),
+        }
+    }
 }
 
 fn mime_from_ext(ext: &str) -> String {
@@ -370,6 +408,16 @@ mod tests {
         }
         fn find_by_hash(&self, hash: &ContentHash) -> Result<Option<TesseraRecord>, CoreError> {
             Ok(self.data.lock().unwrap().get(&hash.to_string()).cloned())
+        }
+        fn find_by_hex_prefix(&self, hex_prefix: &str) -> Result<Vec<TesseraRecord>, CoreError> {
+            Ok(self
+                .data
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|(k, _)| k.starts_with(hex_prefix))
+                .map(|(_, v)| v.clone())
+                .collect())
         }
         fn list(&self) -> Result<Vec<TesseraRecord>, CoreError> {
             Ok(self.data.lock().unwrap().values().cloned().collect())

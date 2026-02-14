@@ -1,5 +1,6 @@
 //! tesseras-core: domain types, tessera format, and serialization.
 
+pub mod crockford;
 pub mod enums;
 pub mod error;
 pub mod manifest;
@@ -24,4 +25,4 @@ pub use ports::*;
 #[cfg(feature = "service")]
 pub use service::{CreateInput, FileInput, FileVerification, TesseraService, VerifyReport};
 pub use tessera::{Tessera, TesseraIdentity};
-pub use types::{ContentHash, NodeId};
+pub use types::{ContentHash, HashPrefix, NodeId};

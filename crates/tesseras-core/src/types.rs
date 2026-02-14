@@ -61,6 +61,114 @@ macro_rules! hex_newtype {
 hex_newtype!(ContentHash, 32);
 hex_newtype!(NodeId, 20);
 
+impl ContentHash {
+    pub fn to_base32(&self) -> String {
+        crate::crockford::encode(&self.0)
+    }
+
+    pub fn to_base32_short(&self, n: usize) -> String {
+        let full = self.to_base32();
+        full[..n.min(full.len())].to_string()
+    }
+}
+
+/// User-supplied hash input: full hash or prefix (base32 or hex).
+#[derive(Debug, Clone)]
+pub enum HashPrefix {
+    /// Full 32-byte hash (parsed from 64 hex or 52 base32).
+    Exact(ContentHash),
+    /// Hex prefix (lowercase), for direct SQL query.
+    HexPrefix(String),
+    /// Base32 prefix with derived hex prefix + normalized base32 for post-filter.
+    Base32Prefix {
+        hex_prefix: String,
+        base32_prefix: String,
+    },
+}
+
+impl HashPrefix {
+    /// Parse user input into a `HashPrefix`.
+    ///
+    /// Rules:
+    /// - 64 hex chars → `Exact` (parsed as hex)
+    /// - 52 valid base32 chars → `Exact` (decoded from base32)
+    /// - Contains Crockford-exclusive char (G-Z except I,L,O,U) → `Base32Prefix`
+    /// - All hex-valid chars, < 64 → `HexPrefix`
+    /// - Otherwise → error
+    pub fn parse(input: &str) -> Result<Self, CoreError> {
+        let trimmed = input.trim();
+
+        // Full 64 hex chars → exact hex
+        if trimmed.len() == 64 && trimmed.chars().all(|c| c.is_ascii_hexdigit()) {
+            let hash = ContentHash::from_str(trimmed)
+                .map_err(|_| CoreError::InvalidHashPrefix(trimmed.to_string()))?;
+            return Ok(HashPrefix::Exact(hash));
+        }
+
+        // Check if all chars are valid Crockford
+        let all_crockford = trimmed.bytes().all(|b| {
+            b < 128 && b != b'U' && b != b'u' && crate::crockford::DECODE_TABLE[b as usize] != 0xFF
+        });
+
+        // Full 52 valid base32 chars → exact base32
+        if trimmed.len() == 52 && all_crockford {
+            if let Some(decoded) = crate::crockford::decode(trimmed) {
+                if decoded.len() >= 32 {
+                    let mut bytes = [0u8; 32];
+                    bytes.copy_from_slice(&decoded[..32]);
+                    return Ok(HashPrefix::Exact(ContentHash::new(bytes)));
+                }
+            }
+        }
+
+        // Check for Crockford-exclusive characters (not valid in hex)
+        let has_base32_exclusive = trimmed.bytes().any(|b| {
+            matches!(
+                b.to_ascii_uppercase(),
+                b'G' | b'H'
+                    | b'J'
+                    | b'K'
+                    | b'M'
+                    | b'N'
+                    | b'P'
+                    | b'Q'
+                    | b'R'
+                    | b'S'
+                    | b'T'
+                    | b'V'
+                    | b'W'
+                    | b'X'
+                    | b'Y'
+                    | b'Z'
+            )
+        });
+
+        if has_base32_exclusive {
+            if !all_crockford {
+                return Err(CoreError::InvalidHashPrefix(trimmed.to_string()));
+            }
+            let base32_prefix = crate::crockford::normalize(trimmed)
+                .ok_or_else(|| CoreError::InvalidHashPrefix(trimmed.to_string()))?;
+            let hex_prefix = crate::crockford::prefix_to_hex_prefix(trimmed)
+                .ok_or_else(|| CoreError::InvalidHashPrefix(trimmed.to_string()))?;
+            return Ok(HashPrefix::Base32Prefix {
+                hex_prefix,
+                base32_prefix,
+            });
+        }
+
+        // All chars are hex-valid (0-9, a-f, A-F)
+        let all_hex = trimmed.chars().all(|c| c.is_ascii_hexdigit());
+        if all_hex && !trimmed.is_empty() {
+            return Ok(HashPrefix::HexPrefix(trimmed.to_ascii_lowercase()));
+        }
+
+        Err(CoreError::InvalidHashPrefix(trimmed.to_string()))
+    }
+}
+
+use std::str::FromStr;
+
 #[cfg(test)]
 mod tests {
     use super::*;

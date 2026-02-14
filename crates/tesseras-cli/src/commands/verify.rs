@@ -1,18 +1,17 @@
 use anyhow::{Context, Result};
-use std::str::FromStr;
-use tesseras_core::ContentHash;
+use tesseras_core::HashPrefix;
 
 use super::create::build_service;
 use super::init::expand_tilde;
 
 pub async fn run(hash: &str, data_dir: &str) -> Result<()> {
-    let content_hash =
-        ContentHash::from_str(hash).context("invalid tessera hash (expected 64 hex chars)")?;
+    let prefix = HashPrefix::parse(hash).context("invalid tessera hash or prefix")?;
     let base = expand_tilde(data_dir);
     let service = build_service(&base)?;
-    let report = service.verify(&content_hash).await?;
+    let record = service.resolve_prefix(&prefix)?;
+    let report = service.verify(&record.hash).await?;
 
-    println!("Tessera: {}", report.tessera_hash);
+    println!("Tessera: {}", report.tessera_hash.to_base32());
     println!(
         "Signature: {}",
         if report.signature_valid {

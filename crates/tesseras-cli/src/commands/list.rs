@@ -16,7 +16,7 @@ pub async fn run(data_dir: &str) -> Result<()> {
     let mut table = comfy_table::Table::new();
     table.set_header(vec!["Hash", "Created", "Memories", "Size", "Visibility"]);
     for t in &tesseras {
-        let hash_short = &t.hash.to_string()[..16];
+        let hash_short = t.hash.to_base32_short(10);
         let date = t.created_at.format("%Y-%m-%d").to_string();
         let size = format_size(t.size_bytes);
         table.add_row(vec![

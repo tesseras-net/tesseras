@@ -4,6 +4,8 @@ use crate::{ContentHash, CoreError};
 pub trait TesseraRepository: Send + Sync {
     fn store(&self, tessera: &TesseraRecord) -> Result<(), CoreError>;
     fn find_by_hash(&self, hash: &ContentHash) -> Result<Option<TesseraRecord>, CoreError>;
+    /// Find tesseras whose hex hash starts with the given prefix.
+    fn find_by_hex_prefix(&self, hex_prefix: &str) -> Result<Vec<TesseraRecord>, CoreError>;
     fn list(&self) -> Result<Vec<TesseraRecord>, CoreError>;
     fn delete(&self, hash: &ContentHash) -> Result<(), CoreError>;
     fn exists(&self, hash: &ContentHash) -> Result<bool, CoreError>;
