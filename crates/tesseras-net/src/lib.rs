@@ -1,5 +1,6 @@
 //! tesseras-net: QUIC transport, NAT traversal, local discovery.
 
+pub mod codec;
 pub mod error;
 pub mod transport;
 
