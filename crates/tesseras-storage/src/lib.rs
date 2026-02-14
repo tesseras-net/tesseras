@@ -2,9 +2,11 @@
 
 pub mod error;
 pub mod identity;
+pub mod sqlite;
 
 pub use error::StorageError;
 pub use identity::FsIdentityStore;
+pub use sqlite::{SqliteMemoryRepository, SqliteTesseraRepository};
 
 #[cfg(test)]
 mod tests {
