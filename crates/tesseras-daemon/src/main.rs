@@ -76,22 +76,19 @@ async fn main() -> Result<()> {
     );
 
     // 4. Ensure data directory exists
-    std::fs::create_dir_all(&config.node.data_dir)
-        .with_context(|| format!("failed to create data dir: {}", config.node.data_dir.display()))?;
+    std::fs::create_dir_all(&config.node.data_dir).with_context(|| {
+        format!(
+            "failed to create data dir: {}",
+            config.node.data_dir.display()
+        )
+    })?;
 
     // 5. Load or generate node identity
     let identity_path = config.node.data_dir.join("identity.key");
     let identity = if identity_path.exists() {
-        let bytes = std::fs::read(&identity_path)
-            .context("failed to read identity file")?;
-        let pubkey: [u8; 32] = bytes[..32]
-            .try_into()
-            .context("invalid identity file")?;
-        let nonce = u64::from_le_bytes(
-            bytes[32..40]
-                .try_into()
-                .context("invalid identity file")?,
-        );
+        let bytes = std::fs::read(&identity_path).context("failed to read identity file")?;
+        let pubkey: [u8; 32] = bytes[..32].try_into().context("invalid identity file")?;
+        let nonce = u64::from_le_bytes(bytes[32..40].try_into().context("invalid identity file")?);
         let node_id = pow::compute_node_id(&pubkey, nonce);
         tesseras_core::NodeIdentity {
             node_id,
@@ -109,8 +106,7 @@ async fn main() -> Result<()> {
         let mut bytes = Vec::with_capacity(40);
         bytes.extend_from_slice(&identity.public_key);
         bytes.extend_from_slice(&identity.nonce.to_le_bytes());
-        std::fs::write(&identity_path, &bytes)
-            .context("failed to write identity file")?;
+        std::fs::write(&identity_path, &bytes).context("failed to write identity file")?;
         identity
     };
 

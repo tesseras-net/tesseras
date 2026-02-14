@@ -132,9 +132,7 @@ mod tests {
         };
         let bytes = encode(&msg).unwrap();
         let decoded = decode(&bytes).unwrap();
-        if let (Message::Store { key: k1, .. }, Message::Store { key: k2, .. }) =
-            (&msg, &decoded)
-        {
+        if let (Message::Store { key: k1, .. }, Message::Store { key: k2, .. }) = (&msg, &decoded) {
             assert_eq!(k1, k2);
         } else {
             panic!("wrong variant");

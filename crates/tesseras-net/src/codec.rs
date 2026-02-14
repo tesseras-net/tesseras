@@ -33,8 +33,7 @@ use crate::error::NetError;
 /// Encode a WireMessage into length-prefixed bytes.
 /// Format: [4-byte big-endian u32 length][msgpack payload]
 pub fn encode(msg: &WireMessage) -> Result<Vec<u8>, NetError> {
-    let payload =
-        rmp_serde::to_vec(msg).map_err(|e| NetError::InvalidMessage(e.to_string()))?;
+    let payload = rmp_serde::to_vec(msg).map_err(|e| NetError::InvalidMessage(e.to_string()))?;
     if payload.len() > MAX_MESSAGE_SIZE {
         return Err(NetError::MessageTooLarge {
             size: payload.len(),

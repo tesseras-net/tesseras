@@ -53,9 +53,8 @@ impl QuinnTransport {
             .map_err(|e| NetError::ConnectionFailed(e.to_string()))?;
 
         let cert_der = rustls::pki_types::CertificateDer::from(cert.cert);
-        let key_der =
-            rustls::pki_types::PrivateKeyDer::try_from(cert.key_pair.serialize_der())
-                .map_err(|e| NetError::ConnectionFailed(e.to_string()))?;
+        let key_der = rustls::pki_types::PrivateKeyDer::try_from(cert.key_pair.serialize_der())
+            .map_err(|e| NetError::ConnectionFailed(e.to_string()))?;
 
         // Server config
         let mut server_crypto = rustls::ServerConfig::builder()
@@ -120,10 +119,7 @@ impl QuinnTransport {
     }
 
     /// Get or create a connection to a peer.
-    async fn get_connection(
-        &self,
-        addr: SocketAddr,
-    ) -> Result<quinn::Connection, NetError> {
+    async fn get_connection(&self, addr: SocketAddr) -> Result<quinn::Connection, NetError> {
         if let Some(conn) = self.connections.get(&addr) {
             if conn.close_reason().is_none() {
                 return Ok(conn.clone());

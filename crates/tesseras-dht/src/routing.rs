@@ -72,11 +72,7 @@ impl KBucket {
 
     /// The least-recently-seen responded to ping: keep it, move to back, discard pending.
     fn refresh_least_recent(&mut self, id: &NodeId) {
-        if let Some(pos) = self
-            .entries
-            .iter()
-            .position(|n| n.identity.node_id == *id)
-        {
+        if let Some(pos) = self.entries.iter().position(|n| n.identity.node_id == *id) {
             let node = self.entries.remove(pos).unwrap();
             self.entries.push_back(node);
         }
@@ -84,11 +80,7 @@ impl KBucket {
 
     /// Remove a node by ID.
     fn remove(&mut self, id: &NodeId) -> bool {
-        if let Some(pos) = self
-            .entries
-            .iter()
-            .position(|n| n.identity.node_id == *id)
-        {
+        if let Some(pos) = self.entries.iter().position(|n| n.identity.node_id == *id) {
             self.entries.remove(pos);
             true
         } else {
