@@ -277,10 +277,25 @@ impl DhtEngine {
                 if let Ok(Some(Message::FindNodeResponse { nodes })) =
                     self.rpc(&peer, &msg).await
                 {
+                    let mut verified = Vec::new();
                     for new_node in nodes {
                         if pow::verify_pow(&new_node.identity)
                             && new_node.identity.node_id != self.node_id()
-                            && !closest.iter().any(|n| n.identity.node_id == new_node.identity.node_id)
+                        {
+                            verified.push(new_node);
+                        }
+                    }
+                    // Update routing table with discovered nodes
+                    {
+                        let mut rt = self.routing.lock().await;
+                        for node in &verified {
+                            rt.update(node.clone());
+                        }
+                    }
+                    for new_node in verified {
+                        if !closest
+                            .iter()
+                            .any(|n| n.identity.node_id == new_node.identity.node_id)
                         {
                             closest.push(new_node);
                         }
@@ -381,12 +396,24 @@ impl DhtEngine {
                     Ok(Some(Message::FindValueResponse {
                         result: FindValueResult::Nodes(nodes),
                     })) => {
+                        let mut verified = Vec::new();
                         for new_node in nodes {
                             if pow::verify_pow(&new_node.identity)
                                 && new_node.identity.node_id != self.node_id()
-                                && !closest
-                                    .iter()
-                                    .any(|n| n.identity.node_id == new_node.identity.node_id)
+                            {
+                                verified.push(new_node);
+                            }
+                        }
+                        {
+                            let mut rt = self.routing.lock().await;
+                            for node in &verified {
+                                rt.update(node.clone());
+                            }
+                        }
+                        for new_node in verified {
+                            if !closest
+                                .iter()
+                                .any(|n| n.identity.node_id == new_node.identity.node_id)
                             {
                                 closest.push(new_node);
                             }
