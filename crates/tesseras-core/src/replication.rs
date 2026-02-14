@@ -131,7 +131,7 @@ pub struct ReplicateAck {
 }
 
 /// Envelope wrapping a fragment with metadata for transfer.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FragmentEnvelope {
     pub id: FragmentId,
     pub plan: FragmentPlan,

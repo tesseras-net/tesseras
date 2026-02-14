@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+use tesseras_core::replication::{Attestation, FragmentEnvelope, ReplicateAck};
 use tesseras_core::{Capabilities, ContentHash, NodeId, NodeIdentity, NodeInfo, TesseraPointer};
 
 /// Kademlia protocol messages.
@@ -34,6 +35,19 @@ pub enum Message {
     StoreResponse {
         accepted: bool,
     },
+
+    Replicate {
+        envelope: FragmentEnvelope,
+    },
+    ReplicateAck {
+        ack: ReplicateAck,
+    },
+    AttestRequest {
+        tessera_hash: ContentHash,
+    },
+    AttestResponse {
+        attestation: Attestation,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -56,6 +70,9 @@ pub fn decode(data: &[u8]) -> Result<Message, String> {
 mod tests {
     use super::*;
     use std::net::SocketAddr;
+    use tesseras_core::replication::{
+        AttestationEntry, FragmentId, FragmentPlan,
+    };
     use tesseras_core::{HolderInfo, Visibility};
 
     fn test_identity() -> NodeIdentity {
@@ -152,6 +169,67 @@ mod tests {
                 result: FindValueResult::Found(_)
             }
         ));
+    }
+
+    #[test]
+    fn replicate_roundtrip() {
+        let envelope = FragmentEnvelope {
+            id: FragmentId::new(
+                ContentHash::new([0x01; 32]),
+                0,
+                16,
+                ContentHash::new([0xcc; 32]),
+            ),
+            plan: FragmentPlan::new(ContentHash::new([0x01; 32]), 100_000_000).unwrap(),
+            original_tessera_size: 100_000_000,
+            fragment_size: 100_000_000 / 16,
+            data: vec![0xaa; 64],
+        };
+        let msg = Message::Replicate { envelope };
+        let bytes = encode(&msg).unwrap();
+        let decoded = decode(&bytes).unwrap();
+        assert!(matches!(decoded, Message::Replicate { .. }));
+    }
+
+    #[test]
+    fn attest_request_roundtrip() {
+        let msg = Message::AttestRequest {
+            tessera_hash: ContentHash::new([0x01; 32]),
+        };
+        let bytes = encode(&msg).unwrap();
+        let decoded = decode(&bytes).unwrap();
+        assert!(matches!(decoded, Message::AttestRequest { .. }));
+    }
+
+    #[test]
+    fn attest_response_roundtrip() {
+        let msg = Message::AttestResponse {
+            attestation: Attestation {
+                tessera_hash: ContentHash::new([0x01; 32]),
+                entries: vec![AttestationEntry {
+                    fragment_index: 0,
+                    checksum: ContentHash::new([0xcc; 32]),
+                }],
+                timestamp: chrono::Utc::now(),
+                signature: vec![0xde, 0xad],
+            },
+        };
+        let bytes = encode(&msg).unwrap();
+        let decoded = decode(&bytes).unwrap();
+        assert!(matches!(decoded, Message::AttestResponse { .. }));
+    }
+
+    #[test]
+    fn replicate_ack_roundtrip() {
+        let msg = Message::ReplicateAck {
+            ack: ReplicateAck {
+                accepted: true,
+                fragments_held: vec![0, 1, 2],
+            },
+        };
+        let bytes = encode(&msg).unwrap();
+        let decoded = decode(&bytes).unwrap();
+        assert!(matches!(decoded, Message::ReplicateAck { .. }));
     }
 
     #[test]

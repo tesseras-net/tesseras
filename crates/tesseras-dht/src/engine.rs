@@ -199,6 +199,16 @@ impl DhtEngine {
                 Some(Message::StoreResponse { accepted })
             }
             Message::StoreResponse { .. } => None,
+            Message::Replicate { .. } => {
+                tracing::debug!("received REPLICATE (handler not yet wired)");
+                None
+            }
+            Message::ReplicateAck { .. } => None,
+            Message::AttestRequest { .. } => {
+                tracing::debug!("received ATTEST_REQUEST (handler not yet wired)");
+                None
+            }
+            Message::AttestResponse { .. } => None,
         }
     }
 
