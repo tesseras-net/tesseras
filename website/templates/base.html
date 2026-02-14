@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}{{ config.title }}{% endblock %}</title>
+    <meta name="description" content="{% block description %}{{ config.description }}{% endblock %}">
+    <link rel="stylesheet" href="{{ get_url(path='style.css', cachebust=true) }}">
+    {% if config.generate_feeds %}
+        {% for feed in config.feed_filenames %}
+            <link rel="alternate" type="application/atom+xml" title="{{ config.title }}" href="{{ get_url(path=feed) }}">
+        {% endfor %}
+    {% endif %}
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <header>
+        <h1><a href="{{ config.base_url }}/{% if lang != config.default_language %}{{ lang }}/{% endif %}">Tesseras</a></h1>
+        <nav>
+            {% if lang == "pt-br" %}
+                <a href="{{ get_url(path='@/pages/about.pt-br.md') }}">Sobre</a>
+                <a href="{{ get_url(path='@/news/_index.pt-br.md') }}">Notícias</a>
+                <a href="{{ get_url(path='@/pages/releases.pt-br.md') }}">Lançamentos</a>
+                <a href="{{ get_url(path='@/pages/faq.pt-br.md') }}">FAQ</a>
+                <a href="{{ get_url(path='@/pages/subscriptions.pt-br.md') }}">Inscrições</a>
+                <a href="{{ get_url(path='@/pages/contact.pt-br.md') }}">Contato</a>
+            {% else %}
+                <a href="{{ get_url(path='@/pages/about.md') }}">About</a>
+                <a href="{{ get_url(path='@/news/_index.md') }}">News</a>
+                <a href="{{ get_url(path='@/pages/releases.md') }}">Releases</a>
+                <a href="{{ get_url(path='@/pages/faq.md') }}">FAQ</a>
+                <a href="{{ get_url(path='@/pages/subscriptions.md') }}">Subscriptions</a>
+                <a href="{{ get_url(path='@/pages/contact.md') }}">Contact</a>
+            {% endif %}
+        </nav>
+        <nav class="lang-switch">
+            {% if lang == "pt-br" %}
+                <a href="{{ current_url | replace(from='/pt-br/', to='/') }}">English</a> | <strong>Português</strong>
+            {% else %}
+                <strong>English</strong> | <a href="/pt-br{{ current_path }}">Português</a>
+            {% endif %}
+        </nav>
+    </header>
+
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer>
+        <p>&copy; {{ now() | date(format="%Y") }} Tesseras Project. <a href="/atom.xml">News Feed</a> · <a href="https://git.sr.ht/~ijanc/tesseras">Source</a></p>
+    </footer>
+</body>
+</html>
