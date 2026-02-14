@@ -17,7 +17,7 @@ impl ReedSolomonCoder {
         use reed_solomon_erasure::galois_8::ReedSolomon;
         let r = ReedSolomon::new(data_shards, parity_shards)
             .map_err(|e| CryptoError::ErasureError(e.to_string()))?;
-        let shard_size = (data.len() + data_shards - 1) / data_shards;
+        let shard_size = data.len().div_ceil(data_shards);
         let mut shards: Vec<Vec<u8>> = (0..data_shards)
             .map(|i| {
                 let start = i * shard_size;

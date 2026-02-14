@@ -1,0 +1,26 @@
+[package]
+name = "tesseras-replication"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tesseras-core = { workspace = true, features = ["service"] }
+tesseras-crypto = { workspace = true, features = ["classical", "erasure"] }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+tracing = { workspace = true }
+chrono = { workspace = true }
+blake3 = { workspace = true }
+rand = { workspace = true }
+
+[dev-dependencies]
+mockall = { workspace = true }
+proptest = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["full", "test-util"] }
+
+[features]
+default = []

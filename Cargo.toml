@@ -8,6 +8,7 @@ members = [
     "crates/tesseras-net",
     "crates/tesseras-dht",
     "crates/tesseras-daemon",
+    "crates/tesseras-replication",
 ]
 
 [workspace.package]
@@ -69,4 +70,5 @@ tesseras-core = { path = "crates/tesseras-core" }
 tesseras-crypto = { path = "crates/tesseras-crypto" }
 tesseras-dht = { path = "crates/tesseras-dht" }
 tesseras-net = { path = "crates/tesseras-net" }
+tesseras-replication = { path = "crates/tesseras-replication" }
 tesseras-storage = { path = "crates/tesseras-storage" }
