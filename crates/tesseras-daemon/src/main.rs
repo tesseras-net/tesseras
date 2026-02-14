@@ -2,10 +2,11 @@
 
 #[allow(dead_code)]
 mod config;
+mod dht_adapter;
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
 use clap::Parser;
@@ -16,8 +17,10 @@ use rand::Rng;
 use tesseras_dht::engine::DhtEngine;
 use tesseras_dht::pow;
 use tesseras_net::{QuinnTransport, Transport};
+use tesseras_storage::{FsBlobStore, FsFragmentStore, SqliteReciprocityLedger};
 
 use config::DaemonConfig;
+use dht_adapter::DhtPortAdapter;
 
 #[derive(Parser, Debug)]
 #[command(name = "tesseras-daemon", about = "Tesseras P2P daemon")]
@@ -121,7 +124,36 @@ async fn main() -> Result<()> {
 
     // 7. Create DHT engine
     let dht_config = config.to_dht_config();
-    let engine = DhtEngine::new(identity, Box::new(transport), dht_config);
+    let engine = DhtEngine::new(identity.clone(), Box::new(transport), dht_config);
+
+    // 7b. Open SQLite database and run migrations
+    let db_path = config.node.data_dir.join("db").join("tesseras.db");
+    std::fs::create_dir_all(db_path.parent().unwrap())?;
+    let conn = rusqlite::Connection::open(&db_path)
+        .with_context(|| format!("failed to open database: {}", db_path.display()))?;
+    tesseras_storage::run_migrations(&conn)
+        .map_err(|e| anyhow::anyhow!("migration failed: {e}"))?;
+    let conn = Arc::new(Mutex::new(conn));
+
+    // 7c. Create storage instances
+    let fragment_store = FsFragmentStore::new(
+        Arc::clone(&conn),
+        config.node.data_dir.join("fragments"),
+    );
+    let reciprocity_ledger = SqliteReciprocityLedger::new(Arc::clone(&conn));
+    let blob_store = FsBlobStore::new(config.node.data_dir.join("blobs"));
+
+    // 7d. Create replication service
+    let dht_adapter = DhtPortAdapter::new(Arc::clone(&engine));
+    let replication_config = tesseras_replication::ReplicationConfig::default();
+    let replication = tesseras_replication::ReplicationService::new(
+        identity,
+        Box::new(dht_adapter),
+        Box::new(fragment_store),
+        Box::new(reciprocity_ledger),
+        Box::new(blob_store),
+        replication_config,
+    );
 
     // 8. Setup shutdown signal
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
@@ -130,6 +162,12 @@ async fn main() -> Result<()> {
     let engine_clone = Arc::clone(&engine);
     let engine_handle = tokio::spawn(async move {
         engine_clone.run(shutdown_rx).await;
+    });
+
+    // 9b. Spawn repair loop
+    let repl_shutdown_rx = shutdown_tx.subscribe();
+    let repl_handle = tokio::spawn(async move {
+        replication.run_repair_loop(repl_shutdown_rx).await;
     });
 
     // 10. Bootstrap (resolve hostnames via DNS for Docker/LAN compatibility)
@@ -202,6 +240,7 @@ async fn main() -> Result<()> {
 
     // Graceful shutdown with timeout
     let _ = tokio::time::timeout(std::time::Duration::from_secs(5), engine_handle).await;
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(2), repl_handle).await;
 
     tracing::info!("goodbye");
     Ok(())

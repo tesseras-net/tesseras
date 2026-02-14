@@ -15,6 +15,9 @@ tesseras-crypto = { workspace = true, features = ["classical", "service"] }
 tesseras-storage = { workspace = true }
 tesseras-net = { workspace = true }
 tesseras-dht = { workspace = true }
+tesseras-replication = { workspace = true }
+rusqlite = { workspace = true }
+async-trait = { workspace = true }
 anyhow = { workspace = true }
 rand = { workspace = true }
 tokio = { workspace = true }
