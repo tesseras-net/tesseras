@@ -1,9 +1,11 @@
 //! tesseras-storage: SQLite index, blob filesystem, import/export.
 
+pub mod blob;
 pub mod error;
 pub mod identity;
 pub mod sqlite;
 
+pub use blob::FsBlobStore;
 pub use error::StorageError;
 pub use identity::FsIdentityStore;
 pub use sqlite::{SqliteMemoryRepository, SqliteTesseraRepository};
