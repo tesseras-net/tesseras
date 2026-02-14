@@ -7,6 +7,14 @@ build_search_index = false
 generate_feeds = true
 feed_filenames = ["atom.xml"]
 
+[link_checker]
+skip_prefixes = [
+    "https://git.sr.ht/~ijanc/",
+    "https://github.com/ijanc/",
+    "https://book.tesseras.net",
+    "https://lists.tesseras.net",
+]
+
 [markdown]
 
 [languages.pt-br]
