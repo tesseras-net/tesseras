@@ -436,6 +436,81 @@ impl DhtEngine {
     pub async fn store_size(&self) -> usize {
         self.store.lock().await.len()
     }
+
+    /// Run the engine's main loop: receive messages, run maintenance timers.
+    pub async fn run(&self, mut shutdown: tokio::sync::watch::Receiver<bool>) {
+        let mut refresh_interval = tokio::time::interval(self.config.bucket_refresh_interval);
+        let mut republish_interval = tokio::time::interval(self.config.republish_interval);
+        let mut stale_interval = tokio::time::interval(self.config.stale_check_interval);
+
+        // Skip the first immediate tick
+        refresh_interval.tick().await;
+        republish_interval.tick().await;
+        stale_interval.tick().await;
+
+        loop {
+            tokio::select! {
+                msg = self.transport.recv() => {
+                    match msg {
+                        Ok(envelope) => self.handle_envelope(envelope).await,
+                        Err(_) => break,
+                    }
+                }
+                _ = refresh_interval.tick() => {
+                    self.refresh_buckets().await;
+                }
+                _ = republish_interval.tick() => {
+                    self.republish_pointers().await;
+                }
+                _ = stale_interval.tick() => {
+                    self.check_stale_contacts().await;
+                }
+                _ = shutdown.changed() => {
+                    if *shutdown.borrow() {
+                        tracing::info!("DHT engine shutting down");
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    /// Refresh buckets by doing a random lookup in each bucket's range.
+    async fn refresh_buckets(&self) {
+        let target = {
+            use rand::Rng;
+            let mut rng = rand::thread_rng();
+            let mut target_bytes = [0u8; 20];
+            rng.fill(&mut target_bytes);
+            NodeId::new(target_bytes)
+        };
+        self.find_closest_nodes(&target).await;
+    }
+
+    /// Republish all stored pointers to their closest nodes.
+    async fn republish_pointers(&self) {
+        let pointers = self.store.lock().await.pointers();
+        for ptr in pointers {
+            let _ = self.publish(ptr).await;
+        }
+    }
+
+    /// Check for stale contacts by pinging random nodes.
+    async fn check_stale_contacts(&self) {
+        let target = {
+            use rand::Rng;
+            let mut rng = rand::thread_rng();
+            let mut target_bytes = [0u8; 20];
+            rng.fill(&mut target_bytes);
+            NodeId::new(target_bytes)
+        };
+        let nodes = self.routing.lock().await.closest(&target, 3);
+        for node in nodes {
+            if !self.ping(node.addr).await {
+                self.routing.lock().await.remove(&node.identity.node_id);
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -644,5 +719,30 @@ mod tests {
 
         // e1 should now have e2 in its routing table
         assert_eq!(e1.routing_table_size().await, 1);
+    }
+
+    #[tokio::test]
+    async fn engine_run_processes_messages() {
+        let net = SimNetwork::new();
+        let e1 = create_engine(&net, 800).await;
+        let e2 = create_engine(&net, 801).await;
+
+        // Start e2's run loop
+        let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+        let e2_clone = Arc::clone(&e2);
+        let run_handle = tokio::spawn(async move {
+            e2_clone.run(shutdown_rx).await;
+        });
+
+        // e1 pings e2 (handled by e2's run loop)
+        let result = e1.ping(addr(801)).await;
+        assert!(result);
+
+        // e1 should know about e2
+        assert_eq!(e1.routing_table_size().await, 1);
+
+        // Shutdown e2
+        shutdown_tx.send(true).unwrap();
+        run_handle.await.unwrap();
     }
 }
