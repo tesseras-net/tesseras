@@ -1,0 +1,45 @@
+# Introdução
+
+Tesseras é uma rede peer-to-peer para preservar memórias humanas através dos milênios. Cada pessoa cria uma **tessera** — uma cápsula do tempo autocontida de memórias (fotos, áudio, vídeo, texto) que sobrevive independentemente de qualquer software, empresa ou infraestrutura.
+
+## O que é uma tessera?
+
+A palavra *tessera* vem das pequenas peças usadas para fazer mosaicos no mundo antigo. No Tesseras, cada tessera é uma coleção de memórias empacotada em um formato projetado para ser compreendido mesmo daqui a milhares de anos, sem nenhum software especial.
+
+Uma tessera contém:
+
+- **Memórias** — fotos (JPEG), gravações de áudio (WAV), vídeo (WebM) e texto (UTF-8 puro)
+- **Metadados** — quando e onde cada memória foi criada, quem está envolvido e o que significa
+- **Identidade** — assinaturas criptográficas provando quem criou
+- **Instruções de decodificação** — explicações em texto puro de cada formato utilizado, para que humanos do futuro possam ler o conteúdo
+
+## Filosofia central
+
+- **Sem dependência de empresas** — suas memórias são suas, armazenadas localmente e replicadas em uma rede peer-to-peer
+- **Sem aprisionamento de formato** — cada tessera inclui instruções para decodificar seu conteúdo
+- **Disponibilidade acima de sigilo** — memórias públicas não são criptografadas, porque acessibilidade a longo prazo importa mais do que esconder coisas
+- **Criptografia mínima** — apenas conteúdo privado e selado é criptografado; todo o resto é aberto
+- **Resistente a computadores quânticos** — assinaturas duplas (Ed25519 + ML-DSA) protegem a integridade mesmo contra futuros computadores quânticos
+
+## Status atual: Fase 0
+
+Tesseras está na **Fase 0** — a fundação local. Você pode criar tesseras, verificar sua integridade e exportá-las como diretórios autocontidos. Rede, replicação e funcionalidades peer-to-peer virão em fases posteriores.
+
+A Fase 0 oferece:
+
+- Geração de identidade (par de chaves Ed25519)
+- Criação de tesseras a partir de arquivos locais
+- Armazenamento endereçado por conteúdo (hashing BLAKE3)
+- Verificação de integridade
+- Exportação autocontida
+
+## Conceitos-chave
+
+| Conceito | Descrição |
+|----------|-----------|
+| **Tessera** | Uma cápsula do tempo autocontida de memórias |
+| **Memória** | Um item individual (foto, gravação, vídeo ou texto) dentro de uma tessera |
+| **Hash de conteúdo** | Um hash BLAKE3 que identifica unicamente uma tessera pelo seu conteúdo |
+| **Visibilidade** | Controla quem pode acessar uma tessera: pública, privada ou círculo |
+| **MANIFEST** | Um índice em texto puro listando cada arquivo na tessera com seu checksum |
+| **Tipo de memória** | Categoriza uma memória: momento, reflexão, cotidiano, relação ou objeto |

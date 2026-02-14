@@ -1,0 +1,16 @@
+# Build both English and Portuguese books
+build:
+    mdbook build en
+    mdbook build pt-br
+
+# Serve English book for development
+serve-en:
+    mdbook serve en
+
+# Serve Portuguese book for development
+serve-pt-br:
+    mdbook serve pt-br --port 3001
+
+# Clean build artifacts
+clean:
+    rm -rf en/book pt-br/book

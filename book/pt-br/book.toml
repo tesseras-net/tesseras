@@ -1,0 +1,11 @@
+[book]
+title = "Guia do Usuário Tesseras"
+authors = ["Colaboradores Tesseras"]
+language = "pt-BR"
+src = "src"
+
+[build]
+build-dir = "book"
+
+[output.html]
+git-repository-url = "https://git.sr.ht/~ijanc/tesseras"
