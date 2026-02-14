@@ -355,6 +355,27 @@ impl EmbeddedNode {
         })
     }
 
+    // -- Network API --
+
+    pub fn get_network_stats(&self) -> Result<crate::types::NetworkStats, TesserasError> {
+        let routing_table_size = self.runtime.block_on(self.engine.routing_table_size());
+        Ok(crate::types::NetworkStats {
+            peer_count: routing_table_size as u32,
+            dht_size: routing_table_size as u32,
+            is_bootstrapped: routing_table_size > 0,
+            uptime_secs: self.started_at.elapsed().as_secs(),
+        })
+    }
+
+    pub fn get_replication_status(&self) -> Result<crate::types::ReplicationStatus, TesserasError> {
+        Ok(crate::types::ReplicationStatus {
+            total_fragments: 0,
+            healthy_fragments: 0,
+            repairing_fragments: 0,
+            replication_factor: 7,
+        })
+    }
+
     // -- Private helpers --
 
     fn load_or_generate_identity(data_dir: &PathBuf) -> Result<NodeIdentity, TesserasError> {
@@ -483,6 +504,19 @@ mod tests {
         // Second start — must not corrupt SQLite or leave locks
         let node = EmbeddedNode::start(data_dir).expect("second start");
         node.stop().expect("second stop");
+    }
+
+    #[test]
+    fn get_network_stats_returns_valid_data() {
+        let dir = TempDir::new().unwrap();
+        let node = EmbeddedNode::start(dir.path().to_str().unwrap().to_string()).unwrap();
+
+        let stats = node.get_network_stats().unwrap();
+        assert_eq!(stats.peer_count, 0); // no bootstrap in test
+        assert!(!stats.is_bootstrapped);
+        assert!(stats.uptime_secs < 5); // just started
+
+        node.stop().unwrap();
     }
 
     #[test]
