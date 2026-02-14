@@ -1,0 +1,6 @@
+# Copy to terraform.tfvars and fill in values.
+# NEVER commit terraform.tfvars — it contains secrets.
+
+hcloud_token   = "your-hetzner-api-token"
+ssh_public_key = "ssh-ed25519 AAAA... you@machine"
+daemon_version = "latest"
