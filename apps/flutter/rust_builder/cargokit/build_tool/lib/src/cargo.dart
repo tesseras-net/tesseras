@@ -23,13 +23,18 @@ class ManifestException {
 }
 
 class CrateInfo {
-  CrateInfo({required this.packageName});
+  CrateInfo({required this.packageName, required this.libName});
 
   final String packageName;
 
+  /// The library name used by Cargo for artifact filenames.
+  /// Falls back to packageName with hyphens replaced by underscores.
+  final String libName;
+
   static CrateInfo parseManifest(String manifest, {final String? fileName}) {
     final toml = TomlDocument.parse(manifest);
-    final package = toml.toMap()['package'];
+    final map = toml.toMap();
+    final package = map['package'];
     if (package == null) {
       throw ManifestException('Missing package section', fileName: fileName);
     }
@@ -37,7 +42,12 @@ class CrateInfo {
     if (name == null) {
       throw ManifestException('Missing package name', fileName: fileName);
     }
-    return CrateInfo(packageName: name);
+    // Rust uses [lib] name if present, otherwise package name with hyphens
+    // replaced by underscores for the actual library filename.
+    final lib = map['lib'];
+    final libName = (lib is Map ? lib['name'] : null) as String? ??
+        (name as String).replaceAll('-', '_');
+    return CrateInfo(packageName: name, libName: libName);
   }
 
   static CrateInfo load(String manifestDir) {
