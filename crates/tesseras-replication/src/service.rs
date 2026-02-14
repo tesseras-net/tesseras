@@ -1,12 +1,15 @@
 use tesseras_core::ports::{BlobStore, DhtPort, FragmentStore, ReciprocityLedger};
 use tesseras_core::replication::{
-    Attestation, AttestationEntry, FragmentEnvelope, ReplicateAck, MAX_TESSERA_SIZE,
+    Attestation, AttestationEntry, FragmentEnvelope, FragmentId, FragmentationTier, ReplicateAck,
+    MAX_TESSERA_SIZE,
 };
 use tesseras_core::types::NodeId;
 use tesseras_core::{ContentHash, NodeIdentity};
 
 use crate::config::ReplicationConfig;
+use crate::distributor::apply_subnet_diversity;
 use crate::error::ReplicationError;
+use crate::fragment::encode_tessera;
 
 /// Health level of a tessera's replication.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -168,6 +171,145 @@ impl ReplicationService {
         })
     }
 
+    /// Replicate a tessera to the network.
+    ///
+    /// Small tier: push whole file to r peers.
+    /// Medium/Large tier: erasure-code, store fragments locally, push to peers.
+    pub async fn replicate_tessera(
+        &self,
+        tessera_hash: &ContentHash,
+        tessera_data: &[u8],
+    ) -> Result<ReplicationReport, ReplicationError> {
+        let encoded = encode_tessera(tessera_hash, tessera_data)?;
+
+        // Find target peers
+        let mut target_bytes = [0u8; 20];
+        target_bytes.copy_from_slice(&tessera_hash.as_bytes()[..20]);
+        let target_node = NodeId::new(target_bytes);
+        let candidates = self.dht.find_closest_nodes(&target_node).await;
+        let peers = apply_subnet_diversity(&candidates, 2);
+
+        let replication_factor = match &encoded.plan.tier {
+            FragmentationTier::Small {
+                replication_factor, ..
+            }
+            | FragmentationTier::Medium {
+                replication_factor, ..
+            }
+            | FragmentationTier::Large {
+                replication_factor, ..
+            } => *replication_factor as usize,
+        };
+
+        let target_peers = &peers[..peers.len().min(replication_factor)];
+        let mut peers_contacted = 0;
+        let mut peers_accepted = 0;
+        let mut fragments_distributed = 0;
+
+        match &encoded.plan.tier {
+            FragmentationTier::Small { .. } => {
+                // Push whole file to each peer
+                let checksum = ContentHash::new(blake3::hash(tessera_data).into());
+                let id = FragmentId::new(*tessera_hash, 0, 1, checksum);
+                let envelope = FragmentEnvelope {
+                    id,
+                    plan: encoded.plan.clone(),
+                    original_tessera_size: tessera_data.len() as u64,
+                    fragment_size: tessera_data.len() as u64,
+                    data: tessera_data.to_vec(),
+                };
+
+                for peer in target_peers {
+                    peers_contacted += 1;
+                    match self.dht.replicate_fragment(peer, &envelope).await {
+                        Ok(ack) if ack.accepted => {
+                            peers_accepted += 1;
+                            fragments_distributed += 1;
+                            self.ledger.record_peer_stores_for_us(
+                                &peer.identity.node_id,
+                                tessera_data.len() as u64,
+                            )?;
+                        }
+                        Ok(_) => {
+                            tracing::debug!(
+                                peer = %peer.identity.node_id,
+                                "peer rejected fragment"
+                            );
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                peer = %peer.identity.node_id,
+                                error = %e,
+                                "failed to replicate to peer"
+                            );
+                        }
+                    }
+                }
+            }
+            FragmentationTier::Medium { .. } | FragmentationTier::Large { .. } => {
+                // Store fragments locally first
+                for (id, frag_data) in &encoded.fragments {
+                    self.fragments.store_fragment(id, frag_data)?;
+                }
+
+                // Distribute fragments across peers (round-robin)
+                for (i, (id, frag_data)) in encoded.fragments.iter().enumerate() {
+                    let peer_idx = i % target_peers.len().max(1);
+                    if peer_idx >= target_peers.len() {
+                        continue;
+                    }
+                    let peer = &target_peers[peer_idx];
+
+                    let envelope = FragmentEnvelope {
+                        id: id.clone(),
+                        plan: encoded.plan.clone(),
+                        original_tessera_size: tessera_data.len() as u64,
+                        fragment_size: frag_data.len() as u64,
+                        data: frag_data.clone(),
+                    };
+
+                    peers_contacted += 1;
+                    match self.dht.replicate_fragment(peer, &envelope).await {
+                        Ok(ack) if ack.accepted => {
+                            peers_accepted += 1;
+                            fragments_distributed += 1;
+                            self.ledger.record_peer_stores_for_us(
+                                &peer.identity.node_id,
+                                frag_data.len() as u64,
+                            )?;
+                        }
+                        Ok(_) => {
+                            tracing::debug!(
+                                peer = %peer.identity.node_id,
+                                fragment = id.index,
+                                "peer rejected fragment"
+                            );
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                peer = %peer.identity.node_id,
+                                fragment = id.index,
+                                error = %e,
+                                "failed to replicate fragment"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        if peers_accepted == 0 && !target_peers.is_empty() {
+            return Err(ReplicationError::NoPeersAvailable);
+        }
+
+        Ok(ReplicationReport {
+            tessera_hash: *tessera_hash,
+            fragments_distributed,
+            peers_contacted,
+            peers_accepted,
+        })
+    }
+
     pub fn identity(&self) -> &NodeIdentity {
         &self.identity
     }
@@ -197,9 +339,10 @@ impl ReplicationService {
 mod tests {
     use super::*;
     use crate::config::ReplicationConfig;
-    use tesseras_core::replication::*;
+    use tesseras_core::replication::{FragmentId, FragmentPlan};
     use tesseras_core::*;
     use mockall::mock;
+    use std::net::SocketAddr;
 
     mock! {
         pub Dht {}
@@ -373,5 +516,112 @@ mod tests {
         let envelope = make_valid_envelope();
         let ack = service.receive_fragment(envelope, &node(0x01)).await.unwrap();
         assert!(!ack.accepted);
+    }
+
+    fn make_node_info(fill: u8, port: u16) -> NodeInfo {
+        NodeInfo {
+            identity: NodeIdentity {
+                node_id: node(fill),
+                public_key: [fill; 32],
+                nonce: 0,
+            },
+            addr: SocketAddr::from(([10, 0, fill, 1], port)),
+            capabilities: Capabilities::phase2_default(),
+        }
+    }
+
+    #[tokio::test]
+    async fn replicate_small_tessera_pushes_to_r_peers() {
+        let mut dht = MockDht::new();
+        let peers: Vec<NodeInfo> = (1..=7)
+            .map(|i| make_node_info(i, 4433))
+            .collect();
+        let peers_clone = peers.clone();
+        dht.expect_find_closest_nodes()
+            .once()
+            .returning(move |_| peers_clone.clone());
+        dht.expect_replicate_fragment()
+            .times(7)
+            .returning(|_, _| {
+                Ok(ReplicateAck {
+                    accepted: true,
+                    fragments_held: vec![],
+                })
+            });
+
+        let mut ledger = MockLedger::new();
+        ledger
+            .expect_record_peer_stores_for_us()
+            .times(7)
+            .returning(|_, _| Ok(()));
+
+        let service = ReplicationService::new(
+            NodeIdentity {
+                node_id: node(0xff),
+                public_key: [0; 32],
+                nonce: 0,
+            },
+            Box::new(dht),
+            Box::new(MockFragments::new()),
+            Box::new(ledger),
+            Box::new(MockBlobs::new()),
+            ReplicationConfig::default(),
+        );
+
+        let data = vec![0xaa; 1000]; // 1KB — small tier
+        let tessera_hash = hash(0x01);
+        let report = service.replicate_tessera(&tessera_hash, &data).await.unwrap();
+        assert_eq!(report.peers_accepted, 7);
+        assert_eq!(report.fragments_distributed, 7);
+    }
+
+    #[tokio::test]
+    async fn replicate_medium_tessera_encodes_and_distributes() {
+        let mut dht = MockDht::new();
+        let peers: Vec<NodeInfo> = (1..=7)
+            .map(|i| make_node_info(i, 4433))
+            .collect();
+        let peers_clone = peers.clone();
+        dht.expect_find_closest_nodes()
+            .once()
+            .returning(move |_| peers_clone.clone());
+        dht.expect_replicate_fragment()
+            .times(24) // 16 data + 8 parity
+            .returning(|_, _| {
+                Ok(ReplicateAck {
+                    accepted: true,
+                    fragments_held: vec![],
+                })
+            });
+
+        let mut fragments = MockFragments::new();
+        fragments
+            .expect_store_fragment()
+            .times(24)
+            .returning(|_, _| Ok(()));
+
+        let mut ledger = MockLedger::new();
+        ledger
+            .expect_record_peer_stores_for_us()
+            .times(24)
+            .returning(|_, _| Ok(()));
+
+        let service = ReplicationService::new(
+            NodeIdentity {
+                node_id: node(0xff),
+                public_key: [0; 32],
+                nonce: 0,
+            },
+            Box::new(dht),
+            Box::new(fragments),
+            Box::new(ledger),
+            Box::new(MockBlobs::new()),
+            ReplicationConfig::default(),
+        );
+
+        let data = vec![0xbb; 10 * 1024 * 1024]; // 10 MB — medium tier
+        let tessera_hash = hash(0x02);
+        let report = service.replicate_tessera(&tessera_hash, &data).await.unwrap();
+        assert_eq!(report.fragments_distributed, 24);
     }
 }
