@@ -1,0 +1,127 @@
+use chrono::{DateTime, NaiveDate, Utc};
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MemoryType {
+    Moment,
+    Reflection,
+    Daily,
+    Relation,
+    Object,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum Visibility {
+    Private,
+    Circle,
+    Public,
+    PublicAfterDeath {
+        inactive_years: u32,
+    },
+    Sealed {
+        open_after: DateTime<Utc>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
+pub enum ApproximateDate {
+    Year(u16),
+    YearMonth(u16, u8),
+    Full(NaiveDate),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SchemaVersion {
+    V1,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn memory_type_serde_roundtrip() {
+        for mt in [
+            MemoryType::Moment,
+            MemoryType::Reflection,
+            MemoryType::Daily,
+            MemoryType::Relation,
+            MemoryType::Object,
+        ] {
+            let json = serde_json::to_string(&mt).unwrap();
+            let parsed: MemoryType = serde_json::from_str(&json).unwrap();
+            assert_eq!(parsed, mt);
+        }
+    }
+
+    #[test]
+    fn memory_type_serializes_lowercase() {
+        let json = serde_json::to_string(&MemoryType::Moment).unwrap();
+        assert_eq!(json, "\"moment\"");
+    }
+
+    #[test]
+    fn visibility_private_serde() {
+        let v = Visibility::Private;
+        let json = serde_json::to_string(&v).unwrap();
+        let parsed: Visibility = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, v);
+    }
+
+    #[test]
+    fn visibility_sealed_serde_rfc3339() {
+        let dt = chrono::DateTime::parse_from_rfc3339("2050-01-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let v = Visibility::Sealed { open_after: dt };
+        let json = serde_json::to_string(&v).unwrap();
+        assert!(json.contains("2050"));
+        let parsed: Visibility = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, v);
+    }
+
+    #[test]
+    fn visibility_public_after_death_serde() {
+        let v = Visibility::PublicAfterDeath { inactive_years: 5 };
+        let json = serde_json::to_string(&v).unwrap();
+        let parsed: Visibility = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, v);
+    }
+
+    #[test]
+    fn approximate_date_year_serde() {
+        let d = ApproximateDate::Year(1990);
+        let json = serde_json::to_string(&d).unwrap();
+        let parsed: ApproximateDate = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, d);
+    }
+
+    #[test]
+    fn approximate_date_year_month_serde() {
+        let d = ApproximateDate::YearMonth(1990, 6);
+        let json = serde_json::to_string(&d).unwrap();
+        let parsed: ApproximateDate = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, d);
+    }
+
+    #[test]
+    fn approximate_date_full_serde() {
+        let d = ApproximateDate::Full(chrono::NaiveDate::from_ymd_opt(1990, 6, 15).unwrap());
+        let json = serde_json::to_string(&d).unwrap();
+        let parsed: ApproximateDate = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, d);
+    }
+
+    #[test]
+    fn schema_version_serde() {
+        let v = SchemaVersion::V1;
+        let json = serde_json::to_string(&v).unwrap();
+        assert_eq!(json, "\"v1\"");
+        let parsed: SchemaVersion = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, v);
+    }
+}
