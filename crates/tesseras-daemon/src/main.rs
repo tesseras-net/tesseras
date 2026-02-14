@@ -132,23 +132,34 @@ async fn main() -> Result<()> {
         engine_clone.run(shutdown_rx).await;
     });
 
-    // 10. Bootstrap
-    let bootstrap_addrs: Vec<SocketAddr> = if let Some(ref addrs) = cli.bootstrap {
-        if addrs.is_empty() {
-            vec![]
+    // 10. Bootstrap (resolve hostnames via DNS for Docker/LAN compatibility)
+    let bootstrap_addrs: Vec<SocketAddr> = {
+        let raw: Vec<String> = if let Some(ref addrs) = cli.bootstrap {
+            if addrs.is_empty() {
+                vec![]
+            } else {
+                addrs.split(',').map(|s| s.trim().to_string()).collect()
+            }
         } else {
-            addrs
-                .split(',')
-                .filter_map(|s| s.trim().parse().ok())
-                .collect()
+            config.bootstrap.hardcoded.clone()
+        };
+
+        let mut resolved = Vec::new();
+        for addr in &raw {
+            match tokio::net::lookup_host(addr).await {
+                Ok(addrs) => {
+                    if let Some(sock) = addrs.into_iter().next() {
+                        resolved.push(sock);
+                    } else {
+                        tracing::warn!(addr = %addr, "DNS resolved but returned no addresses");
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(addr = %addr, error = %e, "failed to resolve bootstrap address");
+                }
+            }
         }
-    } else {
-        config
-            .bootstrap
-            .hardcoded
-            .iter()
-            .filter_map(|s| s.parse().ok())
-            .collect()
+        resolved
     };
 
     if !bootstrap_addrs.is_empty() {
