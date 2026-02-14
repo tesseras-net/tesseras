@@ -24,3 +24,4 @@ proptest = { workspace = true }
 default = ["classical"]
 classical = ["blake3", "ed25519-dalek", "rand"]
 erasure = ["reed-solomon-erasure"]
+service = ["tesseras-core/service"]

@@ -38,6 +38,39 @@ impl Ed25519Verifier {
     }
 }
 
+#[cfg(feature = "service")]
+impl From<&Ed25519KeyPair> for tesseras_core::ports::KeyMaterial {
+    fn from(keypair: &Ed25519KeyPair) -> Self {
+        tesseras_core::ports::KeyMaterial {
+            algorithm: tesseras_core::ports::KeyAlgorithm::Ed25519,
+            secret: keypair.signing_key.to_bytes().to_vec(),
+            public: keypair.verifying_key.to_bytes().to_vec(),
+        }
+    }
+}
+
+#[cfg(feature = "service")]
+impl TryFrom<&tesseras_core::ports::KeyMaterial> for Ed25519KeyPair {
+    type Error = CryptoError;
+
+    fn try_from(material: &tesseras_core::ports::KeyMaterial) -> Result<Self, Self::Error> {
+        if material.algorithm != tesseras_core::ports::KeyAlgorithm::Ed25519 {
+            return Err(CryptoError::InvalidKey("not Ed25519 key material".into()));
+        }
+        let secret_bytes: [u8; 32] = material
+            .secret
+            .as_slice()
+            .try_into()
+            .map_err(|_| CryptoError::InvalidKey("invalid secret key length".into()))?;
+        let signing_key = SigningKey::from_bytes(&secret_bytes);
+        let verifying_key = signing_key.verifying_key();
+        Ok(Ed25519KeyPair {
+            signing_key,
+            verifying_key,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -66,6 +99,20 @@ mod tests {
         let sig = Ed25519Signer::sign(b"data", &keypair1.signing_key);
         let result = Ed25519Verifier::verify(b"data", &sig, &keypair2.verifying_key);
         assert!(result.is_err());
+    }
+
+    #[test]
+    #[cfg(feature = "service")]
+    fn keypair_to_key_material_roundtrip() {
+        use tesseras_core::ports::{KeyAlgorithm, KeyMaterial};
+        let keypair = Ed25519KeyGenerator::generate();
+        let material: KeyMaterial = (&keypair).into();
+        assert_eq!(material.algorithm, KeyAlgorithm::Ed25519);
+        assert_eq!(material.secret.len(), 32);
+        assert_eq!(material.public.len(), 32);
+        let restored = Ed25519KeyPair::try_from(&material).unwrap();
+        let sig = Ed25519Signer::sign(b"test", &restored.signing_key);
+        assert!(Ed25519Verifier::verify(b"test", &sig, &restored.verifying_key).is_ok());
     }
 
     #[test]

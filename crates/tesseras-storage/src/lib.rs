@@ -1,8 +1,10 @@
 //! tesseras-storage: SQLite index, blob filesystem, import/export.
 
 pub mod error;
+pub mod identity;
 
 pub use error::StorageError;
+pub use identity::FsIdentityStore;
 
 #[cfg(test)]
 mod tests {
