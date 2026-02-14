@@ -4,12 +4,14 @@ pub mod blob;
 pub mod error;
 pub mod fragment;
 pub mod identity;
+pub mod reciprocity;
 pub mod sqlite;
 
 pub use blob::FsBlobStore;
 pub use error::StorageError;
 pub use fragment::FsFragmentStore;
 pub use identity::FsIdentityStore;
+pub use reciprocity::SqliteReciprocityLedger;
 pub use sqlite::{SqliteMemoryRepository, SqliteTesseraRepository};
 
 /// Run database migrations on the given connection.
