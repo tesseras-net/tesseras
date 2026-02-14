@@ -14,6 +14,8 @@ pub use sqlite::{SqliteMemoryRepository, SqliteTesseraRepository};
 pub fn run_migrations(conn: &rusqlite::Connection) -> Result<(), StorageError> {
     conn.execute_batch(include_str!("../migrations/001_initial.sql"))
         .map_err(|e| StorageError::Database(e.to_string()))?;
+    conn.execute_batch(include_str!("../migrations/002_replication.sql"))
+        .map_err(|e| StorageError::Database(e.to_string()))?;
     Ok(())
 }
 
@@ -38,5 +40,47 @@ mod tests {
             .exists([])
             .unwrap();
         assert!(memories_exists);
+    }
+
+    #[test]
+    fn replication_tables_exist() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        for table in [
+            "fragments",
+            "fragment_plans",
+            "holders",
+            "holder_fragments",
+            "reciprocity",
+        ] {
+            let exists: bool = conn
+                .prepare(&format!(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'"
+                ))
+                .unwrap()
+                .exists([])
+                .unwrap();
+            assert!(exists, "table {table} should exist");
+        }
+    }
+
+    #[test]
+    fn reciprocity_generated_column() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        run_migrations(&conn).unwrap();
+        conn.execute(
+            "INSERT INTO reciprocity (peer_id, bytes_stored_for_them, bytes_they_store_for_us, last_updated)
+             VALUES ('peer1', 500, 300, '2026-01-01T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+        let balance: i64 = conn
+            .query_row(
+                "SELECT balance FROM reciprocity WHERE peer_id = 'peer1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(balance, -200); // 300 - 500 = -200
     }
 }
