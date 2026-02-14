@@ -47,7 +47,8 @@ reed-solomon-erasure = "6"
 rusqlite = { version = "0.33" }
 
 # CLI
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive", "color"] }
+clap_complete = "4"
 dialoguer = "0.11"
 comfy-table = "7"
 
