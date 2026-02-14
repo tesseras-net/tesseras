@@ -87,13 +87,44 @@ else
     fail "tessera verification did not pass"
 fi
 
-# --- 8. Check replication activity in logs ---
-echo "--- checking replication activity ---"
-if docker compose logs client 2>&1 | grep -qi "repair.loop\|replication\|under-replicated\|fragment"; then
-    pass "replication activity detected in client logs"
+# --- 8a. Wait for repair sweep to complete ---
+echo "--- waiting for repair sweep (up to 15s) ---"
+elapsed=0
+sweep_found=false
+while [ "$elapsed" -lt 15 ]; do
+    if docker compose logs 2>&1 | grep -q "repair sweep complete"; then
+        sweep_found=true
+        break
+    fi
+    sleep 1
+    elapsed=$((elapsed + 1))
+done
+if [ "$sweep_found" = true ]; then
+    pass "repair sweep completed"
 else
-    info "no replication log entries found (stub transport — expected)"
+    fail "repair sweep did not complete within 15s"
 fi
+
+# --- 8b. No handler errors ---
+echo "--- checking for handler errors ---"
+ALL_LOGS=$(docker compose logs 2>&1)
+if echo "$ALL_LOGS" | grep -q "REPLICATE handler failed"; then
+    fail "REPLICATE handler failed (see logs)"
+fi
+if echo "$ALL_LOGS" | grep -q "ATTEST handler failed"; then
+    fail "ATTEST handler failed (see logs)"
+fi
+pass "no RPC handler errors"
+
+# --- 8c. Handlers are wired ---
+echo "--- checking handler wiring ---"
+if echo "$ALL_LOGS" | grep -q "received REPLICATE but no handler set"; then
+    fail "REPLICATE handler not wired"
+fi
+if echo "$ALL_LOGS" | grep -q "received ATTEST_REQUEST but no handler set"; then
+    fail "ATTEST handler not wired"
+fi
+pass "all RPC handlers wired correctly"
 
 # --- 9. Check routing table ---
 echo "--- checking routing table ---"

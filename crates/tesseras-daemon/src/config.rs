@@ -10,6 +10,8 @@ pub struct DaemonConfig {
     pub bootstrap: BootstrapConfig,
     pub network: NetworkConfig,
     pub observability: ObservabilityConfig,
+    #[serde(default)]
+    pub replication: ReplicationTomlConfig,
 }
 
 #[derive(Debug, Deserialize)]
@@ -46,6 +48,23 @@ pub struct ObservabilityConfig {
     pub log_format: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ReplicationTomlConfig {
+    /// How often the repair loop runs, in seconds. Default: 86400 (24h).
+    pub repair_interval_secs: u64,
+    /// Random jitter added to repair interval, in seconds. Default: 7200 (2h).
+    pub repair_jitter_secs: u64,
+}
+
+impl Default for ReplicationTomlConfig {
+    fn default() -> Self {
+        Self {
+            repair_interval_secs: 86400,
+            repair_jitter_secs: 7200,
+        }
+    }
+}
+
 impl Default for DaemonConfig {
     fn default() -> Self {
         Self {
@@ -76,6 +95,7 @@ impl Default for DaemonConfig {
                 metrics_addr: "127.0.0.1:9190".parse().unwrap(),
                 log_format: "json".into(),
             },
+            replication: ReplicationTomlConfig::default(),
         }
     }
 }
@@ -96,6 +116,16 @@ impl DaemonConfig {
             stale_check_interval: std::time::Duration::from_secs(900),
         }
     }
+
+    pub fn to_replication_config(&self) -> tesseras_replication::ReplicationConfig {
+        tesseras_replication::ReplicationConfig {
+            repair_interval: std::time::Duration::from_secs(
+                self.replication.repair_interval_secs,
+            ),
+            repair_jitter: std::time::Duration::from_secs(self.replication.repair_jitter_secs),
+            ..tesseras_replication::ReplicationConfig::default()
+        }
+    }
 }
 
 #[cfg(test)]
@@ -107,5 +137,75 @@ mod tests {
         let config = DaemonConfig::default();
         assert_eq!(config.dht.k, 20);
         assert_eq!(config.node.listen_addr.port(), 4433);
+        assert_eq!(config.replication.repair_interval_secs, 86400);
+        assert_eq!(config.replication.repair_jitter_secs, 7200);
+    }
+
+    #[test]
+    fn toml_without_replication_uses_defaults() {
+        let toml = r#"
+[node]
+data_dir = "/tmp/test"
+listen_addr = "127.0.0.1:4433"
+
+[dht]
+k = 20
+alpha = 3
+bucket_refresh_interval_secs = 3600
+republish_interval_secs = 3600
+pointer_ttl_secs = 86400
+max_stored_pointers = 100000
+ping_failure_threshold = 3
+
+[bootstrap]
+dns_domain = "test"
+hardcoded = []
+
+[network]
+enable_mdns = false
+
+[observability]
+metrics_addr = "127.0.0.1:9190"
+log_format = "json"
+"#;
+        let config: DaemonConfig = toml::from_str(toml).unwrap();
+        assert_eq!(config.replication.repair_interval_secs, 86400);
+        assert_eq!(config.replication.repair_jitter_secs, 7200);
+    }
+
+    #[test]
+    fn toml_with_replication_overrides() {
+        let toml = r#"
+[node]
+data_dir = "/tmp/test"
+listen_addr = "127.0.0.1:4433"
+
+[dht]
+k = 20
+alpha = 3
+bucket_refresh_interval_secs = 3600
+republish_interval_secs = 3600
+pointer_ttl_secs = 86400
+max_stored_pointers = 100000
+ping_failure_threshold = 3
+
+[bootstrap]
+dns_domain = "test"
+hardcoded = []
+
+[network]
+enable_mdns = false
+
+[observability]
+metrics_addr = "127.0.0.1:9190"
+log_format = "json"
+
+[replication]
+repair_interval_secs = 5
+repair_jitter_secs = 1
+"#;
+        let config: DaemonConfig = toml::from_str(toml).unwrap();
+        assert_eq!(config.replication.repair_interval_secs, 5);
+        assert_eq!(config.replication.repair_jitter_secs, 1);
     }
 }

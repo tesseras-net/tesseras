@@ -1,0 +1,30 @@
+# Smoke test config: short repair interval so the repair loop fires quickly.
+# CLI flags --listen, --bootstrap, --data-dir override the values below.
+
+[node]
+data_dir = "/data"
+listen_addr = "0.0.0.0:4433"
+
+[dht]
+k = 20
+alpha = 3
+bucket_refresh_interval_secs = 3600
+republish_interval_secs = 3600
+pointer_ttl_secs = 86400
+max_stored_pointers = 100000
+ping_failure_threshold = 3
+
+[bootstrap]
+dns_domain = "_tesseras._udp.tesseras.net"
+hardcoded = []
+
+[network]
+enable_mdns = false
+
+[observability]
+metrics_addr = "127.0.0.1:9190"
+log_format = "json"
+
+[replication]
+repair_interval_secs = 5
+repair_jitter_secs = 1

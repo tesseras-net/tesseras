@@ -1,15 +1,27 @@
 services:
   boot1:
     build: ../..
-    command: ["--listen", "0.0.0.0:4433", "--bootstrap", "", "--data-dir", "/data"]
+    command: ["--config", "/etc/tesseras/config.toml", "--listen", "0.0.0.0:4433", "--bootstrap", "", "--data-dir", "/data"]
     ports: ["4433:4433/udp"]
+    environment:
+      RUST_LOG: info
+    volumes:
+      - ./smoke-config.toml:/etc/tesseras/config.toml:ro
 
   boot2:
     build: ../..
-    command: ["--listen", "0.0.0.0:4433", "--bootstrap", "boot1:4433", "--data-dir", "/data"]
+    command: ["--config", "/etc/tesseras/config.toml", "--listen", "0.0.0.0:4433", "--bootstrap", "boot1:4433", "--data-dir", "/data"]
     depends_on: [boot1]
+    environment:
+      RUST_LOG: info
+    volumes:
+      - ./smoke-config.toml:/etc/tesseras/config.toml:ro
 
   client:
     build: ../..
-    command: ["--listen", "0.0.0.0:4433", "--bootstrap", "boot2:4433", "--data-dir", "/data"]
+    command: ["--config", "/etc/tesseras/config.toml", "--listen", "0.0.0.0:4433", "--bootstrap", "boot2:4433", "--data-dir", "/data"]
     depends_on: [boot2]
+    environment:
+      RUST_LOG: info
+    volumes:
+      - ./smoke-config.toml:/etc/tesseras/config.toml:ro
