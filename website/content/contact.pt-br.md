@@ -14,5 +14,5 @@ A melhor forma de contatar o projeto é através da [lista de discussão](/pt-br
 
 ### Recursos
 
-- [Livro](https://tesseras.net/book/) — documentação para usuários (em breve)
+- [Livro](https://tesseras.net/book/pt-br/) — documentação para usuários (em breve)
 - [Feed Atom](/pt-br/atom.xml) — notícias do projeto
