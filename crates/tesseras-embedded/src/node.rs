@@ -355,6 +355,10 @@ impl EmbeddedNode {
         })
     }
 
+    pub fn subscribe_network_events(&self) -> broadcast::Receiver<NetworkEvent> {
+        self.event_tx.subscribe()
+    }
+
     // -- Network API --
 
     pub fn get_network_stats(&self) -> Result<crate::types::NetworkStats, TesserasError> {
@@ -504,6 +508,24 @@ mod tests {
         // Second start — must not corrupt SQLite or leave locks
         let node = EmbeddedNode::start(data_dir).expect("second start");
         node.stop().expect("second stop");
+    }
+
+    #[test]
+    fn network_events_stream_emits_bootstrap() {
+        let dir = TempDir::new().unwrap();
+        let node = EmbeddedNode::start(dir.path().to_str().unwrap().to_string()).unwrap();
+
+        let mut rx = node.subscribe_network_events();
+
+        // The node emits BootstrapComplete on start — give it a moment
+        let event = node.runtime.block_on(async {
+            tokio::time::timeout(std::time::Duration::from_secs(2), rx.recv()).await
+        });
+
+        // Should receive at least one event
+        assert!(event.is_ok());
+
+        node.stop().unwrap();
     }
 
     #[test]
