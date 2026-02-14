@@ -14,5 +14,5 @@ The best way to reach the project is through the [mailing list](/subscriptions/)
 
 ### Resources
 
-- [Book](https://book.tesseras.net) — user documentation (coming soon)
+- [Book](https://tesseras.net/book/) — user documentation (coming soon)
 - [Atom feed](/atom.xml) — project news
