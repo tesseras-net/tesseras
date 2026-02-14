@@ -183,7 +183,7 @@ impl TesseraService {
             .iter()
             .map(|(_, data, _, _, _)| data.len() as u64)
             .sum();
-        let vis_str = serde_json::to_string(&input.visibility).unwrap_or_default();
+        let vis_str = input.visibility.to_string();
         let tessera_record = TesseraRecord {
             hash: content_hash,
             creator_pubkey: pub_key_hex,

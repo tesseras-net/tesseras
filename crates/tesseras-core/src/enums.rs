@@ -1,3 +1,5 @@
+use std::fmt;
+
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -19,6 +21,22 @@ pub enum Visibility {
     Public,
     PublicAfterDeath { inactive_years: u32 },
     Sealed { open_after: DateTime<Utc> },
+}
+
+impl fmt::Display for Visibility {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Visibility::Private => write!(f, "private"),
+            Visibility::Circle => write!(f, "circle"),
+            Visibility::Public => write!(f, "public"),
+            Visibility::PublicAfterDeath { inactive_years } => {
+                write!(f, "public after {inactive_years}y inactive")
+            }
+            Visibility::Sealed { open_after } => {
+                write!(f, "sealed until {}", open_after.format("%Y-%m-%d"))
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
