@@ -12,7 +12,6 @@ chrono = { workspace = true }
 thiserror = { workspace = true }
 
 # Optional: application service layer
-async-trait = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true }
 
 [dev-dependencies]
@@ -24,8 +23,8 @@ ed25519-dalek = { workspace = true, features = ["rand_core"] }
 rand = { workspace = true }
 tempfile = { workspace = true }
 tesseras-storage = { workspace = true }
-sqlx = { workspace = true }
+rusqlite = { workspace = true }
 
 [features]
 default = []
-service = ["async-trait", "dep:tokio"]
+service = ["dep:tokio"]

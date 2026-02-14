@@ -5,7 +5,7 @@ use super::init::expand_tilde;
 
 pub async fn run(data_dir: &str) -> Result<()> {
     let base = expand_tilde(data_dir);
-    let service = build_service(&base).await?;
+    let service = build_service(&base)?;
     let tesseras = service.list().await?;
 
     if tesseras.is_empty() {

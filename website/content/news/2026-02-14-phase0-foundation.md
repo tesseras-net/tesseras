@@ -12,7 +12,7 @@ The first milestone of the Tesseras project is complete. Phase 0 establishes the
 
 **tesseras-crypto** — Ed25519 key generation, signing, and verification. A dual-signature framework (Ed25519 + ML-DSA placeholder) ready for post-quantum migration. BLAKE3 content hashing. Reed-Solomon erasure coding behind a feature flag for future replication.
 
-**tesseras-storage** — SQLite index via sqlx with compile-time checked migrations. Filesystem blob store with content-addressable layout (`blobs/<tessera_hash>/<memory_hash>/<filename>`). Identity key persistence on disk.
+**tesseras-storage** — SQLite index via rusqlite with plain-SQL migrations. Filesystem blob store with content-addressable layout (`blobs/<tessera_hash>/<memory_hash>/<filename>`). Identity key persistence on disk.
 
 **tesseras-cli** — A working `tesseras` binary with five commands:
 - `init` — generates Ed25519 identity, creates SQLite database

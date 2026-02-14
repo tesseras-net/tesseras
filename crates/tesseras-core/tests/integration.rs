@@ -1,5 +1,6 @@
 //! Integration tests: full create → verify → export cycle using real adapters.
 
+use std::sync::{Arc, Mutex};
 use tempfile::TempDir;
 use tesseras_core::ports::{Hasher, ManifestSigner, ManifestVerifier};
 use tesseras_core::{ContentHash, CreateInput, FileInput, MemoryType, TesseraService, Visibility};
@@ -76,16 +77,14 @@ impl ManifestVerifier for TestVerifier {
     }
 }
 
-async fn setup() -> (TesseraService, TempDir) {
+fn setup() -> (TesseraService, TempDir) {
     let dir = TempDir::new().unwrap();
-    let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
-    sqlx::migrate!("../tesseras-storage/migrations")
-        .run(&pool)
-        .await
-        .unwrap();
+    let conn = rusqlite::Connection::open_in_memory().unwrap();
+    tesseras_storage::run_migrations(&conn).unwrap();
+    let conn = Arc::new(Mutex::new(conn));
     let service = TesseraService::new(
-        Box::new(SqliteTesseraRepository::new(pool.clone())),
-        Box::new(SqliteMemoryRepository::new(pool)),
+        Box::new(SqliteTesseraRepository::new(conn.clone())),
+        Box::new(SqliteMemoryRepository::new(conn)),
         Box::new(FsBlobStore::new(dir.path().join("blobs"))),
         Box::new(TestHasher),
         Box::new(TestSigner::new()),
@@ -96,7 +95,7 @@ async fn setup() -> (TesseraService, TempDir) {
 
 #[tokio::test]
 async fn create_verify_export_cycle() {
-    let (service, dir) = setup().await;
+    let (service, dir) = setup();
 
     // Write test files
     let input_dir = dir.path().join("input");
@@ -134,7 +133,7 @@ async fn create_verify_export_cycle() {
 
 #[tokio::test]
 async fn create_non_interactive_empty_context() {
-    let (service, dir) = setup().await;
+    let (service, dir) = setup();
     let input_dir = dir.path().join("input");
     std::fs::create_dir_all(&input_dir).unwrap();
     std::fs::write(input_dir.join("note.txt"), "Some text").unwrap();
@@ -158,7 +157,7 @@ async fn create_non_interactive_empty_context() {
 
 #[tokio::test]
 async fn verify_detects_tampered_file() {
-    let (service, dir) = setup().await;
+    let (service, dir) = setup();
     let input_dir = dir.path().join("input");
     std::fs::create_dir_all(&input_dir).unwrap();
     std::fs::write(input_dir.join("photo.jpg"), b"original data").unwrap();
@@ -196,7 +195,7 @@ async fn verify_detects_tampered_file() {
 
 #[tokio::test]
 async fn verify_detects_bad_signature() {
-    let (service, dir) = setup().await;
+    let (service, dir) = setup();
     let input_dir = dir.path().join("input");
     std::fs::create_dir_all(&input_dir).unwrap();
     std::fs::write(input_dir.join("note.txt"), b"test content").unwrap();

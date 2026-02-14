@@ -110,14 +110,12 @@ impl TesseraService {
 
             // Store media blob
             self.blobs
-                .write(&content_hash, memory_hash, media_name, data)
-                .await?;
+                .write(&content_hash, memory_hash, media_name, data)?;
 
             // Store context if present
             if let Some(ctx) = &file.context {
                 self.blobs
-                    .write(&content_hash, memory_hash, "context.txt", ctx.as_bytes())
-                    .await?;
+                    .write(&content_hash, memory_hash, "context.txt", ctx.as_bytes())?;
             }
 
             // Store metadata JSON
@@ -138,8 +136,7 @@ impl TesseraService {
                     memory_hash,
                     "meta.json",
                     meta_json.as_bytes(),
-                )
-                .await?;
+                )?;
 
             // Collect memory record for DB (stored after tessera)
             memory_records.push(MemoryRecord {
@@ -179,11 +176,9 @@ impl TesseraService {
                 &content_hash,
                 "MANIFEST",
                 manifest_text.as_bytes(),
-            )
-            .await?;
+            )?;
         self.blobs
-            .write(&content_hash, &content_hash, "ed25519.sig", &sig_bytes)
-            .await?;
+            .write(&content_hash, &content_hash, "ed25519.sig", &sig_bytes)?;
 
         // 5. Store tessera record in DB first (FK parent)
         let total_size: u64 = memory_entries
@@ -204,11 +199,11 @@ impl TesseraService {
             },
             is_mine: true,
         };
-        self.repo.store(&tessera_record).await?;
+        self.repo.store(&tessera_record)?;
 
         // 6. Store memory records in DB (FK children)
         for record in &memory_records {
-            self.memory_repo.store(record).await?;
+            self.memory_repo.store(record)?;
         }
 
         Ok(content_hash)
@@ -218,15 +213,14 @@ impl TesseraService {
         // 1. Load TesseraRecord from DB
         let tessera = self
             .repo
-            .find_by_hash(hash)
-            .await?
+            .find_by_hash(hash)?
             .ok_or_else(|| CoreError::InvalidTessera(format!("tessera not found: {hash}")))?;
 
-        let _memories = self.memory_repo.list_by_tessera(hash).await?;
+        let _memories = self.memory_repo.list_by_tessera(hash)?;
 
         // 2. Read manifest from well-known location: content_hash/content_hash/MANIFEST
         let manifest_data =
-            self.blobs.read(hash, hash, "MANIFEST").await.map_err(|_| {
+            self.blobs.read(hash, hash, "MANIFEST").map_err(|_| {
                 CoreError::InvalidTessera("manifest not found in blob store".into())
             })?;
         let manifest_text = String::from_utf8_lossy(&manifest_data).to_string();
@@ -236,7 +230,7 @@ impl TesseraService {
 
         // 4. Verify signature
         let mut signature_valid = false;
-        if let Ok(sig_bytes) = self.blobs.read(hash, hash, "ed25519.sig").await {
+        if let Ok(sig_bytes) = self.blobs.read(hash, hash, "ed25519.sig") {
             signature_valid = self.verifier.verify(
                 manifest_text.as_bytes(),
                 &sig_bytes,
@@ -252,7 +246,7 @@ impl TesseraService {
                 let memory_hash_str = parts[1];
                 let filename = parts[2..].join("/");
                 if let Ok(memory_hash) = ContentHash::from_str(memory_hash_str) {
-                    match self.blobs.read(hash, &memory_hash, &filename).await {
+                    match self.blobs.read(hash, &memory_hash, &filename) {
                         Ok(data) => {
                             let actual_hash = self.hasher.hash(&data);
                             let valid = actual_hash == entry.hash;
@@ -286,23 +280,22 @@ impl TesseraService {
     pub async fn export(&self, hash: &ContentHash, dest: &Path) -> Result<(), CoreError> {
         let _tessera = self
             .repo
-            .find_by_hash(hash)
-            .await?
+            .find_by_hash(hash)?
             .ok_or_else(|| CoreError::InvalidTessera(format!("tessera not found: {hash}")))?;
 
         let tessera_dir = dest.join(format!("tessera-{hash}"));
         tokio::fs::create_dir_all(&tessera_dir).await?;
 
-        let memories = self.memory_repo.list_by_tessera(hash).await?;
+        let memories = self.memory_repo.list_by_tessera(hash)?;
 
         let identity_dir = tessera_dir.join("identity");
         tokio::fs::create_dir_all(&identity_dir).await?;
 
         // Read manifest and signature from well-known location
-        if let Ok(manifest_data) = self.blobs.read(hash, hash, "MANIFEST").await {
+        if let Ok(manifest_data) = self.blobs.read(hash, hash, "MANIFEST") {
             tokio::fs::write(tessera_dir.join("MANIFEST"), &manifest_data).await?;
         }
-        if let Ok(sig_data) = self.blobs.read(hash, hash, "ed25519.sig").await {
+        if let Ok(sig_data) = self.blobs.read(hash, hash, "ed25519.sig") {
             tokio::fs::write(identity_dir.join("ed25519.sig"), &sig_data).await?;
         }
 
@@ -315,15 +308,15 @@ impl TesseraService {
             tokio::fs::create_dir_all(&mem_dir).await?;
 
             let media_filename = mem.media_path.split('/').next_back().unwrap_or("media.bin");
-            if let Ok(data) = self.blobs.read(hash, &mem.hash, media_filename).await {
+            if let Ok(data) = self.blobs.read(hash, &mem.hash, media_filename) {
                 tokio::fs::write(mem_dir.join(media_filename), &data).await?;
             }
             if mem.context_path.is_some() {
-                if let Ok(data) = self.blobs.read(hash, &mem.hash, "context.txt").await {
+                if let Ok(data) = self.blobs.read(hash, &mem.hash, "context.txt") {
                     tokio::fs::write(mem_dir.join("context.txt"), &data).await?;
                 }
             }
-            if let Ok(data) = self.blobs.read(hash, &mem.hash, "meta.json").await {
+            if let Ok(data) = self.blobs.read(hash, &mem.hash, "meta.json") {
                 tokio::fs::write(mem_dir.join("meta.json"), &data).await?;
             }
         }
@@ -332,7 +325,7 @@ impl TesseraService {
     }
 
     pub async fn list(&self) -> Result<Vec<TesseraRecord>, CoreError> {
-        self.repo.list().await
+        self.repo.list()
     }
 }
 
@@ -369,29 +362,28 @@ mod tests {
         }
     }
 
-    #[async_trait::async_trait]
     impl TesseraRepository for InMemoryTesseraRepo {
-        async fn store(&self, tessera: &TesseraRecord) -> Result<(), CoreError> {
+        fn store(&self, tessera: &TesseraRecord) -> Result<(), CoreError> {
             self.data
                 .lock()
                 .unwrap()
                 .insert(tessera.hash.to_string(), tessera.clone());
             Ok(())
         }
-        async fn find_by_hash(
+        fn find_by_hash(
             &self,
             hash: &ContentHash,
         ) -> Result<Option<TesseraRecord>, CoreError> {
             Ok(self.data.lock().unwrap().get(&hash.to_string()).cloned())
         }
-        async fn list(&self) -> Result<Vec<TesseraRecord>, CoreError> {
+        fn list(&self) -> Result<Vec<TesseraRecord>, CoreError> {
             Ok(self.data.lock().unwrap().values().cloned().collect())
         }
-        async fn delete(&self, hash: &ContentHash) -> Result<(), CoreError> {
+        fn delete(&self, hash: &ContentHash) -> Result<(), CoreError> {
             self.data.lock().unwrap().remove(&hash.to_string());
             Ok(())
         }
-        async fn exists(&self, hash: &ContentHash) -> Result<bool, CoreError> {
+        fn exists(&self, hash: &ContentHash) -> Result<bool, CoreError> {
             Ok(self.data.lock().unwrap().contains_key(&hash.to_string()))
         }
     }
@@ -408,22 +400,21 @@ mod tests {
         }
     }
 
-    #[async_trait::async_trait]
     impl MemoryRepository for InMemoryMemoryRepo {
-        async fn store(&self, memory: &MemoryRecord) -> Result<(), CoreError> {
+        fn store(&self, memory: &MemoryRecord) -> Result<(), CoreError> {
             self.data
                 .lock()
                 .unwrap()
                 .insert(memory.hash.to_string(), memory.clone());
             Ok(())
         }
-        async fn find_by_hash(
+        fn find_by_hash(
             &self,
             hash: &ContentHash,
         ) -> Result<Option<MemoryRecord>, CoreError> {
             Ok(self.data.lock().unwrap().get(&hash.to_string()).cloned())
         }
-        async fn list_by_tessera(
+        fn list_by_tessera(
             &self,
             tessera_hash: &ContentHash,
         ) -> Result<Vec<MemoryRecord>, CoreError> {
@@ -437,7 +428,7 @@ mod tests {
                 .cloned()
                 .collect())
         }
-        async fn delete(&self, hash: &ContentHash) -> Result<(), CoreError> {
+        fn delete(&self, hash: &ContentHash) -> Result<(), CoreError> {
             self.data.lock().unwrap().remove(&hash.to_string());
             Ok(())
         }
@@ -459,9 +450,8 @@ mod tests {
         }
     }
 
-    #[async_trait::async_trait]
     impl BlobStore for InMemoryBlobStore {
-        async fn write(
+        fn write(
             &self,
             tessera_hash: &ContentHash,
             memory_hash: &ContentHash,
@@ -472,7 +462,7 @@ mod tests {
             self.data.lock().unwrap().insert(key, data.to_vec());
             Ok(())
         }
-        async fn read(
+        fn read(
             &self,
             tessera_hash: &ContentHash,
             memory_hash: &ContentHash,
@@ -486,7 +476,7 @@ mod tests {
                 ))
             })
         }
-        async fn exists(
+        fn exists(
             &self,
             tessera_hash: &ContentHash,
             memory_hash: &ContentHash,
@@ -495,7 +485,7 @@ mod tests {
             let key = Self::key(tessera_hash, memory_hash, name);
             Ok(self.data.lock().unwrap().contains_key(&key))
         }
-        async fn delete_tessera(&self, tessera_hash: &ContentHash) -> Result<(), CoreError> {
+        fn delete_tessera(&self, tessera_hash: &ContentHash) -> Result<(), CoreError> {
             let prefix = tessera_hash.to_string();
             self.data
                 .lock()

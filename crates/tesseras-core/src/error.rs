@@ -15,6 +15,9 @@ pub enum CoreError {
     #[error("serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
 
+    #[error("database error: {0}")]
+    Database(String),
+
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
 }

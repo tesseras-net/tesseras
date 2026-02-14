@@ -19,6 +19,6 @@ clap = { workspace = true }
 dialoguer = { workspace = true }
 comfy-table = { workspace = true }
 tracing = { workspace = true }
-sqlx = { workspace = true }
+rusqlite = { workspace = true }
 chrono = { workspace = true }
 ed25519-dalek = { workspace = true }

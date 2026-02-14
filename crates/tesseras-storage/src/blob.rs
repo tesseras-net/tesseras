@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 
-use async_trait::async_trait;
 use tesseras_core::ports::BlobStore;
 use tesseras_core::{ContentHash, CoreError};
 
@@ -26,9 +25,8 @@ impl FsBlobStore {
     }
 }
 
-#[async_trait]
 impl BlobStore for FsBlobStore {
-    async fn write(
+    fn write(
         &self,
         tessera_hash: &ContentHash,
         memory_hash: &ContentHash,
@@ -36,35 +34,35 @@ impl BlobStore for FsBlobStore {
         data: &[u8],
     ) -> Result<(), CoreError> {
         let path = self.blob_path(tessera_hash, memory_hash, name);
-        tokio::fs::create_dir_all(path.parent().unwrap()).await?;
-        tokio::fs::write(&path, data).await?;
+        std::fs::create_dir_all(path.parent().unwrap())?;
+        std::fs::write(&path, data)?;
         Ok(())
     }
 
-    async fn read(
+    fn read(
         &self,
         tessera_hash: &ContentHash,
         memory_hash: &ContentHash,
         name: &str,
     ) -> Result<Vec<u8>, CoreError> {
         let path = self.blob_path(tessera_hash, memory_hash, name);
-        tokio::fs::read(&path).await.map_err(CoreError::Io)
+        std::fs::read(&path).map_err(CoreError::Io)
     }
 
-    async fn exists(
+    fn exists(
         &self,
         tessera_hash: &ContentHash,
         memory_hash: &ContentHash,
         name: &str,
     ) -> Result<bool, CoreError> {
         let path = self.blob_path(tessera_hash, memory_hash, name);
-        Ok(tokio::fs::try_exists(&path).await.unwrap_or(false))
+        Ok(path.exists())
     }
 
-    async fn delete_tessera(&self, tessera_hash: &ContentHash) -> Result<(), CoreError> {
+    fn delete_tessera(&self, tessera_hash: &ContentHash) -> Result<(), CoreError> {
         let path = self.base_path.join(tessera_hash.to_string());
-        if tokio::fs::try_exists(&path).await.unwrap_or(false) {
-            tokio::fs::remove_dir_all(&path).await?;
+        if path.exists() {
+            std::fs::remove_dir_all(&path)?;
         }
         Ok(())
     }
@@ -75,56 +73,47 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
-    #[tokio::test]
-    async fn write_read_roundtrip() {
+    #[test]
+    fn write_read_roundtrip() {
         let dir = TempDir::new().unwrap();
         let store = FsBlobStore::new(dir.path().join("blobs"));
         let t_hash = ContentHash::new([0x01; 32]);
         let m_hash = ContentHash::new([0x02; 32]);
         let data = b"JPEG image data here";
-        store
-            .write(&t_hash, &m_hash, "media.jpg", data)
-            .await
-            .unwrap();
-        let read = store.read(&t_hash, &m_hash, "media.jpg").await.unwrap();
+        store.write(&t_hash, &m_hash, "media.jpg", data).unwrap();
+        let read = store.read(&t_hash, &m_hash, "media.jpg").unwrap();
         assert_eq!(read, data);
     }
 
-    #[tokio::test]
-    async fn read_nonexistent_returns_error() {
+    #[test]
+    fn read_nonexistent_returns_error() {
         let dir = TempDir::new().unwrap();
         let store = FsBlobStore::new(dir.path().join("blobs"));
         let t_hash = ContentHash::new([0x01; 32]);
         let m_hash = ContentHash::new([0x02; 32]);
-        let result = store.read(&t_hash, &m_hash, "nope.jpg").await;
+        let result = store.read(&t_hash, &m_hash, "nope.jpg");
         assert!(result.is_err());
     }
 
-    #[tokio::test]
-    async fn exists_check() {
+    #[test]
+    fn exists_check() {
         let dir = TempDir::new().unwrap();
         let store = FsBlobStore::new(dir.path().join("blobs"));
         let t_hash = ContentHash::new([0x01; 32]);
         let m_hash = ContentHash::new([0x02; 32]);
-        assert!(!store.exists(&t_hash, &m_hash, "media.jpg").await.unwrap());
-        store
-            .write(&t_hash, &m_hash, "media.jpg", b"data")
-            .await
-            .unwrap();
-        assert!(store.exists(&t_hash, &m_hash, "media.jpg").await.unwrap());
+        assert!(!store.exists(&t_hash, &m_hash, "media.jpg").unwrap());
+        store.write(&t_hash, &m_hash, "media.jpg", b"data").unwrap();
+        assert!(store.exists(&t_hash, &m_hash, "media.jpg").unwrap());
     }
 
-    #[tokio::test]
-    async fn delete_tessera_removes_all() {
+    #[test]
+    fn delete_tessera_removes_all() {
         let dir = TempDir::new().unwrap();
         let store = FsBlobStore::new(dir.path().join("blobs"));
         let t_hash = ContentHash::new([0x01; 32]);
         let m_hash = ContentHash::new([0x02; 32]);
-        store
-            .write(&t_hash, &m_hash, "media.jpg", b"data")
-            .await
-            .unwrap();
-        store.delete_tessera(&t_hash).await.unwrap();
-        assert!(!store.exists(&t_hash, &m_hash, "media.jpg").await.unwrap());
+        store.write(&t_hash, &m_hash, "media.jpg", b"data").unwrap();
+        store.delete_tessera(&t_hash).unwrap();
+        assert!(!store.exists(&t_hash, &m_hash, "media.jpg").unwrap());
     }
 }

@@ -1,60 +1,54 @@
-use async_trait::async_trait;
-
 use crate::{ContentHash, CoreError};
 
 /// Tessera metadata persistence.
-#[async_trait]
 pub trait TesseraRepository: Send + Sync {
-    async fn store(&self, tessera: &TesseraRecord) -> Result<(), CoreError>;
-    async fn find_by_hash(&self, hash: &ContentHash) -> Result<Option<TesseraRecord>, CoreError>;
-    async fn list(&self) -> Result<Vec<TesseraRecord>, CoreError>;
-    async fn delete(&self, hash: &ContentHash) -> Result<(), CoreError>;
-    async fn exists(&self, hash: &ContentHash) -> Result<bool, CoreError>;
+    fn store(&self, tessera: &TesseraRecord) -> Result<(), CoreError>;
+    fn find_by_hash(&self, hash: &ContentHash) -> Result<Option<TesseraRecord>, CoreError>;
+    fn list(&self) -> Result<Vec<TesseraRecord>, CoreError>;
+    fn delete(&self, hash: &ContentHash) -> Result<(), CoreError>;
+    fn exists(&self, hash: &ContentHash) -> Result<bool, CoreError>;
 }
 
 /// Memory metadata persistence.
-#[async_trait]
 pub trait MemoryRepository: Send + Sync {
-    async fn store(&self, memory: &MemoryRecord) -> Result<(), CoreError>;
-    async fn find_by_hash(&self, hash: &ContentHash) -> Result<Option<MemoryRecord>, CoreError>;
-    async fn list_by_tessera(
+    fn store(&self, memory: &MemoryRecord) -> Result<(), CoreError>;
+    fn find_by_hash(&self, hash: &ContentHash) -> Result<Option<MemoryRecord>, CoreError>;
+    fn list_by_tessera(
         &self,
         tessera_hash: &ContentHash,
     ) -> Result<Vec<MemoryRecord>, CoreError>;
-    async fn delete(&self, hash: &ContentHash) -> Result<(), CoreError>;
+    fn delete(&self, hash: &ContentHash) -> Result<(), CoreError>;
 }
 
 /// Raw file storage.
-#[async_trait]
 pub trait BlobStore: Send + Sync {
-    async fn write(
+    fn write(
         &self,
         tessera_hash: &ContentHash,
         memory_hash: &ContentHash,
         name: &str,
         data: &[u8],
     ) -> Result<(), CoreError>;
-    async fn read(
+    fn read(
         &self,
         tessera_hash: &ContentHash,
         memory_hash: &ContentHash,
         name: &str,
     ) -> Result<Vec<u8>, CoreError>;
-    async fn exists(
+    fn exists(
         &self,
         tessera_hash: &ContentHash,
         memory_hash: &ContentHash,
         name: &str,
     ) -> Result<bool, CoreError>;
-    async fn delete_tessera(&self, tessera_hash: &ContentHash) -> Result<(), CoreError>;
+    fn delete_tessera(&self, tessera_hash: &ContentHash) -> Result<(), CoreError>;
 }
 
 /// Identity key persistence.
-#[async_trait]
 pub trait IdentityStore: Send + Sync {
-    async fn save_keypair(&self, material: &KeyMaterial) -> Result<(), CoreError>;
-    async fn load_keypair(&self, algorithm: KeyAlgorithm) -> Result<KeyMaterial, CoreError>;
-    async fn keypair_exists(&self, algorithm: KeyAlgorithm) -> Result<bool, CoreError>;
+    fn save_keypair(&self, material: &KeyMaterial) -> Result<(), CoreError>;
+    fn load_keypair(&self, algorithm: KeyAlgorithm) -> Result<KeyMaterial, CoreError>;
+    fn keypair_exists(&self, algorithm: KeyAlgorithm) -> Result<bool, CoreError>;
 }
 
 /// Boundary type for key material (decoupled from crypto backends).

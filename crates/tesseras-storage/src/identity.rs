@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 
-use async_trait::async_trait;
 use tesseras_core::CoreError;
 use tesseras_core::ports::{IdentityStore, KeyAlgorithm, KeyMaterial};
 
@@ -22,30 +21,23 @@ impl FsIdentityStore {
     }
 }
 
-#[async_trait]
 impl IdentityStore for FsIdentityStore {
-    async fn save_keypair(&self, material: &KeyMaterial) -> Result<(), CoreError> {
+    fn save_keypair(&self, material: &KeyMaterial) -> Result<(), CoreError> {
         let base = self.key_path(material.algorithm);
-        tokio::fs::create_dir_all(base.parent().unwrap())
-            .await
-            .map_err(CoreError::Io)?;
+        std::fs::create_dir_all(base.parent().unwrap()).map_err(CoreError::Io)?;
         let key_path = format!("{}.key", base.display());
         let pub_path = format!("{}.pub", base.display());
-        tokio::fs::write(&key_path, &material.secret)
-            .await
-            .map_err(CoreError::Io)?;
-        tokio::fs::write(&pub_path, &material.public)
-            .await
-            .map_err(CoreError::Io)?;
+        std::fs::write(&key_path, &material.secret).map_err(CoreError::Io)?;
+        std::fs::write(&pub_path, &material.public).map_err(CoreError::Io)?;
         Ok(())
     }
 
-    async fn load_keypair(&self, algorithm: KeyAlgorithm) -> Result<KeyMaterial, CoreError> {
+    fn load_keypair(&self, algorithm: KeyAlgorithm) -> Result<KeyMaterial, CoreError> {
         let base = self.key_path(algorithm);
         let key_path = format!("{}.key", base.display());
         let pub_path = format!("{}.pub", base.display());
-        let secret = tokio::fs::read(&key_path).await.map_err(CoreError::Io)?;
-        let public = tokio::fs::read(&pub_path).await.map_err(CoreError::Io)?;
+        let secret = std::fs::read(&key_path).map_err(CoreError::Io)?;
+        let public = std::fs::read(&pub_path).map_err(CoreError::Io)?;
         Ok(KeyMaterial {
             algorithm,
             secret,
@@ -53,10 +45,10 @@ impl IdentityStore for FsIdentityStore {
         })
     }
 
-    async fn keypair_exists(&self, algorithm: KeyAlgorithm) -> Result<bool, CoreError> {
+    fn keypair_exists(&self, algorithm: KeyAlgorithm) -> Result<bool, CoreError> {
         let base = self.key_path(algorithm);
         let key_path = format!("{}.key", base.display());
-        Ok(tokio::fs::try_exists(&key_path).await.unwrap_or(false))
+        Ok(std::path::Path::new(&key_path).exists())
     }
 }
 
@@ -65,8 +57,8 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
-    #[tokio::test]
-    async fn save_load_roundtrip() {
+    #[test]
+    fn save_load_roundtrip() {
         let dir = TempDir::new().unwrap();
         let store = FsIdentityStore::new(dir.path().to_path_buf());
         let material = KeyMaterial {
@@ -74,20 +66,20 @@ mod tests {
             secret: vec![0x42; 32],
             public: vec![0x43; 32],
         };
-        store.save_keypair(&material).await.unwrap();
-        let loaded = store.load_keypair(KeyAlgorithm::Ed25519).await.unwrap();
+        store.save_keypair(&material).unwrap();
+        let loaded = store.load_keypair(KeyAlgorithm::Ed25519).unwrap();
         assert_eq!(loaded, material);
     }
 
-    #[tokio::test]
-    async fn keypair_exists_false_initially() {
+    #[test]
+    fn keypair_exists_false_initially() {
         let dir = TempDir::new().unwrap();
         let store = FsIdentityStore::new(dir.path().to_path_buf());
-        assert!(!store.keypair_exists(KeyAlgorithm::Ed25519).await.unwrap());
+        assert!(!store.keypair_exists(KeyAlgorithm::Ed25519).unwrap());
     }
 
-    #[tokio::test]
-    async fn keypair_exists_true_after_save() {
+    #[test]
+    fn keypair_exists_true_after_save() {
         let dir = TempDir::new().unwrap();
         let store = FsIdentityStore::new(dir.path().to_path_buf());
         let material = KeyMaterial {
@@ -95,7 +87,7 @@ mod tests {
             secret: vec![0x42; 32],
             public: vec![0x43; 32],
         };
-        store.save_keypair(&material).await.unwrap();
-        assert!(store.keypair_exists(KeyAlgorithm::Ed25519).await.unwrap());
+        store.save_keypair(&material).unwrap();
+        assert!(store.keypair_exists(KeyAlgorithm::Ed25519).unwrap());
     }
 }

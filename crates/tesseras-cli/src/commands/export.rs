@@ -11,7 +11,7 @@ pub async fn run(hash: &str, dest: &str, data_dir: &str) -> Result<()> {
         ContentHash::from_str(hash).context("invalid tessera hash (expected 64 hex chars)")?;
     let base = expand_tilde(data_dir);
     let dest = PathBuf::from(dest);
-    let service = build_service(&base).await?;
+    let service = build_service(&base)?;
     service.export(&content_hash, &dest).await?;
     println!(
         "Exported to {}",

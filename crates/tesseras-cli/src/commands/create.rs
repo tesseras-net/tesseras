@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use tesseras_core::ports::{IdentityStore, KeyAlgorithm};
 use tesseras_core::{CreateInput, FileInput, MemoryType, Visibility};
 use tesseras_storage::FsIdentityStore;
@@ -83,7 +84,7 @@ pub async fn run(args: &CreateArgs, data_dir: &str) -> Result<()> {
     };
 
     // 5. Build service and create tessera
-    let service = build_service(&base).await?;
+    let service = build_service(&base)?;
     let content_hash = service.create(input).await?;
     println!("Created tessera: {content_hash}");
     Ok(())
@@ -129,17 +130,16 @@ fn parse_visibility(s: &str) -> Result<Visibility> {
     }
 }
 
-pub async fn build_service(base: &Path) -> Result<tesseras_core::TesseraService> {
+pub fn build_service(base: &Path) -> Result<tesseras_core::TesseraService> {
     let db_path = base.join("db/tesseras.db");
-    let pool = sqlx::SqlitePool::connect(&format!("sqlite:{}?mode=rwc", db_path.display()))
-        .await
-        .context("failed to connect to database")?;
+    let conn = rusqlite::Connection::open(&db_path)
+        .context("failed to open database")?;
+    let conn = Arc::new(Mutex::new(conn));
 
     let identity_store = FsIdentityStore::new(base.to_path_buf());
     let key_material = identity_store
         .load_keypair(KeyAlgorithm::Ed25519)
-        .await
-        .context("no identity found — run 'tesseras init' first")?;
+        .map_err(|e| anyhow::anyhow!("no identity found — run 'tesseras init' first: {e}"))?;
     let keypair = tesseras_crypto::ed25519::Ed25519KeyPair::try_from(&key_material)
         .map_err(|e| anyhow::anyhow!("invalid key material: {e}"))?;
 
@@ -148,8 +148,8 @@ pub async fn build_service(base: &Path) -> Result<tesseras_core::TesseraService>
     let hasher = CryptoHasher;
 
     Ok(tesseras_core::TesseraService::new(
-        Box::new(tesseras_storage::SqliteTesseraRepository::new(pool.clone())),
-        Box::new(tesseras_storage::SqliteMemoryRepository::new(pool)),
+        Box::new(tesseras_storage::SqliteTesseraRepository::new(conn.clone())),
+        Box::new(tesseras_storage::SqliteMemoryRepository::new(conn)),
         Box::new(tesseras_storage::FsBlobStore::new(base.join("blobs"))),
         Box::new(hasher),
         Box::new(signer),

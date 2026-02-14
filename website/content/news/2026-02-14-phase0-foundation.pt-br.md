@@ -12,7 +12,7 @@ O primeiro marco do projeto Tesseras está completo. A Fase 0 estabelece a funda
 
 **tesseras-crypto** — Geração de chaves Ed25519, assinatura e verificação. Um framework de assinatura dual (Ed25519 + placeholder ML-DSA) pronto para migração pós-quântica. Hashing de conteúdo com BLAKE3. Codificação de apagamento Reed-Solomon atrás de uma feature flag para futura replicação.
 
-**tesseras-storage** — Índice SQLite via sqlx com migrações verificadas em tempo de compilação. Blob store no sistema de arquivos com layout endereçável por conteúdo (`blobs/<tessera_hash>/<memory_hash>/<filename>`). Persistência de chaves de identidade em disco.
+**tesseras-storage** — Índice SQLite via rusqlite com migrações em SQL puro. Blob store no sistema de arquivos com layout endereçável por conteúdo (`blobs/<tessera_hash>/<memory_hash>/<filename>`). Persistência de chaves de identidade em disco.
 
 **tesseras-cli** — Um binário `tesseras` funcional com cinco comandos:
 - `init` — gera identidade Ed25519, cria banco de dados SQLite

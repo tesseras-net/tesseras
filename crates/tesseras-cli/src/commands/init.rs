@@ -19,10 +19,10 @@ pub async fn run(data_dir: &str) -> Result<()> {
 
     // 2. Generate Ed25519 keypair
     let identity_store = FsIdentityStore::new(base.clone());
-    if !identity_store.keypair_exists(KeyAlgorithm::Ed25519).await? {
+    if !identity_store.keypair_exists(KeyAlgorithm::Ed25519)? {
         let keypair = Ed25519KeyGenerator::generate();
         let material: tesseras_core::ports::KeyMaterial = (&keypair).into();
-        identity_store.save_keypair(&material).await?;
+        identity_store.save_keypair(&material)?;
         println!("Generated Ed25519 identity");
     } else {
         println!("Ed25519 identity already exists");
@@ -30,12 +30,9 @@ pub async fn run(data_dir: &str) -> Result<()> {
 
     // 3. Initialize SQLite
     let db_path = base.join("db/tesseras.db");
-    let pool = sqlx::SqlitePool::connect(&format!("sqlite:{}?mode=rwc", db_path.display()))
-        .await
-        .context("failed to connect to database")?;
-    sqlx::migrate!("../tesseras-storage/migrations")
-        .run(&pool)
-        .await
+    let conn = rusqlite::Connection::open(&db_path)
+        .context("failed to open database")?;
+    tesseras_storage::run_migrations(&conn)
         .context("failed to run migrations")?;
     println!("Database initialized");
 

@@ -9,7 +9,7 @@ pub async fn run(hash: &str, data_dir: &str) -> Result<()> {
     let content_hash =
         ContentHash::from_str(hash).context("invalid tessera hash (expected 64 hex chars)")?;
     let base = expand_tilde(data_dir);
-    let service = build_service(&base).await?;
+    let service = build_service(&base)?;
     let report = service.verify(&content_hash).await?;
 
     println!("Tessera: {}", report.tessera_hash);

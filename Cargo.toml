@@ -25,7 +25,6 @@ anyhow = "1"
 
 # Async
 tokio = { version = "1", features = ["full"] }
-async-trait = "0.1"
 
 # Crypto
 blake3 = "1"
@@ -34,7 +33,7 @@ rand = "0.8"
 reed-solomon-erasure = "6"
 
 # Storage
-sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
+rusqlite = { version = "0.33", features = ["bundled"] }
 
 # CLI
 clap = { version = "4", features = ["derive"] }
