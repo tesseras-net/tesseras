@@ -24,6 +24,9 @@ pub enum CoreError {
     #[error("no tessera found matching prefix: {0}")]
     PrefixNotFound(String),
 
+    #[error("tessera too big: {size} bytes exceeds maximum {max} bytes")]
+    TesseraTooBig { size: u64, max: u64 },
+
     #[error("database error: {0}")]
     Database(String),
 

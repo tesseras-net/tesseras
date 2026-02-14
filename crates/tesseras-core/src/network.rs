@@ -23,6 +23,11 @@ impl Capabilities {
         Self(Self::PING | Self::FIND_NODE | Self::FIND_VALUE | Self::STORE)
     }
 
+    /// Phase 2 default: Phase 1 + REPLICATE | ATTEST
+    pub fn phase2_default() -> Self {
+        Self(Self::PING | Self::FIND_NODE | Self::FIND_VALUE | Self::STORE | Self::REPLICATE | Self::ATTEST)
+    }
+
     pub fn has(&self, cap: u64) -> bool {
         self.0 & cap != 0
     }
@@ -83,6 +88,16 @@ mod tests {
         assert!(!caps.has(Capabilities::REPLICATE));
         assert!(!caps.has(Capabilities::ATTEST));
         assert!(!caps.has(Capabilities::RELAY));
+    }
+
+    #[test]
+    fn capabilities_phase2_default_has_replication() {
+        let caps = Capabilities::phase2_default();
+        assert!(caps.has(Capabilities::REPLICATE));
+        assert!(caps.has(Capabilities::ATTEST));
+        // Still has phase 1 caps
+        assert!(caps.has(Capabilities::PING));
+        assert!(caps.has(Capabilities::FIND_NODE));
     }
 
     #[test]

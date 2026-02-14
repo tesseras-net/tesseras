@@ -9,6 +9,7 @@ pub mod metadata;
 pub mod network;
 #[cfg(feature = "service")]
 pub mod ports;
+pub mod replication;
 #[cfg(feature = "service")]
 pub mod service;
 pub mod tessera;
@@ -25,4 +26,5 @@ pub use ports::*;
 #[cfg(feature = "service")]
 pub use service::{CreateInput, FileInput, FileVerification, TesseraService, VerifyReport};
 pub use tessera::{Tessera, TesseraIdentity};
+pub use replication::*;
 pub use types::{ContentHash, HashPrefix, NodeId};
