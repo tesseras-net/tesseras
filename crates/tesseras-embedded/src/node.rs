@@ -6,15 +6,22 @@ use std::sync::{Arc, Mutex};
 
 use tokio::sync::{broadcast, watch};
 
+use tesseras_core::ports::{IdentityStore, KeyAlgorithm};
+use tesseras_core::service::TesseraService;
 use tesseras_core::NodeIdentity;
+use tesseras_crypto::ed25519::{Ed25519KeyGenerator, Ed25519KeyPair};
 use tesseras_dht::engine::DhtEngine;
 use tesseras_dht::pow;
 use tesseras_net::{QuinnTransport, Transport};
 use tesseras_replication::ReplicationService;
-use tesseras_storage::{FsBlobStore, FsFragmentStore, SqliteReciprocityLedger};
+use tesseras_storage::{
+    FsBlobStore, FsFragmentStore, FsIdentityStore, SqliteMemoryRepository,
+    SqliteReciprocityLedger, SqliteTesseraRepository,
+};
 
+use crate::crypto_service::{Blake3HasherAdapter, Ed25519SignerAdapter, Ed25519VerifierAdapter};
 use crate::error::TesserasError;
-use crate::types::{IdentityInfo, NetworkEvent};
+use crate::types::{CreateMemoryRequest, IdentityInfo, MemoryInfo, NetworkEvent};
 
 /// Profile stored as JSON alongside cryptographic identity.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -31,6 +38,7 @@ pub struct EmbeddedNode {
     conn: Arc<Mutex<rusqlite::Connection>>,
     identity: NodeIdentity,
     engine: Arc<DhtEngine>,
+    tessera_service: TesseraService,
     shutdown_tx: watch::Sender<bool>,
     event_tx: broadcast::Sender<NetworkEvent>,
     running: AtomicBool,
@@ -65,6 +73,10 @@ impl EmbeddedNode {
 
         tracing::info!(node_id = %identity.node_id, "embedded node identity loaded");
 
+        // Load or generate Ed25519 signing keypair for TesseraService
+        let identity_store = FsIdentityStore::new(data_dir.clone());
+        let signing_key = Self::load_or_generate_signing_key(&identity_store)?;
+
         // Create QUIC transport — bind to ephemeral port for mobile
         let engine = runtime.block_on(async {
             let listen_addr: std::net::SocketAddr = "0.0.0.0:0".parse().unwrap();
@@ -79,7 +91,7 @@ impl EmbeddedNode {
             Ok::<Arc<DhtEngine>, TesserasError>(engine)
         })?;
 
-        // Create storage instances
+        // Create storage instances for replication service
         let fragment_store =
             FsFragmentStore::new(Arc::clone(&conn), data_dir.join("fragments"));
         let reciprocity_ledger = SqliteReciprocityLedger::new(Arc::clone(&conn));
@@ -95,6 +107,20 @@ impl EmbeddedNode {
             Box::new(reciprocity_ledger),
             Box::new(blob_store),
             replication_config,
+        );
+
+        // Create TesseraService (separate storage instances since replication took ownership)
+        let tessera_repo = SqliteTesseraRepository::new(Arc::clone(&conn));
+        let memory_repo = SqliteMemoryRepository::new(Arc::clone(&conn));
+        let blob_store_for_service = FsBlobStore::new(data_dir.join("blobs"));
+
+        let tessera_service = TesseraService::new(
+            Box::new(tessera_repo),
+            Box::new(memory_repo),
+            Box::new(blob_store_for_service),
+            Box::new(Blake3HasherAdapter),
+            Box::new(Ed25519SignerAdapter::new(signing_key)),
+            Box::new(Ed25519VerifierAdapter),
         );
 
         // Setup shutdown and event channels
@@ -125,6 +151,7 @@ impl EmbeddedNode {
             conn,
             identity,
             engine,
+            tessera_service,
             shutdown_tx,
             event_tx,
             running: AtomicBool::new(true),
@@ -166,6 +193,8 @@ impl EmbeddedNode {
     pub fn event_sender(&self) -> &broadcast::Sender<NetworkEvent> {
         &self.event_tx
     }
+
+    // -- Identity API --
 
     pub fn create_identity(
         &self,
@@ -224,6 +253,110 @@ impl EmbeddedNode {
         }))
     }
 
+    // -- Memory API --
+
+    pub fn create_memory(
+        &self,
+        request: CreateMemoryRequest,
+    ) -> Result<MemoryInfo, TesserasError> {
+        use tesseras_core::metadata::Location;
+        use tesseras_core::service::{CreateInput, FileInput};
+
+        let location = match (
+            request.location_description,
+            request.location_lat,
+            request.location_lon,
+        ) {
+            (Some(desc), lat, lon) => Some(Location {
+                description: desc,
+                coordinates: lat.zip(lon),
+            }),
+            _ => None,
+        };
+
+        let input = CreateInput {
+            files: vec![FileInput {
+                path: std::path::PathBuf::from(&request.media_path),
+                context: request.context_text.clone(),
+                memory_type: request.memory_type,
+            }],
+            visibility: request.visibility,
+            language: "en".to_string(),
+            tags: request.tags.clone(),
+            location,
+        };
+
+        let hash = self
+            .runtime
+            .block_on(self.tessera_service.create(input))?;
+
+        Ok(MemoryInfo {
+            hash: hash.to_string(),
+            tessera_hash: hash.to_string(),
+            media_path: request.media_path,
+            context: request.context_text,
+            memory_type: format!("{:?}", request.memory_type).to_lowercase(),
+            visibility: String::new(),
+            created_at: chrono::Utc::now().to_rfc3339(),
+            tags: request.tags,
+        })
+    }
+
+    pub fn get_timeline(
+        &self,
+        offset: u32,
+        limit: u32,
+    ) -> Result<Vec<MemoryInfo>, TesserasError> {
+        let mut records = self.runtime.block_on(self.tessera_service.list())?;
+
+        // Sort by created_at descending (newest first)
+        records.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+
+        let page = records
+            .into_iter()
+            .skip(offset as usize)
+            .take(limit as usize)
+            .map(|r| MemoryInfo {
+                hash: r.hash.to_string(),
+                tessera_hash: r.hash.to_string(),
+                media_path: String::new(),
+                context: None,
+                memory_type: String::new(),
+                visibility: r.visibility,
+                created_at: r.created_at.to_rfc3339(),
+                tags: vec![],
+            })
+            .collect();
+
+        Ok(page)
+    }
+
+    pub fn get_memory(&self, hash: String) -> Result<MemoryInfo, TesserasError> {
+        use std::str::FromStr;
+        let content_hash = tesseras_core::ContentHash::from_str(&hash)
+            .map_err(|e| TesserasError::InvalidInput(e.to_string()))?;
+
+        let tessera = self
+            .runtime
+            .block_on(self.tessera_service.list())?
+            .into_iter()
+            .find(|r| r.hash == content_hash)
+            .ok_or_else(|| TesserasError::InvalidInput(format!("tessera not found: {hash}")))?;
+
+        Ok(MemoryInfo {
+            hash: tessera.hash.to_string(),
+            tessera_hash: tessera.hash.to_string(),
+            media_path: String::new(),
+            context: None,
+            memory_type: String::new(),
+            visibility: tessera.visibility,
+            created_at: tessera.created_at.to_rfc3339(),
+            tags: vec![],
+        })
+    }
+
+    // -- Private helpers --
+
     fn load_or_generate_identity(data_dir: &PathBuf) -> Result<NodeIdentity, TesserasError> {
         let identity_path = data_dir.join("identity.key");
         if identity_path.exists() {
@@ -258,6 +391,29 @@ impl EmbeddedNode {
             Ok(identity)
         }
     }
+
+    fn load_or_generate_signing_key(
+        identity_store: &FsIdentityStore,
+    ) -> Result<ed25519_dalek::SigningKey, TesserasError> {
+        if identity_store
+            .keypair_exists(KeyAlgorithm::Ed25519)
+            .map_err(|e| TesserasError::Storage(e.to_string()))?
+        {
+            let material = identity_store
+                .load_keypair(KeyAlgorithm::Ed25519)
+                .map_err(|e| TesserasError::Storage(e.to_string()))?;
+            let keypair = Ed25519KeyPair::try_from(&material)
+                .map_err(|e| TesserasError::Storage(e.to_string()))?;
+            Ok(keypair.signing_key)
+        } else {
+            let keypair = Ed25519KeyGenerator::generate();
+            let material = tesseras_core::ports::KeyMaterial::from(&keypair);
+            identity_store
+                .save_keypair(&material)
+                .map_err(|e| TesserasError::Storage(e.to_string()))?;
+            Ok(keypair.signing_key)
+        }
+    }
 }
 
 #[cfg(test)]
@@ -284,9 +440,7 @@ mod tests {
         assert!(id.is_none());
 
         // Create identity
-        let id = node
-            .create_identity("Alice".to_string(), None)
-            .unwrap();
+        let id = node.create_identity("Alice".to_string(), None).unwrap();
         assert_eq!(id.name, "Alice");
         assert!(!id.public_key_hex.is_empty());
         assert!(!id.node_id_hex.is_empty());
@@ -329,5 +483,67 @@ mod tests {
         // Second start — must not corrupt SQLite or leave locks
         let node = EmbeddedNode::start(data_dir).expect("second start");
         node.stop().expect("second stop");
+    }
+
+    #[test]
+    fn create_memory_and_get_timeline() {
+        let dir = TempDir::new().unwrap();
+        let node = EmbeddedNode::start(dir.path().to_str().unwrap().to_string()).unwrap();
+        node.create_identity("Test".to_string(), None).unwrap();
+
+        // Create a test file
+        let media_path = dir.path().join("photo.jpg");
+        std::fs::write(&media_path, b"fake jpeg data").unwrap();
+
+        let request = CreateMemoryRequest {
+            media_path: media_path.to_str().unwrap().to_string(),
+            context_text: Some("A beautiful sunset".to_string()),
+            memory_type: tesseras_core::MemoryType::Moment,
+            visibility: tesseras_core::Visibility::Private,
+            location_description: None,
+            location_lat: None,
+            location_lon: None,
+            tags: vec!["nature".to_string()],
+            people: vec![],
+        };
+
+        let memory = node.create_memory(request).unwrap();
+        assert!(!memory.hash.is_empty());
+        assert_eq!(memory.memory_type, "moment");
+
+        // Timeline should contain the memory
+        let timeline = node.get_timeline(0, 10).unwrap();
+        assert_eq!(timeline.len(), 1);
+        assert_eq!(timeline[0].hash, memory.hash);
+
+        node.stop().unwrap();
+    }
+
+    #[test]
+    fn get_memory_by_hash() {
+        let dir = TempDir::new().unwrap();
+        let node = EmbeddedNode::start(dir.path().to_str().unwrap().to_string()).unwrap();
+        node.create_identity("Test".to_string(), None).unwrap();
+
+        let media_path = dir.path().join("note.txt");
+        std::fs::write(&media_path, b"Some thoughts").unwrap();
+
+        let request = CreateMemoryRequest {
+            media_path: media_path.to_str().unwrap().to_string(),
+            context_text: Some("Daily reflection".to_string()),
+            memory_type: tesseras_core::MemoryType::Reflection,
+            visibility: tesseras_core::Visibility::Public,
+            location_description: None,
+            location_lat: None,
+            location_lon: None,
+            tags: vec![],
+            people: vec![],
+        };
+
+        let created = node.create_memory(request).unwrap();
+        let fetched = node.get_memory(created.hash.clone()).unwrap();
+        assert_eq!(fetched.hash, created.hash);
+
+        node.stop().unwrap();
     }
 }
