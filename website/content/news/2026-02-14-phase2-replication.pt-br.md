@@ -1,6 +1,6 @@
 +++
 title = "Fase 2: Memórias Sobrevivem"
-date = 2026-02-14
+date = 2026-02-14T12:00:00+00:00
 description = "Tesseras agora fragmenta, distribui e repara dados automaticamente pela rede usando codificação de apagamento Reed-Solomon e um livro-razão de reciprocidade bilateral."
 +++
 

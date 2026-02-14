@@ -1,6 +1,6 @@
 +++
 title = "Phase 0: Foundation Laid"
-date = 2026-02-14
+date = 2026-02-14T10:00:00+00:00
 description = "The foundation crates for Tesseras are now in place — core domain types, cryptographic primitives, SQLite storage, and a working CLI."
 +++
 

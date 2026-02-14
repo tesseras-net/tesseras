@@ -1,6 +1,6 @@
 +++
 title = "Fase 0: Fundação Construída"
-date = 2026-02-14
+date = 2026-02-14T10:00:00+00:00
 description = "Os crates fundamentais do Tesseras estão prontos — tipos de domínio, primitivas criptográficas, armazenamento SQLite e uma CLI funcional."
 +++
 

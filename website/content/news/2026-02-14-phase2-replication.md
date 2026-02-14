@@ -1,6 +1,6 @@
 +++
 title = "Phase 2: Memories Survive"
-date = 2026-02-14
+date = 2026-02-14T12:00:00+00:00
 description = "Tesseras now fragments, distributes, and automatically repairs data across the network using Reed-Solomon erasure coding and a bilateral reciprocity ledger."
 +++
 

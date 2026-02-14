@@ -1,6 +1,6 @@
 +++
 title = "Fase 1: Nós Se Encontram"
-date = 2026-02-14
+date = 2026-02-14T11:00:00+00:00
 description = "Os nós do Tesseras agora descobrem pares, formam uma DHT Kademlia sobre QUIC e publicam e encontram ponteiros de tesseras pela rede."
 +++
 

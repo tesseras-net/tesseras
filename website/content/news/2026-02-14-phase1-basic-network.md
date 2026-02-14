@@ -1,6 +1,6 @@
 +++
 title = "Phase 1: Nodes Find Each Other"
-date = 2026-02-14
+date = 2026-02-14T11:00:00+00:00
 description = "Tesseras nodes can now discover peers, form a Kademlia DHT over QUIC, and publish and find tessera pointers across the network."
 +++
 
