@@ -6,17 +6,17 @@ use std::sync::{Arc, Mutex};
 
 use tokio::sync::{broadcast, watch};
 
+use tesseras_core::NodeIdentity;
 use tesseras_core::ports::{IdentityStore, KeyAlgorithm};
 use tesseras_core::service::TesseraService;
-use tesseras_core::NodeIdentity;
 use tesseras_crypto::ed25519::{Ed25519KeyGenerator, Ed25519KeyPair};
 use tesseras_dht::engine::DhtEngine;
 use tesseras_dht::pow;
 use tesseras_net::{QuinnTransport, Transport};
 use tesseras_replication::ReplicationService;
 use tesseras_storage::{
-    FsBlobStore, FsFragmentStore, FsIdentityStore, SqliteMemoryRepository,
-    SqliteReciprocityLedger, SqliteTesseraRepository,
+    FsBlobStore, FsFragmentStore, FsIdentityStore, SqliteMemoryRepository, SqliteReciprocityLedger,
+    SqliteTesseraRepository,
 };
 
 use crate::crypto_service::{Blake3HasherAdapter, Ed25519SignerAdapter, Ed25519VerifierAdapter};
@@ -92,8 +92,7 @@ impl EmbeddedNode {
         })?;
 
         // Create storage instances for replication service
-        let fragment_store =
-            FsFragmentStore::new(Arc::clone(&conn), data_dir.join("fragments"));
+        let fragment_store = FsFragmentStore::new(Arc::clone(&conn), data_dir.join("fragments"));
         let reciprocity_ledger = SqliteReciprocityLedger::new(Arc::clone(&conn));
         let blob_store = FsBlobStore::new(data_dir.join("blobs"));
 
@@ -255,10 +254,7 @@ impl EmbeddedNode {
 
     // -- Memory API --
 
-    pub fn create_memory(
-        &self,
-        request: CreateMemoryRequest,
-    ) -> Result<MemoryInfo, TesserasError> {
+    pub fn create_memory(&self, request: CreateMemoryRequest) -> Result<MemoryInfo, TesserasError> {
         use tesseras_core::metadata::Location;
         use tesseras_core::service::{CreateInput, FileInput};
 
@@ -286,9 +282,7 @@ impl EmbeddedNode {
             location,
         };
 
-        let hash = self
-            .runtime
-            .block_on(self.tessera_service.create(input))?;
+        let hash = self.runtime.block_on(self.tessera_service.create(input))?;
 
         Ok(MemoryInfo {
             hash: hash.to_string(),
@@ -302,11 +296,7 @@ impl EmbeddedNode {
         })
     }
 
-    pub fn get_timeline(
-        &self,
-        offset: u32,
-        limit: u32,
-    ) -> Result<Vec<MemoryInfo>, TesserasError> {
+    pub fn get_timeline(&self, offset: u32, limit: u32) -> Result<Vec<MemoryInfo>, TesserasError> {
         let mut records = self.runtime.block_on(self.tessera_service.list())?;
 
         // Sort by created_at descending (newest first)
@@ -382,7 +372,7 @@ impl EmbeddedNode {
 
     // -- Private helpers --
 
-    fn load_or_generate_identity(data_dir: &PathBuf) -> Result<NodeIdentity, TesserasError> {
+    fn load_or_generate_identity(data_dir: &std::path::Path) -> Result<NodeIdentity, TesserasError> {
         let identity_path = data_dir.join("identity.key");
         if identity_path.exists() {
             let bytes = std::fs::read(&identity_path)?;

@@ -2,8 +2,8 @@
 //! wrapping tesseras-crypto primitives.
 
 use ed25519_dalek::{Signer, Verifier};
-use tesseras_core::ports::{Hasher, ManifestSigner, ManifestVerifier};
 use tesseras_core::ContentHash;
+use tesseras_core::ports::{Hasher, ManifestSigner, ManifestVerifier};
 
 /// Wraps Blake3Hasher to implement the Hasher port trait.
 pub struct Blake3HasherAdapter;

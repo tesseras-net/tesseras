@@ -48,10 +48,7 @@ fn full_lifecycle() {
 
     // 7. Restart and verify persistence
     let node = EmbeddedNode::start(data_dir).expect("restart");
-    let identity = node
-        .get_identity()
-        .expect("get identity")
-        .expect("exists");
+    let identity = node.get_identity().expect("get identity").expect("exists");
     assert_eq!(identity.name, "Integration Test User");
 
     let timeline = node.get_timeline(0, 10).expect("timeline after restart");
