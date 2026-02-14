@@ -11,11 +11,17 @@
             <link rel="alternate" type="application/atom+xml" title="{{ config.title }}" href="{{ get_url(path=feed) }}">
         {% endfor %}
     {% endif %}
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ get_url(path='images/favicon.png', cachebust=true) }}">
     {% block head %}{% endblock %}
 </head>
 <body>
     <header>
-        <h1><a href="{{ config.base_url }}/{% if lang != config.default_language %}{{ lang }}/{% endif %}">Tesseras</a></h1>
+        <h1>
+            <a href="{{ config.base_url }}/{% if lang != config.default_language %}{{ lang }}/{% endif %}">
+                <img src="{{ get_url(path='images/logo-64.png', cachebust=true) }}" alt="Tesseras" width="40" height="40" class="logo">
+                Tesseras
+            </a>
+        </h1>
         <nav>
             {% if lang == "pt-br" %}
                 <a href="{{ get_url(path='@/about.pt-br.md') }}">Sobre</a>

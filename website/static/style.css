@@ -41,6 +41,13 @@ header h1 {
 header h1 a {
     text-decoration: none;
     color: #2c2c2c;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4em;
+}
+
+.logo {
+    vertical-align: middle;
 }
 
 header h1 a:hover {
