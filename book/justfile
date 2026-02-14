@@ -11,6 +11,10 @@ serve-en:
 serve-pt-br:
     mdbook serve pt-br --port 3001
 
+# Deploy the book
+deploy server="tesseras-website":
+    ./deploy.sh {{ server }}
+
 # Clean build artifacts
 clean:
     rm -rf en/book pt-br/book

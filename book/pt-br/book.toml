@@ -8,4 +8,5 @@ src = "src"
 build-dir = "book"
 
 [output.html]
+site-url = "/book/pt-br/"
 git-repository-url = "https://git.sr.ht/~ijanc/tesseras"
