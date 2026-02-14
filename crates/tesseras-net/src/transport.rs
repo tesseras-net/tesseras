@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use tesseras_core::NodeId;
@@ -29,4 +30,23 @@ pub trait Transport: Send + Sync {
     async fn recv(&self) -> Result<Envelope, NetError>;
     async fn disconnect(&self, peer: &PeerAddr);
     fn local_addr(&self) -> SocketAddr;
+}
+
+#[async_trait]
+impl<T: Transport> Transport for Arc<T> {
+    async fn send(&self, peer: &PeerAddr, data: &[u8]) -> Result<(), NetError> {
+        (**self).send(peer, data).await
+    }
+
+    async fn recv(&self) -> Result<Envelope, NetError> {
+        (**self).recv().await
+    }
+
+    async fn disconnect(&self, peer: &PeerAddr) {
+        (**self).disconnect(peer).await
+    }
+
+    fn local_addr(&self) -> SocketAddr {
+        (**self).local_addr()
+    }
 }
