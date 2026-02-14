@@ -5,6 +5,7 @@ members = [
     "crates/tesseras-crypto",
     "crates/tesseras-storage",
     "crates/tesseras-cli",
+    "crates/tesseras-net",
 ]
 
 [workspace.package]
@@ -26,6 +27,7 @@ anyhow = "1"
 
 # Async
 tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
 
 # Crypto
 blake3 = "1"
@@ -52,4 +54,5 @@ tempfile = "3"
 # Internal
 tesseras-core = { path = "crates/tesseras-core" }
 tesseras-crypto = { path = "crates/tesseras-crypto" }
+tesseras-net = { path = "crates/tesseras-net" }
 tesseras-storage = { path = "crates/tesseras-storage" }
