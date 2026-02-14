@@ -163,7 +163,7 @@ mod tests {
             .expect_list_fragments()
             .returning(|_| Ok(vec![]));
 
-        let holders: Vec<NodeInfo> = (1..=7).map(|i| make_holder(i)).collect();
+        let holders: Vec<NodeInfo> = (1..=7).map(make_holder).collect();
 
         let action =
             check_tessera_health(&dht, &fragments, &hash(0x01), &holders, 7).await;
@@ -193,7 +193,7 @@ mod tests {
             .expect_list_fragments()
             .returning(|_| Ok(vec![]));
 
-        let holders: Vec<NodeInfo> = (1..=7).map(|i| make_holder(i)).collect();
+        let holders: Vec<NodeInfo> = (1..=7).map(make_holder).collect();
 
         let action =
             check_tessera_health(&dht, &fragments, &hash(0x01), &holders, 7).await;

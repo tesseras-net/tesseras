@@ -21,6 +21,8 @@ mockall = { workspace = true }
 proptest = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
+tesseras-storage = { workspace = true }
+rusqlite = { workspace = true }
 
 [features]
 default = []
