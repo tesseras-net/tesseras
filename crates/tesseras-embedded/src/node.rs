@@ -372,7 +372,9 @@ impl EmbeddedNode {
 
     // -- Private helpers --
 
-    fn load_or_generate_identity(data_dir: &std::path::Path) -> Result<NodeIdentity, TesserasError> {
+    fn load_or_generate_identity(
+        data_dir: &std::path::Path,
+    ) -> Result<NodeIdentity, TesserasError> {
         let identity_path = data_dir.join("identity.key");
         if identity_path.exists() {
             let bytes = std::fs::read(&identity_path)?;

@@ -13,6 +13,10 @@ install:
     cargo install --path crates/tesseras-daemon
     @just _install-completions
 
+# Test the embedded crate
+test-embedded:
+    cargo test -p tesseras-embedded
+
 [private]
 _install-completions:
     #!/usr/bin/env sh
