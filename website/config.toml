@@ -1,0 +1,31 @@
+base_url = "https://tesseras.net"
+title = "Tesseras"
+description = "P2P network for preserving human memories across millennia"
+default_language = "en"
+compile_sass = false
+build_search_index = false
+generate_feeds = true
+feed_filenames = ["atom.xml"]
+
+[link_checker]
+skip_prefixes = [
+    "https://git.sr.ht/~ijanc/",
+    "https://github.com/ijanc/",
+    "https://book.tesseras.net",
+    "https://lists.tesseras.net",
+]
+
+[markdown]
+
+[languages.pt-br]
+title = "Tesseras"
+description = "Rede P2P para preservar memórias humanas através dos milênios"
+generate_feeds = true
+feed_filenames = ["atom.xml"]
+
+[languages.pt-br.translations]
+
+[translations]
+
+[extra]
+author = "Tesseras Project"

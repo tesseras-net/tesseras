@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}{{ section.title }} — Tesseras{% endblock %}
+{% block description %}{{ section.description }}{% endblock %}
+
+{% block content %}
+<h2>{{ section.title }}</h2>
+{% if section.pages %}
+<ul class="news-list">
+    {% for page in section.pages %}
+    <li>
+        <a href="{{ page.permalink }}">{{ page.title }}</a>
+        <span class="news-date">{{ page.date | date(format="%Y-%m-%d") }}</span>
+        {% if page.description %}
+        <p>{{ page.description }}</p>
+        {% endif %}
+    </li>
+    {% endfor %}
+</ul>
+{% else %}
+<p>No posts yet.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page.title }} — Tesseras{% endblock %}
+{% block description %}{{ page.description }}{% endblock %}
+
+{% block content %}
+<article>
+    <h2>{{ page.title }}</h2>
+    <p class="news-date">{{ page.date | date(format="%Y-%m-%d") }}</p>
+    {{ page.content | safe }}
+</article>
+{% endblock %}
