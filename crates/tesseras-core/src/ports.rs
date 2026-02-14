@@ -13,10 +13,7 @@ pub trait TesseraRepository: Send + Sync {
 pub trait MemoryRepository: Send + Sync {
     fn store(&self, memory: &MemoryRecord) -> Result<(), CoreError>;
     fn find_by_hash(&self, hash: &ContentHash) -> Result<Option<MemoryRecord>, CoreError>;
-    fn list_by_tessera(
-        &self,
-        tessera_hash: &ContentHash,
-    ) -> Result<Vec<MemoryRecord>, CoreError>;
+    fn list_by_tessera(&self, tessera_hash: &ContentHash) -> Result<Vec<MemoryRecord>, CoreError>;
     fn delete(&self, hash: &ContentHash) -> Result<(), CoreError>;
 }
 

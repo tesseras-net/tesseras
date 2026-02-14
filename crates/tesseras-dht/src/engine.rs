@@ -60,7 +60,12 @@ impl DhtEngine {
     }
 
     /// Record a seen peer in the routing table.
-    async fn record_peer(&self, peer_addr: SocketAddr, identity: &NodeIdentity, caps: Capabilities) {
+    async fn record_peer(
+        &self,
+        peer_addr: SocketAddr,
+        identity: &NodeIdentity,
+        caps: Capabilities,
+    ) {
         let info = NodeInfo {
             identity: identity.clone(),
             addr: peer_addr,
@@ -183,13 +188,8 @@ impl DhtEngine {
     }
 
     /// Send an RPC and wait for the response. Returns None on timeout.
-    async fn rpc(
-        &self,
-        peer: &PeerAddr,
-        msg: &Message,
-    ) -> Result<Option<Message>, DhtError> {
-        let req_bytes =
-            message::encode(msg).map_err(DhtError::Codec)?;
+    async fn rpc(&self, peer: &PeerAddr, msg: &Message) -> Result<Option<Message>, DhtError> {
+        let req_bytes = message::encode(msg).map_err(DhtError::Codec)?;
         let request_id = self.next_request_id().await;
         let wire_msg = WireMessage {
             version: 1,
@@ -205,8 +205,8 @@ impl DhtEngine {
             // In a real implementation, we'd use a pending-requests map.
             // For now, we read the next message from transport.
             let envelope = self.transport.recv().await?;
-            let (resp_wire, _) = wire_codec::decode(&envelope.payload)
-                .map_err(DhtError::Transport)?;
+            let (resp_wire, _) =
+                wire_codec::decode(&envelope.payload).map_err(DhtError::Transport)?;
             if let WireBody::Response(resp_bytes) = resp_wire.body {
                 let resp = message::decode(&resp_bytes).map_err(DhtError::Codec)?;
                 Ok::<_, DhtError>(Some(resp))
@@ -235,7 +235,10 @@ impl DhtEngine {
             sender: self.identity.clone(),
         };
         match self.rpc(&peer, &msg).await {
-            Ok(Some(Message::Pong { sender, capabilities })) => {
+            Ok(Some(Message::Pong {
+                sender,
+                capabilities,
+            })) => {
                 if pow::verify_pow(&sender) {
                     self.record_peer(addr, &sender, capabilities).await;
                 }
@@ -274,9 +277,7 @@ impl DhtEngine {
                     addr: node.addr,
                 };
                 let msg = Message::FindNode { target: *target };
-                if let Ok(Some(Message::FindNodeResponse { nodes })) =
-                    self.rpc(&peer, &msg).await
-                {
+                if let Ok(Some(Message::FindNodeResponse { nodes })) = self.rpc(&peer, &msg).await {
                     let mut verified = Vec::new();
                     for new_node in nodes {
                         if pow::verify_pow(&new_node.identity)
@@ -337,8 +338,7 @@ impl DhtEngine {
                 key: pointer.tessera_hash,
                 pointer: pointer.clone(),
             };
-            if let Ok(Some(Message::StoreResponse { accepted: true })) =
-                self.rpc(&peer, &msg).await
+            if let Ok(Some(Message::StoreResponse { accepted: true })) = self.rpc(&peer, &msg).await
             {
                 acks += 1;
             }
@@ -573,7 +573,10 @@ mod tests {
         let response = e2.handle_message(&ping, &peer).await;
 
         match response {
-            Some(Message::Pong { sender, capabilities }) => {
+            Some(Message::Pong {
+                sender,
+                capabilities,
+            }) => {
                 assert_eq!(sender.node_id, e2.node_id());
                 assert!(capabilities.has(Capabilities::PING));
             }

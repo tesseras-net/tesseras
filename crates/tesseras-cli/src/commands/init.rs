@@ -30,10 +30,8 @@ pub async fn run(data_dir: &str) -> Result<()> {
 
     // 3. Initialize SQLite
     let db_path = base.join("db/tesseras.db");
-    let conn = rusqlite::Connection::open(&db_path)
-        .context("failed to open database")?;
-    tesseras_storage::run_migrations(&conn)
-        .context("failed to run migrations")?;
+    let conn = rusqlite::Connection::open(&db_path).context("failed to open database")?;
+    tesseras_storage::run_migrations(&conn).context("failed to run migrations")?;
     println!("Database initialized");
 
     // 4. Write default config.toml if not present

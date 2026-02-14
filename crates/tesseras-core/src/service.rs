@@ -130,13 +130,12 @@ impl TesseraService {
                 description: file.context.clone().unwrap_or_default(),
             };
             let meta_json = serde_json::to_string_pretty(&meta)?;
-            self.blobs
-                .write(
-                    &content_hash,
-                    memory_hash,
-                    "meta.json",
-                    meta_json.as_bytes(),
-                )?;
+            self.blobs.write(
+                &content_hash,
+                memory_hash,
+                "meta.json",
+                meta_json.as_bytes(),
+            )?;
 
             // Collect memory record for DB (stored after tessera)
             memory_records.push(MemoryRecord {
@@ -170,13 +169,12 @@ impl TesseraService {
         let (sig_bytes, _) = self.signer.sign(manifest_text.as_bytes());
 
         // Store manifest and signature at well-known location: content_hash/content_hash/
-        self.blobs
-            .write(
-                &content_hash,
-                &content_hash,
-                "MANIFEST",
-                manifest_text.as_bytes(),
-            )?;
+        self.blobs.write(
+            &content_hash,
+            &content_hash,
+            "MANIFEST",
+            manifest_text.as_bytes(),
+        )?;
         self.blobs
             .write(&content_hash, &content_hash, "ed25519.sig", &sig_bytes)?;
 
@@ -219,10 +217,10 @@ impl TesseraService {
         let _memories = self.memory_repo.list_by_tessera(hash)?;
 
         // 2. Read manifest from well-known location: content_hash/content_hash/MANIFEST
-        let manifest_data =
-            self.blobs.read(hash, hash, "MANIFEST").map_err(|_| {
-                CoreError::InvalidTessera("manifest not found in blob store".into())
-            })?;
+        let manifest_data = self
+            .blobs
+            .read(hash, hash, "MANIFEST")
+            .map_err(|_| CoreError::InvalidTessera("manifest not found in blob store".into()))?;
         let manifest_text = String::from_utf8_lossy(&manifest_data).to_string();
 
         // 3. Parse manifest
@@ -370,10 +368,7 @@ mod tests {
                 .insert(tessera.hash.to_string(), tessera.clone());
             Ok(())
         }
-        fn find_by_hash(
-            &self,
-            hash: &ContentHash,
-        ) -> Result<Option<TesseraRecord>, CoreError> {
+        fn find_by_hash(&self, hash: &ContentHash) -> Result<Option<TesseraRecord>, CoreError> {
             Ok(self.data.lock().unwrap().get(&hash.to_string()).cloned())
         }
         fn list(&self) -> Result<Vec<TesseraRecord>, CoreError> {
@@ -408,10 +403,7 @@ mod tests {
                 .insert(memory.hash.to_string(), memory.clone());
             Ok(())
         }
-        fn find_by_hash(
-            &self,
-            hash: &ContentHash,
-        ) -> Result<Option<MemoryRecord>, CoreError> {
+        fn find_by_hash(&self, hash: &ContentHash) -> Result<Option<MemoryRecord>, CoreError> {
             Ok(self.data.lock().unwrap().get(&hash.to_string()).cloned())
         }
         fn list_by_tessera(
