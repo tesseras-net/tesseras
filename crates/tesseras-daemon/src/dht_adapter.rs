@@ -29,20 +29,10 @@ impl DhtPort for DhtPortAdapter {
         target: &NodeInfo,
         fragment: &FragmentEnvelope,
     ) -> Result<ReplicateAck, CoreError> {
-        // Construct and send a REPLICATE message via DHT engine.
-        // For now, this is a stub — full wire integration requires
-        // access to the engine's private rpc() method.
-        // In practice, REPLICATE would be sent as a QUIC stream.
-        tracing::debug!(
-            target_node = %target.identity.node_id,
-            tessera = %fragment.id.tessera_hash,
-            fragment = fragment.id.index,
-            "replicate_fragment (adapter stub)"
-        );
-        Ok(ReplicateAck {
-            accepted: true,
-            fragments_held: vec![fragment.id.index],
-        })
+        self.engine
+            .replicate_fragment(target, fragment)
+            .await
+            .map_err(|e| CoreError::Network(e.to_string()))
     }
 
     async fn request_attestation(
@@ -50,17 +40,10 @@ impl DhtPort for DhtPortAdapter {
         target: &NodeInfo,
         tessera_hash: &ContentHash,
     ) -> Result<Attestation, CoreError> {
-        tracing::debug!(
-            target_node = %target.identity.node_id,
-            tessera = %tessera_hash,
-            "request_attestation (adapter stub)"
-        );
-        Ok(Attestation {
-            tessera_hash: *tessera_hash,
-            entries: vec![],
-            timestamp: chrono::Utc::now(),
-            signature: vec![],
-        })
+        self.engine
+            .request_attestation(target, tessera_hash)
+            .await
+            .map_err(|e| CoreError::Network(e.to_string()))
     }
 
     async fn ping(&self, target: &NodeInfo) -> bool {

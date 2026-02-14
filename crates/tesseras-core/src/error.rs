@@ -30,6 +30,9 @@ pub enum CoreError {
     #[error("database error: {0}")]
     Database(String),
 
+    #[error("network error: {0}")]
+    Network(String),
+
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
 }

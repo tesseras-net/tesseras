@@ -4,6 +4,8 @@ use std::sync::Arc;
 
 use tokio::sync::{Mutex, oneshot};
 
+use tesseras_core::ports::ReplicationHandler;
+use tesseras_core::replication::{Attestation, FragmentEnvelope, ReplicateAck};
 use tesseras_core::*;
 use tesseras_net::codec::{self as wire_codec, WireBody, WireMessage};
 use tesseras_net::{Envelope, PeerAddr, Transport};
@@ -24,6 +26,7 @@ pub struct DhtEngine {
     store: Mutex<PointerStore>,
     request_counter: Mutex<u64>,
     pending: Mutex<HashMap<u64, oneshot::Sender<(WireMessage, PeerAddr)>>>,
+    replication_handler: std::sync::Mutex<Option<Arc<dyn ReplicationHandler>>>,
 }
 
 impl DhtEngine {
@@ -44,6 +47,7 @@ impl DhtEngine {
             config,
             request_counter: Mutex::new(0),
             pending: Mutex::new(HashMap::new()),
+            replication_handler: std::sync::Mutex::new(None),
         })
     }
 
@@ -53,6 +57,12 @@ impl DhtEngine {
 
     pub fn node_id(&self) -> NodeId {
         self.identity.node_id
+    }
+
+    /// Set the handler for incoming REPLICATE/ATTEST messages.
+    /// Must be called after construction (breaks the circular dependency).
+    pub fn set_replication_handler(&self, handler: Arc<dyn ReplicationHandler>) {
+        *self.replication_handler.lock().unwrap() = Some(handler);
     }
 
     async fn next_request_id(&self) -> u64 {
@@ -199,14 +209,40 @@ impl DhtEngine {
                 Some(Message::StoreResponse { accepted })
             }
             Message::StoreResponse { .. } => None,
-            Message::Replicate { .. } => {
-                tracing::debug!("received REPLICATE (handler not yet wired)");
-                None
+            Message::Replicate { envelope } => {
+                let handler = self.replication_handler.lock().unwrap().clone();
+                if let Some(handler) = handler {
+                    let sender_node_id = peer.node_id.unwrap_or(NodeId::new([0u8; 20]));
+                    match handler
+                        .handle_replicate(envelope.clone(), &sender_node_id)
+                        .await
+                    {
+                        Ok(ack) => Some(Message::ReplicateAck { ack }),
+                        Err(e) => {
+                            tracing::warn!(error = %e, "REPLICATE handler failed");
+                            None
+                        }
+                    }
+                } else {
+                    tracing::debug!("received REPLICATE but no handler set");
+                    None
+                }
             }
             Message::ReplicateAck { .. } => None,
-            Message::AttestRequest { .. } => {
-                tracing::debug!("received ATTEST_REQUEST (handler not yet wired)");
-                None
+            Message::AttestRequest { tessera_hash } => {
+                let handler = self.replication_handler.lock().unwrap().clone();
+                if let Some(handler) = handler {
+                    match handler.handle_attest_request(tessera_hash).await {
+                        Ok(attestation) => Some(Message::AttestResponse { attestation }),
+                        Err(e) => {
+                            tracing::warn!(error = %e, "ATTEST handler failed");
+                            None
+                        }
+                    }
+                } else {
+                    tracing::debug!("received ATTEST_REQUEST but no handler set");
+                    None
+                }
             }
             Message::AttestResponse { .. } => None,
         }
@@ -269,6 +305,50 @@ impl DhtEngine {
                 true
             }
             _ => false,
+        }
+    }
+
+    /// Send a REPLICATE message to a target node and return the ack.
+    pub async fn replicate_fragment(
+        &self,
+        target: &NodeInfo,
+        envelope: &FragmentEnvelope,
+    ) -> Result<ReplicateAck, DhtError> {
+        let peer = PeerAddr {
+            node_id: Some(target.identity.node_id),
+            addr: target.addr,
+        };
+        let msg = Message::Replicate {
+            envelope: envelope.clone(),
+        };
+        match self.rpc(&peer, &msg).await? {
+            Some(Message::ReplicateAck { ack }) => Ok(ack),
+            Some(other) => Err(DhtError::RpcFailed(format!(
+                "expected ReplicateAck, got {other:?}"
+            ))),
+            None => Err(DhtError::RpcFailed("no response to REPLICATE".into())),
+        }
+    }
+
+    /// Send an ATTEST_REQUEST to a target node and return the attestation.
+    pub async fn request_attestation(
+        &self,
+        target: &NodeInfo,
+        tessera_hash: &ContentHash,
+    ) -> Result<Attestation, DhtError> {
+        let peer = PeerAddr {
+            node_id: Some(target.identity.node_id),
+            addr: target.addr,
+        };
+        let msg = Message::AttestRequest {
+            tessera_hash: *tessera_hash,
+        };
+        match self.rpc(&peer, &msg).await? {
+            Some(Message::AttestResponse { attestation }) => Ok(attestation),
+            Some(other) => Err(DhtError::RpcFailed(format!(
+                "expected AttestResponse, got {other:?}"
+            ))),
+            None => Err(DhtError::RpcFailed("no response to ATTEST_REQUEST".into())),
         }
     }
 
@@ -814,5 +894,121 @@ mod tests {
         shutdown_tx2.send(true).unwrap();
         run_handle1.await.unwrap();
         run_handle2.await.unwrap();
+    }
+
+    // -- ReplicationHandler dispatch tests --
+
+    use tesseras_core::replication::{
+        AttestationEntry, FragmentId, FragmentPlan,
+    };
+
+    fn make_test_envelope() -> FragmentEnvelope {
+        let data = vec![0xaa; 64];
+        let checksum = ContentHash::new(blake3::hash(&data).into());
+        let plan = FragmentPlan::new(ContentHash::new([0x01; 32]), 100_000_000).unwrap();
+        let id = FragmentId::new(ContentHash::new([0x01; 32]), 0, 16, checksum);
+        FragmentEnvelope {
+            id,
+            plan,
+            original_tessera_size: 100_000_000,
+            fragment_size: 64,
+            data,
+        }
+    }
+
+    /// Mock handler that always accepts fragments and returns empty attestations.
+    struct MockHandler;
+
+    #[async_trait::async_trait]
+    impl ReplicationHandler for MockHandler {
+        async fn handle_replicate(
+            &self,
+            _envelope: FragmentEnvelope,
+            _sender: &NodeId,
+        ) -> Result<ReplicateAck, tesseras_core::CoreError> {
+            Ok(ReplicateAck {
+                accepted: true,
+                fragments_held: vec![0, 1, 2],
+            })
+        }
+
+        async fn handle_attest_request(
+            &self,
+            tessera_hash: &ContentHash,
+        ) -> Result<tesseras_core::replication::Attestation, tesseras_core::CoreError> {
+            Ok(tesseras_core::replication::Attestation {
+                tessera_hash: *tessera_hash,
+                entries: vec![AttestationEntry {
+                    fragment_index: 0,
+                    checksum: ContentHash::new([0xcc; 32]),
+                }],
+                timestamp: chrono::Utc::now(),
+                signature: vec![0xde, 0xad],
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn replicate_handler_dispatches() {
+        let net = SimNetwork::new();
+        let engine = create_engine(&net, 900).await;
+        engine.set_replication_handler(Arc::new(MockHandler));
+
+        let envelope = make_test_envelope();
+        let msg = Message::Replicate { envelope };
+        let peer = PeerAddr {
+            node_id: Some(NodeId::new([0x01; 20])),
+            addr: addr(901),
+        };
+
+        let response = engine.handle_message(&msg, &peer).await;
+        match response {
+            Some(Message::ReplicateAck { ack }) => {
+                assert!(ack.accepted);
+                assert_eq!(ack.fragments_held, vec![0, 1, 2]);
+            }
+            _ => panic!("expected ReplicateAck"),
+        }
+    }
+
+    #[tokio::test]
+    async fn attest_handler_dispatches() {
+        let net = SimNetwork::new();
+        let engine = create_engine(&net, 910).await;
+        engine.set_replication_handler(Arc::new(MockHandler));
+
+        let tessera_hash = ContentHash::new([0x01; 32]);
+        let msg = Message::AttestRequest { tessera_hash };
+        let peer = PeerAddr {
+            node_id: None,
+            addr: addr(911),
+        };
+
+        let response = engine.handle_message(&msg, &peer).await;
+        match response {
+            Some(Message::AttestResponse { attestation }) => {
+                assert_eq!(attestation.tessera_hash, tessera_hash);
+                assert_eq!(attestation.entries.len(), 1);
+                assert_eq!(attestation.entries[0].fragment_index, 0);
+            }
+            _ => panic!("expected AttestResponse"),
+        }
+    }
+
+    #[tokio::test]
+    async fn replicate_without_handler_returns_none() {
+        let net = SimNetwork::new();
+        let engine = create_engine(&net, 920).await;
+        // No handler set
+
+        let envelope = make_test_envelope();
+        let msg = Message::Replicate { envelope };
+        let peer = PeerAddr {
+            node_id: Some(NodeId::new([0x01; 20])),
+            addr: addr(921),
+        };
+
+        let response = engine.handle_message(&msg, &peer).await;
+        assert!(response.is_none(), "should return None when no handler set");
     }
 }

@@ -6,7 +6,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-tesseras-core = { workspace = true }
+tesseras-core = { workspace = true, features = ["service"] }
 tesseras-net = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
@@ -21,6 +21,8 @@ rand = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
 proptest = { workspace = true }
 chrono = { workspace = true }
+mockall = { workspace = true }
+blake3 = { workspace = true }
 
 [features]
 default = []

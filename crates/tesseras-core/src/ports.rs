@@ -94,6 +94,21 @@ pub trait DhtPort: Send + Sync {
     async fn ping(&self, target: &NodeInfo) -> bool;
 }
 
+/// Handler for incoming REPLICATE/ATTEST RPCs, set on DhtEngine after construction.
+#[async_trait::async_trait]
+pub trait ReplicationHandler: Send + Sync {
+    async fn handle_replicate(
+        &self,
+        envelope: FragmentEnvelope,
+        sender: &NodeId,
+    ) -> Result<ReplicateAck, CoreError>;
+
+    async fn handle_attest_request(
+        &self,
+        tessera_hash: &ContentHash,
+    ) -> Result<Attestation, CoreError>;
+}
+
 /// Local storage for erasure-coded fragments. Sync (consistent with existing storage traits).
 pub trait FragmentStore: Send + Sync {
     fn store_fragment(&self, id: &FragmentId, data: &[u8]) -> Result<(), CoreError>;

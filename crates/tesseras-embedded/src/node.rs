@@ -6,8 +6,10 @@ use std::sync::{Arc, Mutex};
 
 use tokio::sync::{broadcast, watch};
 
-use tesseras_core::NodeIdentity;
-use tesseras_core::ports::{IdentityStore, KeyAlgorithm};
+use tesseras_core::ports::{IdentityStore, KeyAlgorithm, ReplicationHandler};
+use tesseras_core::replication::{Attestation, FragmentEnvelope, ReplicateAck};
+use tesseras_core::types::NodeId;
+use tesseras_core::{ContentHash, CoreError, NodeIdentity};
 use tesseras_core::service::TesseraService;
 use tesseras_crypto::ed25519::{Ed25519KeyGenerator, Ed25519KeyPair};
 use tesseras_dht::engine::DhtEngine;
@@ -29,6 +31,34 @@ struct UserProfile {
     name: String,
     avatar_path: Option<String>,
     created_at: String,
+}
+
+/// Bridges incoming REPLICATE/ATTEST RPCs from the DhtEngine to the ReplicationService.
+struct ReplicationHandlerAdapter {
+    service: Arc<ReplicationService>,
+}
+
+#[async_trait::async_trait]
+impl ReplicationHandler for ReplicationHandlerAdapter {
+    async fn handle_replicate(
+        &self,
+        envelope: FragmentEnvelope,
+        sender: &NodeId,
+    ) -> Result<ReplicateAck, CoreError> {
+        self.service
+            .receive_fragment(envelope, sender)
+            .await
+            .map_err(|e| CoreError::Network(e.to_string()))
+    }
+
+    async fn handle_attest_request(
+        &self,
+        tessera_hash: &ContentHash,
+    ) -> Result<Attestation, CoreError> {
+        self.service
+            .handle_attestation_request(tessera_hash)
+            .map_err(|e| CoreError::Network(e.to_string()))
+    }
 }
 
 pub struct EmbeddedNode {
@@ -99,14 +129,20 @@ impl EmbeddedNode {
         // Create replication service
         let dht_adapter = crate::dht_adapter::DhtPortAdapter::new(Arc::clone(&engine));
         let replication_config = tesseras_replication::ReplicationConfig::default();
-        let replication = ReplicationService::new(
+        let replication = Arc::new(ReplicationService::new(
             identity.clone(),
             Box::new(dht_adapter),
             Box::new(fragment_store),
             Box::new(reciprocity_ledger),
             Box::new(blob_store),
             replication_config,
-        );
+        ));
+
+        // Wire replication handler into DHT engine
+        let handler = ReplicationHandlerAdapter {
+            service: Arc::clone(&replication),
+        };
+        engine.set_replication_handler(Arc::new(handler));
 
         // Create TesseraService (separate storage instances since replication took ownership)
         let tessera_repo = SqliteTesseraRepository::new(Arc::clone(&conn));
@@ -134,8 +170,9 @@ impl EmbeddedNode {
 
         // Spawn repair loop
         let repl_shutdown = shutdown_tx.subscribe();
+        let replication_clone = Arc::clone(&replication);
         runtime.spawn(async move {
-            replication.run_repair_loop(repl_shutdown).await;
+            replication_clone.run_repair_loop(repl_shutdown).await;
         });
 
         let event_tx_clone = event_tx.clone();

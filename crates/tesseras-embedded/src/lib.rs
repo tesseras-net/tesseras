@@ -1,8 +1,10 @@
 //! tesseras-embedded: embeddable node for mobile/desktop via FFI.
 
+pub mod api;
 pub mod crypto_service;
 pub mod dht_adapter;
 pub mod error;
+mod frb_generated;
 pub mod node;
 pub mod types;
 

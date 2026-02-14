@@ -14,9 +14,14 @@ use tokio::sync::watch;
 use tracing_subscriber::EnvFilter;
 
 use rand::Rng;
+use tesseras_core::ports::ReplicationHandler;
+use tesseras_core::replication::{Attestation, FragmentEnvelope, ReplicateAck};
+use tesseras_core::types::NodeId;
+use tesseras_core::{ContentHash, CoreError};
 use tesseras_dht::engine::DhtEngine;
 use tesseras_dht::pow;
 use tesseras_net::{QuinnTransport, Transport};
+use tesseras_replication::ReplicationService;
 use tesseras_storage::{FsBlobStore, FsFragmentStore, SqliteReciprocityLedger};
 
 use config::DaemonConfig;
@@ -40,6 +45,34 @@ struct Cli {
     /// Data directory (overrides config)
     #[arg(short, long)]
     data_dir: Option<PathBuf>,
+}
+
+/// Bridges incoming REPLICATE/ATTEST RPCs from the DhtEngine to the ReplicationService.
+struct ReplicationHandlerAdapter {
+    service: Arc<ReplicationService>,
+}
+
+#[async_trait::async_trait]
+impl ReplicationHandler for ReplicationHandlerAdapter {
+    async fn handle_replicate(
+        &self,
+        envelope: FragmentEnvelope,
+        sender: &NodeId,
+    ) -> Result<ReplicateAck, CoreError> {
+        self.service
+            .receive_fragment(envelope, sender)
+            .await
+            .map_err(|e| CoreError::Network(e.to_string()))
+    }
+
+    async fn handle_attest_request(
+        &self,
+        tessera_hash: &ContentHash,
+    ) -> Result<Attestation, CoreError> {
+        self.service
+            .handle_attestation_request(tessera_hash)
+            .map_err(|e| CoreError::Network(e.to_string()))
+    }
 }
 
 #[tokio::main]
@@ -144,14 +177,20 @@ async fn main() -> Result<()> {
     // 7d. Create replication service
     let dht_adapter = DhtPortAdapter::new(Arc::clone(&engine));
     let replication_config = tesseras_replication::ReplicationConfig::default();
-    let replication = tesseras_replication::ReplicationService::new(
+    let replication = Arc::new(ReplicationService::new(
         identity,
         Box::new(dht_adapter),
         Box::new(fragment_store),
         Box::new(reciprocity_ledger),
         Box::new(blob_store),
         replication_config,
-    );
+    ));
+
+    // 7e. Wire replication handler into DHT engine
+    let handler = ReplicationHandlerAdapter {
+        service: Arc::clone(&replication),
+    };
+    engine.set_replication_handler(Arc::new(handler));
 
     // 8. Setup shutdown signal
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
@@ -164,8 +203,9 @@ async fn main() -> Result<()> {
 
     // 9b. Spawn repair loop
     let repl_shutdown_rx = shutdown_tx.subscribe();
+    let replication_clone = Arc::clone(&replication);
     let repl_handle = tokio::spawn(async move {
-        replication.run_repair_loop(repl_shutdown_rx).await;
+        replication_clone.run_repair_loop(repl_shutdown_rx).await;
     });
 
     // 10. Bootstrap (resolve hostnames via DNS for Docker/LAN compatibility)

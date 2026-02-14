@@ -1,6 +1,10 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use tesseras_core::ports::ReplicationHandler;
+use tesseras_core::replication::{
+    Attestation, AttestationEntry, FragmentEnvelope, FragmentId, FragmentPlan, ReplicateAck,
+};
 use tesseras_core::*;
 use tesseras_dht::{config::DhtConfig, engine::DhtEngine, pow};
 use tesseras_net::SimNetwork;
@@ -228,4 +232,108 @@ async fn pow_rejection() {
 
     s.send(true).ok();
     s_bad.send(true).ok();
+}
+
+/// Mock handler that always accepts fragments.
+struct MockHandler;
+
+#[async_trait::async_trait]
+impl ReplicationHandler for MockHandler {
+    async fn handle_replicate(
+        &self,
+        _envelope: FragmentEnvelope,
+        _sender: &NodeId,
+    ) -> Result<ReplicateAck, CoreError> {
+        Ok(ReplicateAck {
+            accepted: true,
+            fragments_held: vec![0],
+        })
+    }
+
+    async fn handle_attest_request(
+        &self,
+        tessera_hash: &ContentHash,
+    ) -> Result<Attestation, CoreError> {
+        Ok(Attestation {
+            tessera_hash: *tessera_hash,
+            entries: vec![AttestationEntry {
+                fragment_index: 0,
+                checksum: ContentHash::new([0xcc; 32]),
+            }],
+            timestamp: chrono::Utc::now(),
+            signature: vec![],
+        })
+    }
+}
+
+#[tokio::test]
+async fn replicate_roundtrip() {
+    let net = SimNetwork::new();
+    let e1 = create_engine(&net, 60001).await;
+    let e2 = create_engine(&net, 60002).await;
+
+    // Set handler on e2 so it can process REPLICATE
+    e2.set_replication_handler(Arc::new(MockHandler));
+
+    let (s1, _) = spawn_engine(&e1);
+    let (s2, _) = spawn_engine(&e2);
+    tokio::task::yield_now().await;
+
+    // Bootstrap so e1 knows about e2
+    e1.bootstrap(&[addr(60002)]).await.unwrap();
+
+    // Build a fragment envelope
+    let data = vec![0xaa; 64];
+    let checksum = ContentHash::new(blake3::hash(&data).into());
+    let plan = FragmentPlan::new(ContentHash::new([0x01; 32]), 100_000_000).unwrap();
+    let id = FragmentId::new(ContentHash::new([0x01; 32]), 0, 16, checksum);
+    let envelope = FragmentEnvelope {
+        id,
+        plan,
+        original_tessera_size: 100_000_000,
+        fragment_size: 64,
+        data,
+    };
+
+    // e1 sends REPLICATE to e2
+    let target = NodeInfo {
+        identity: e2.identity().clone(),
+        addr: addr(60002),
+        capabilities: Capabilities::phase1_default(),
+    };
+    let ack = e1.replicate_fragment(&target, &envelope).await.unwrap();
+    assert!(ack.accepted);
+    assert_eq!(ack.fragments_held, vec![0]);
+
+    s1.send(true).ok();
+    s2.send(true).ok();
+}
+
+#[tokio::test]
+async fn attest_roundtrip() {
+    let net = SimNetwork::new();
+    let e1 = create_engine(&net, 61001).await;
+    let e2 = create_engine(&net, 61002).await;
+
+    // Set handler on e2
+    e2.set_replication_handler(Arc::new(MockHandler));
+
+    let (s1, _) = spawn_engine(&e1);
+    let (s2, _) = spawn_engine(&e2);
+    tokio::task::yield_now().await;
+
+    e1.bootstrap(&[addr(61002)]).await.unwrap();
+
+    let tessera_hash = ContentHash::new([0x01; 32]);
+    let target = NodeInfo {
+        identity: e2.identity().clone(),
+        addr: addr(61002),
+        capabilities: Capabilities::phase1_default(),
+    };
+    let attestation = e1.request_attestation(&target, &tessera_hash).await.unwrap();
+    assert_eq!(attestation.tessera_hash, tessera_hash);
+    assert_eq!(attestation.entries.len(), 1);
+
+    s1.send(true).ok();
+    s2.send(true).ok();
 }

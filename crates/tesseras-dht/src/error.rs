@@ -18,6 +18,9 @@ pub enum DhtError {
     #[error("codec error: {0}")]
     Codec(String),
 
+    #[error("rpc failed: {0}")]
+    RpcFailed(String),
+
     #[error("shutdown")]
     Shutdown,
 }
