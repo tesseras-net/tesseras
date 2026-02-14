@@ -1,15 +1,15 @@
 services:
   boot1:
     build: ../..
-    command: ["--listen", "0.0.0.0:4433", "--bootstrap", ""]
+    command: ["--listen", "0.0.0.0:4433", "--bootstrap", "", "--data-dir", "/data"]
     ports: ["4433:4433/udp"]
 
   boot2:
     build: ../..
-    command: ["--listen", "0.0.0.0:4433", "--bootstrap", "boot1:4433"]
+    command: ["--listen", "0.0.0.0:4433", "--bootstrap", "boot1:4433", "--data-dir", "/data"]
     depends_on: [boot1]
 
   client:
     build: ../..
-    command: ["--listen", "0.0.0.0:4433", "--bootstrap", "boot2:4433"]
+    command: ["--listen", "0.0.0.0:4433", "--bootstrap", "boot2:4433", "--data-dir", "/data"]
     depends_on: [boot2]

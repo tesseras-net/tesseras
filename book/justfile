@@ -1,3 +1,7 @@
+[private]
+default:
+    @just --list --unsorted
+
 # Build both English and Portuguese books
 build:
     mdbook build en
