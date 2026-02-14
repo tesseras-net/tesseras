@@ -299,6 +299,7 @@ async fn replicate_roundtrip() {
     let target = NodeInfo {
         identity: e2.identity().clone(),
         addr: addr(60002),
+        alt_addrs: vec![],
         capabilities: Capabilities::phase1_default(),
     };
     let ack = e1.replicate_fragment(&target, &envelope).await.unwrap();
@@ -328,6 +329,7 @@ async fn attest_roundtrip() {
     let target = NodeInfo {
         identity: e2.identity().clone(),
         addr: addr(61002),
+        alt_addrs: vec![],
         capabilities: Capabilities::phase1_default(),
     };
     let attestation = e1.request_attestation(&target, &tessera_hash).await.unwrap();

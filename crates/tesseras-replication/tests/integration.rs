@@ -70,6 +70,7 @@ fn make_node_info(fill: u8, port: u16) -> NodeInfo {
             nonce: 0,
         },
         addr: std::net::SocketAddr::from(([10, 0, fill, 1], port)),
+        alt_addrs: vec![],
         capabilities: Capabilities::phase2_default(),
     }
 }

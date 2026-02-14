@@ -77,8 +77,8 @@ impl Transport for MemTransport {
         self.routes.lock().await.remove(&peer.addr);
     }
 
-    fn local_addr(&self) -> SocketAddr {
-        self.addr
+    fn local_addrs(&self) -> Vec<SocketAddr> {
+        vec![self.addr]
     }
 }
 

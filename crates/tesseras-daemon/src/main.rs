@@ -34,9 +34,10 @@ struct Cli {
     #[arg(short, long)]
     config: Option<PathBuf>,
 
-    /// Listen address (overrides config)
-    #[arg(short, long)]
-    listen: Option<SocketAddr>,
+    /// Listen addresses (comma-separated, overrides config).
+    /// e.g. --listen "0.0.0.0:4433,[::]:4433"
+    #[arg(short, long, value_delimiter = ',')]
+    listen: Vec<SocketAddr>,
 
     /// Bootstrap addresses (comma-separated, overrides config)
     #[arg(short, long)]
@@ -91,8 +92,8 @@ async fn main() -> Result<()> {
     };
 
     // Apply CLI overrides
-    if let Some(listen) = cli.listen {
-        config.node.listen_addr = listen;
+    if !cli.listen.is_empty() {
+        config.node.listen_addrs = cli.listen;
     }
     if let Some(ref data_dir) = cli.data_dir {
         config.node.data_dir = data_dir.clone();
@@ -105,8 +106,9 @@ async fn main() -> Result<()> {
         .with_target(true)
         .init();
 
+    let effective_addrs = config.node.effective_addrs();
     tracing::info!(
-        listen = %config.node.listen_addr,
+        listen = ?effective_addrs,
         data_dir = %config.node.data_dir.display(),
         "starting tesseras-daemon"
     );
@@ -148,12 +150,12 @@ async fn main() -> Result<()> {
 
     tracing::info!(node_id = %identity.node_id, "node identity loaded");
 
-    // 6. Create QUIC transport
-    let transport = QuinnTransport::bind(config.node.listen_addr)
+    // 6. Create QUIC transport (multi-endpoint for dual-stack)
+    let transport = QuinnTransport::bind_multiple(&effective_addrs)
         .await
         .context("failed to bind QUIC transport")?;
 
-    tracing::info!(addr = %transport.local_addr(), "QUIC transport bound");
+    tracing::info!(addrs = ?transport.local_addrs(), "QUIC transport bound");
 
     // 7. Create DHT engine
     let dht_config = config.to_dht_config();
@@ -224,10 +226,12 @@ async fn main() -> Result<()> {
         for addr in &raw {
             match tokio::net::lookup_host(addr).await {
                 Ok(addrs) => {
-                    if let Some(sock) = addrs.into_iter().next() {
-                        resolved.push(sock);
-                    } else {
+                    let all: Vec<_> = addrs.into_iter().collect();
+                    if all.is_empty() {
                         tracing::warn!(addr = %addr, "DNS resolved but returned no addresses");
+                    } else {
+                        tracing::debug!(addr = %addr, results = ?all, "DNS resolved");
+                        resolved.extend(all);
                     }
                 }
                 Err(e) => {

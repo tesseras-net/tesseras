@@ -144,6 +144,7 @@ mod tests {
             holders: vec![HolderInfo {
                 node_id: NodeId::new([0x01; 20]),
                 addr: "127.0.0.1:4433".parse().unwrap(),
+                alt_addrs: vec![],
                 last_seen: chrono::Utc::now(),
                 fragments: vec![],
             }],

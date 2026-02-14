@@ -77,10 +77,12 @@ impl DhtEngine {
         peer_addr: SocketAddr,
         identity: &NodeIdentity,
         caps: Capabilities,
+        listen_addrs: &[SocketAddr],
     ) {
         let info = NodeInfo {
             identity: identity.clone(),
             addr: peer_addr,
+            alt_addrs: listen_addrs.to_vec(),
             capabilities: caps,
         };
         self.routing.lock().await.update(info);
@@ -155,20 +157,23 @@ impl DhtEngine {
         match msg {
             Message::Ping { sender } => {
                 if pow::verify_pow(sender) {
-                    self.record_peer(peer.addr, sender, Capabilities::phase1_default())
+                    self.record_peer(peer.addr, sender, Capabilities::phase1_default(), &[])
                         .await;
                 }
                 Some(Message::Pong {
                     sender: self.identity.clone(),
                     capabilities: Capabilities::phase1_default(),
+                    listen_addrs: self.transport.local_addrs().into_iter().skip(1).collect(),
                 })
             }
             Message::Pong {
                 sender,
                 capabilities,
+                listen_addrs,
             } => {
                 if pow::verify_pow(sender) {
-                    self.record_peer(peer.addr, sender, *capabilities).await;
+                    self.record_peer(peer.addr, sender, *capabilities, listen_addrs)
+                        .await;
                 }
                 None
             }
@@ -298,9 +303,11 @@ impl DhtEngine {
             Ok(Some(Message::Pong {
                 sender,
                 capabilities,
+                listen_addrs,
             })) => {
                 if pow::verify_pow(&sender) {
-                    self.record_peer(addr, &sender, capabilities).await;
+                    self.record_peer(addr, &sender, capabilities, &listen_addrs)
+                        .await;
                 }
                 true
             }
@@ -680,6 +687,7 @@ mod tests {
             Some(Message::Pong {
                 sender,
                 capabilities,
+                ..
             }) => {
                 assert_eq!(sender.node_id, e2.node_id());
                 assert!(capabilities.has(Capabilities::PING));
@@ -720,11 +728,13 @@ mod tests {
             rt.update(NodeInfo {
                 identity: node1.clone(),
                 addr: addr(301),
+                alt_addrs: vec![],
                 capabilities: Capabilities::phase1_default(),
             });
             rt.update(NodeInfo {
                 identity: node2.clone(),
                 addr: addr(302),
+                alt_addrs: vec![],
                 capabilities: Capabilities::phase1_default(),
             });
         }

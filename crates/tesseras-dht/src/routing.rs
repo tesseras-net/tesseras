@@ -194,6 +194,7 @@ mod tests {
                 nonce: 0,
             },
             addr: SocketAddr::from(([127, 0, 0, 1], 4433)),
+            alt_addrs: vec![],
             capabilities: Capabilities::phase1_default(),
         }
     }
@@ -246,6 +247,7 @@ mod tests {
                     nonce: 0,
                 },
                 addr: SocketAddr::from(([127, 0, 0, 1], 4433)),
+                alt_addrs: vec![],
                 capabilities: Capabilities::phase1_default(),
             });
         }
@@ -265,6 +267,7 @@ mod tests {
                 nonce: 0,
             },
             addr: SocketAddr::from(([127, 0, 0, 1], 4433)),
+            alt_addrs: vec![],
             capabilities: Capabilities::phase1_default(),
         };
 
@@ -292,6 +295,7 @@ mod tests {
                 nonce: 0,
             },
             addr: SocketAddr::from(([127, 0, 0, 1], 4433)),
+            alt_addrs: vec![],
             capabilities: Capabilities::phase1_default(),
         };
         rt.update(old_node.clone());
@@ -305,6 +309,7 @@ mod tests {
                 nonce: 0,
             },
             addr: SocketAddr::from(([127, 0, 0, 1], 4433)),
+            alt_addrs: vec![],
             capabilities: Capabilities::phase1_default(),
         };
 
@@ -332,6 +337,7 @@ mod tests {
                     nonce: 0,
                 },
                 addr: SocketAddr::from(([127, 0, 0, 1], 4433)),
+                alt_addrs: vec![],
                 capabilities: Capabilities::phase1_default(),
             });
         }

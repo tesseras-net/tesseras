@@ -126,6 +126,7 @@ mod tests {
                 nonce: 0,
             },
             addr: std::net::SocketAddr::from(([10, 0, 0, fill], 4433)),
+            alt_addrs: vec![],
             capabilities: Capabilities::phase2_default(),
         }
     }

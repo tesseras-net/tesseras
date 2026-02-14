@@ -18,6 +18,21 @@ pub struct DaemonConfig {
 pub struct NodeConfig {
     pub data_dir: PathBuf,
     pub listen_addr: SocketAddr,
+    /// Additional listen addresses for explicit dual-stack (e.g. IPv4 + IPv6).
+    #[serde(default)]
+    pub listen_addrs: Vec<SocketAddr>,
+}
+
+impl NodeConfig {
+    /// Return effective listen addresses: `listen_addrs` if non-empty,
+    /// otherwise the single `listen_addr`.
+    pub fn effective_addrs(&self) -> Vec<SocketAddr> {
+        if !self.listen_addrs.is_empty() {
+            self.listen_addrs.clone()
+        } else {
+            vec![self.listen_addr]
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -73,6 +88,7 @@ impl Default for DaemonConfig {
                     .unwrap_or_else(|| PathBuf::from("."))
                     .join("tesseras"),
                 listen_addr: "0.0.0.0:4433".parse().unwrap(),
+                listen_addrs: vec![],
             },
             dht: DhtTomlConfig {
                 k: 20,
@@ -137,8 +153,64 @@ mod tests {
         let config = DaemonConfig::default();
         assert_eq!(config.dht.k, 20);
         assert_eq!(config.node.listen_addr.port(), 4433);
+        assert!(config.node.listen_addrs.is_empty());
         assert_eq!(config.replication.repair_interval_secs, 86400);
         assert_eq!(config.replication.repair_jitter_secs, 7200);
+    }
+
+    #[test]
+    fn effective_addrs_uses_listen_addrs_when_set() {
+        let mut config = DaemonConfig::default();
+        config.node.listen_addrs = vec![
+            "0.0.0.0:4433".parse().unwrap(),
+            "[::]:4433".parse().unwrap(),
+        ];
+        let addrs = config.node.effective_addrs();
+        assert_eq!(addrs.len(), 2);
+        assert!(addrs[0].is_ipv4());
+        assert!(addrs[1].is_ipv6());
+    }
+
+    #[test]
+    fn effective_addrs_falls_back_to_listen_addr() {
+        let config = DaemonConfig::default();
+        let addrs = config.node.effective_addrs();
+        assert_eq!(addrs.len(), 1);
+        assert_eq!(addrs[0], config.node.listen_addr);
+    }
+
+    #[test]
+    fn toml_with_listen_addrs() {
+        let toml = r#"
+[node]
+data_dir = "/tmp/test"
+listen_addr = "127.0.0.1:4433"
+listen_addrs = ["0.0.0.0:4433", "[::]:4433"]
+
+[dht]
+k = 20
+alpha = 3
+bucket_refresh_interval_secs = 3600
+republish_interval_secs = 3600
+pointer_ttl_secs = 86400
+max_stored_pointers = 100000
+ping_failure_threshold = 3
+
+[bootstrap]
+dns_domain = "test"
+hardcoded = []
+
+[network]
+enable_mdns = false
+
+[observability]
+metrics_addr = "127.0.0.1:9190"
+log_format = "json"
+"#;
+        let config: DaemonConfig = toml::from_str(toml).unwrap();
+        assert_eq!(config.node.listen_addrs.len(), 2);
+        let addrs = config.node.effective_addrs();
+        assert_eq!(addrs.len(), 2);
     }
 
     #[test]

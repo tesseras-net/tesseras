@@ -565,6 +565,7 @@ mod tests {
                 nonce: 0,
             },
             addr: SocketAddr::from(([10, 0, fill, 1], port)),
+            alt_addrs: vec![],
             capabilities: Capabilities::phase2_default(),
         }
     }

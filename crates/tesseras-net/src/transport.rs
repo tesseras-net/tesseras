@@ -45,7 +45,10 @@ pub trait Transport: Send + Sync {
     async fn send(&self, peer: &PeerAddr, data: &[u8]) -> Result<(), NetError>;
     async fn recv(&self) -> Result<Envelope, NetError>;
     async fn disconnect(&self, peer: &PeerAddr);
-    fn local_addr(&self) -> SocketAddr;
+    fn local_addrs(&self) -> Vec<SocketAddr>;
+    fn local_addr(&self) -> SocketAddr {
+        self.local_addrs()[0]
+    }
 }
 
 #[async_trait]
@@ -60,6 +63,10 @@ impl<T: Transport> Transport for Arc<T> {
 
     async fn disconnect(&self, peer: &PeerAddr) {
         (**self).disconnect(peer).await
+    }
+
+    fn local_addrs(&self) -> Vec<SocketAddr> {
+        (**self).local_addrs()
     }
 
     fn local_addr(&self) -> SocketAddr {

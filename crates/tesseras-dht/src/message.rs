@@ -12,6 +12,9 @@ pub enum Message {
     Pong {
         sender: NodeIdentity,
         capabilities: Capabilities,
+        /// Additional listen addresses (e.g. IPv6). Empty for single-address nodes.
+        #[serde(default)]
+        listen_addrs: Vec<std::net::SocketAddr>,
     },
 
     FindNode {
@@ -88,6 +91,7 @@ mod tests {
             holders: vec![HolderInfo {
                 node_id: NodeId::new([0x03; 20]),
                 addr: "10.0.0.1:4433".parse().unwrap(),
+                alt_addrs: vec![],
                 last_seen: chrono::Utc::now(),
                 fragments: vec![0, 1, 2],
             }],
@@ -111,10 +115,43 @@ mod tests {
         let msg = Message::Pong {
             sender: test_identity(),
             capabilities: Capabilities::phase1_default(),
+            listen_addrs: vec![],
         };
         let bytes = encode(&msg).unwrap();
         let decoded = decode(&bytes).unwrap();
         assert_eq!(decoded, msg);
+    }
+
+    #[test]
+    fn pong_with_listen_addrs_roundtrip() {
+        let msg = Message::Pong {
+            sender: test_identity(),
+            capabilities: Capabilities::phase1_default(),
+            listen_addrs: vec![
+                "[::1]:4433".parse().unwrap(),
+                "10.0.0.1:4433".parse().unwrap(),
+            ],
+        };
+        let bytes = encode(&msg).unwrap();
+        let decoded = decode(&bytes).unwrap();
+        assert_eq!(decoded, msg);
+    }
+
+    #[test]
+    fn pong_backward_compat() {
+        // Pong without listen_addrs (old format) should deserialize fine
+        let msg_old = Message::Pong {
+            sender: test_identity(),
+            capabilities: Capabilities::phase1_default(),
+            listen_addrs: vec![],
+        };
+        let bytes = encode(&msg_old).unwrap();
+        let decoded = decode(&bytes).unwrap();
+        if let Message::Pong { listen_addrs, .. } = decoded {
+            assert!(listen_addrs.is_empty());
+        } else {
+            panic!("expected Pong");
+        }
     }
 
     #[test]
@@ -132,6 +169,7 @@ mod tests {
             nodes: vec![NodeInfo {
                 identity: test_identity(),
                 addr: "192.168.1.1:4433".parse::<SocketAddr>().unwrap(),
+                alt_addrs: vec![],
                 capabilities: Capabilities::phase1_default(),
             }],
         };

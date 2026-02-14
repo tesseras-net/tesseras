@@ -92,6 +92,59 @@ Monitoramento e logging.
 | `metrics_addr` | endereco | `127.0.0.1:9190` | Endereco para o endpoint de metricas Prometheus |
 | `log_format` | string | `json` | Formato de saida de log (`json` ou `text`) |
 
+## Suporte a IPv6
+
+Tesseras suporta IPv6 nativamente. Os campos `listen_addr` e `listen_addrs` aceitam tanto enderecos IPv4 quanto IPv6.
+
+### Escutando em IPv6
+
+Para escutar em todas as interfaces IPv6:
+
+```toml
+[node]
+listen_addr = "[::]:4433"
+```
+
+No Linux e na maioria dos BSDs, vincular a `[::]` tambem aceita conexoes IPv4 (dual-stack) por padrao. Em alguns sistemas (notavelmente OpenBSD), `[::]` e somente IPv6 porque `IPV6_V6ONLY` e habilitado por padrao. Para garantir tanto IPv4 quanto IPv6 em todas as plataformas, use `listen_addrs` com enderecos explicitos:
+
+```toml
+[node]
+listen_addrs = ["0.0.0.0:4433", "[::]:4433"]
+```
+
+Para loopback IPv6 apenas (testes):
+
+```toml
+[node]
+listen_addr = "[::1]:4433"
+```
+
+### Bootstrap com IPv6
+
+Enderecos de bootstrap podem ser IPv6:
+
+```toml
+[bootstrap]
+hardcoded = [
+    "boot1.tesseras.net:4433",
+    "[2001:db8::1]:4433",
+]
+```
+
+Hostnames DNS com registros A e AAAA sao resolvidos para todos os enderecos, entao o daemon se conectara pelo protocolo que estiver acessivel.
+
+### Comportamento de `IPV6_V6ONLY` por SO
+
+| SO | `[::]` aceita IPv4? | Notas |
+|----|---------------------|-------|
+| Linux | Sim (dual-stack) | `IPV6_V6ONLY` padrao 0 |
+| macOS | Sim (dual-stack) | `IPV6_V6ONLY` padrao 0 |
+| FreeBSD | Sim (dual-stack) | `IPV6_V6ONLY` padrao 0 |
+| OpenBSD | Nao (somente IPv6) | `IPV6_V6ONLY` sempre 1 |
+| Windows | Sim (dual-stack) | `IPV6_V6ONLY` padrao 0 |
+
+Se precisar de controle explicito, use `listen_addrs` com um endereco IPv4 e um IPv6.
+
 ## Configuracao minima
 
 A maioria dos usuarios nao precisa de um arquivo de configuracao. Se precisar, uma configuracao minima sobrescrevendo apenas o necessario e suficiente:

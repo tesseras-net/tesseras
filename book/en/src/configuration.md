@@ -92,6 +92,59 @@ Monitoring and logging.
 | `metrics_addr` | address | `127.0.0.1:9190` | Address for the Prometheus metrics endpoint |
 | `log_format` | string | `json` | Log output format (`json` or `text`) |
 
+## IPv6 Support
+
+Tesseras supports IPv6 natively. The `listen_addr` and `listen_addrs` fields accept both IPv4 and IPv6 addresses.
+
+### Listening on IPv6
+
+To listen on all IPv6 interfaces:
+
+```toml
+[node]
+listen_addr = "[::]:4433"
+```
+
+On Linux and most BSDs, binding to `[::]` also accepts IPv4 connections (dual-stack) by default. On some systems (notably OpenBSD), `[::]` is IPv6-only due to `IPV6_V6ONLY` being enabled by default. To guarantee both IPv4 and IPv6 on all platforms, use `listen_addrs` with explicit addresses:
+
+```toml
+[node]
+listen_addrs = ["0.0.0.0:4433", "[::]:4433"]
+```
+
+For IPv6 loopback only (testing):
+
+```toml
+[node]
+listen_addr = "[::1]:4433"
+```
+
+### Bootstrap with IPv6
+
+Bootstrap addresses can be IPv6:
+
+```toml
+[bootstrap]
+hardcoded = [
+    "boot1.tesseras.net:4433",
+    "[2001:db8::1]:4433",
+]
+```
+
+DNS hostnames with both A and AAAA records are resolved to all addresses, so the daemon will connect over whichever protocol is reachable.
+
+### `IPV6_V6ONLY` behavior by OS
+
+| OS | `[::]` accepts IPv4? | Notes |
+|----|---------------------|-------|
+| Linux | Yes (dual-stack) | `IPV6_V6ONLY` defaults to 0 |
+| macOS | Yes (dual-stack) | `IPV6_V6ONLY` defaults to 0 |
+| FreeBSD | Yes (dual-stack) | `IPV6_V6ONLY` defaults to 0 |
+| OpenBSD | No (IPv6-only) | `IPV6_V6ONLY` always 1 |
+| Windows | Yes (dual-stack) | `IPV6_V6ONLY` defaults to 0 |
+
+If you need explicit control, use `listen_addrs` with both an IPv4 and IPv6 address.
+
 ## Minimal config
 
 Most users don't need a config file at all. If you do, a minimal config overriding only what you need is enough:

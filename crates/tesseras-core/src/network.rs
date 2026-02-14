@@ -54,7 +54,18 @@ pub struct NodeIdentity {
 pub struct NodeInfo {
     pub identity: NodeIdentity,
     pub addr: SocketAddr,
+    /// Additional addresses (e.g. IPv6 when primary is IPv4). Empty for
+    /// nodes that only have a single address.
+    #[serde(default)]
+    pub alt_addrs: Vec<SocketAddr>,
     pub capabilities: Capabilities,
+}
+
+impl NodeInfo {
+    /// Iterate over all addresses (primary + alternates).
+    pub fn all_addrs(&self) -> impl Iterator<Item = &SocketAddr> {
+        std::iter::once(&self.addr).chain(self.alt_addrs.iter())
+    }
 }
 
 /// A node that holds (part of) a tessera.
@@ -62,8 +73,18 @@ pub struct NodeInfo {
 pub struct HolderInfo {
     pub node_id: NodeId,
     pub addr: SocketAddr,
+    /// Additional addresses for this holder.
+    #[serde(default)]
+    pub alt_addrs: Vec<SocketAddr>,
     pub last_seen: chrono::DateTime<chrono::Utc>,
     pub fragments: Vec<u32>,
+}
+
+impl HolderInfo {
+    /// Iterate over all addresses (primary + alternates).
+    pub fn all_addrs(&self) -> impl Iterator<Item = &SocketAddr> {
+        std::iter::once(&self.addr).chain(self.alt_addrs.iter())
+    }
 }
 
 /// DHT stores lightweight pointers to tessera holders (not the data itself).
@@ -135,6 +156,7 @@ mod tests {
             holders: vec![HolderInfo {
                 node_id: NodeId::new([0x02; 20]),
                 addr: "127.0.0.1:4433".parse().unwrap(),
+                alt_addrs: vec![],
                 last_seen: chrono::Utc::now(),
                 fragments: vec![0, 1, 2],
             }],
@@ -149,6 +171,24 @@ mod tests {
     }
 
     #[test]
+    fn node_info_serde_roundtrip_ipv6() {
+        let info = NodeInfo {
+            identity: NodeIdentity {
+                node_id: NodeId::new([0xab; 20]),
+                public_key: [0xcd; 32],
+                nonce: 99,
+            },
+            addr: "[::1]:4433".parse().unwrap(),
+            alt_addrs: vec![],
+            capabilities: Capabilities::phase1_default(),
+        };
+        let bytes = rmp_serde::to_vec(&info).unwrap();
+        let parsed: NodeInfo = rmp_serde::from_slice(&bytes).unwrap();
+        assert_eq!(parsed, info);
+        assert!(parsed.addr.is_ipv6());
+    }
+
+    #[test]
     fn node_info_serde_roundtrip() {
         let info = NodeInfo {
             identity: NodeIdentity {
@@ -157,10 +197,49 @@ mod tests {
                 nonce: 99,
             },
             addr: "192.168.1.1:4433".parse().unwrap(),
+            alt_addrs: vec![],
             capabilities: Capabilities::phase1_default(),
         };
         let bytes = rmp_serde::to_vec(&info).unwrap();
         let parsed: NodeInfo = rmp_serde::from_slice(&bytes).unwrap();
         assert_eq!(parsed, info);
+    }
+
+    #[test]
+    fn node_info_alt_addrs_serde() {
+        let info = NodeInfo {
+            identity: NodeIdentity {
+                node_id: NodeId::new([0xab; 20]),
+                public_key: [0xcd; 32],
+                nonce: 99,
+            },
+            addr: "192.168.1.1:4433".parse().unwrap(),
+            alt_addrs: vec!["[::1]:4433".parse().unwrap(), "10.0.0.1:4433".parse().unwrap()],
+            capabilities: Capabilities::phase1_default(),
+        };
+        let bytes = rmp_serde::to_vec(&info).unwrap();
+        let parsed: NodeInfo = rmp_serde::from_slice(&bytes).unwrap();
+        assert_eq!(parsed, info);
+        assert_eq!(parsed.alt_addrs.len(), 2);
+        assert!(parsed.alt_addrs[0].is_ipv6());
+    }
+
+    #[test]
+    fn node_info_empty_alt_addrs_roundtrip() {
+        // Empty alt_addrs serializes as empty array and deserializes correctly
+        let info = NodeInfo {
+            identity: NodeIdentity {
+                node_id: NodeId::new([0xab; 20]),
+                public_key: [0xcd; 32],
+                nonce: 99,
+            },
+            addr: "192.168.1.1:4433".parse().unwrap(),
+            alt_addrs: vec![],
+            capabilities: Capabilities::phase1_default(),
+        };
+        let bytes = rmp_serde::to_vec(&info).unwrap();
+        let parsed: NodeInfo = rmp_serde::from_slice(&bytes).unwrap();
+        assert_eq!(parsed, info);
+        assert!(parsed.alt_addrs.is_empty());
     }
 }
