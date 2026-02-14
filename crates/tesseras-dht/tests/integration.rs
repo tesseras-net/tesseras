@@ -47,8 +47,11 @@ async fn three_node_bootstrap() {
     let e2 = create_engine(&net, 10002).await;
     let e3 = create_engine(&net, 10003).await;
 
-    // e1 is the seed node
+    // Start all run loops so responses get routed via pending-requests map
     let (s1, _) = spawn_engine(&e1);
+    let (s2, _) = spawn_engine(&e2);
+    let (s3, _) = spawn_engine(&e3);
+    tokio::task::yield_now().await;
 
     // e2 bootstraps from e1
     e2.bootstrap(&[addr(10001)]).await.unwrap();
@@ -56,10 +59,6 @@ async fn three_node_bootstrap() {
         e2.routing_table_size().await >= 1,
         "e2 should know at least e1"
     );
-
-    // Start e2's run loop, then bootstrap e3 from e2
-    let (s2, _) = spawn_engine(&e2);
-    tokio::task::yield_now().await;
 
     e3.bootstrap(&[addr(10002)]).await.unwrap();
     assert!(
@@ -75,6 +74,7 @@ async fn three_node_bootstrap() {
 
     s1.send(true).ok();
     s2.send(true).ok();
+    s3.send(true).ok();
 }
 
 #[tokio::test]
@@ -88,16 +88,17 @@ async fn ten_node_lookup_convergence() {
         engines.push(create_engine(&net, 20001 + i).await);
     }
 
-    // Engine 0 is the seed
-    let (s, _) = spawn_engine(&engines[0]);
-    shutdowns.push(s);
+    // Start all run loops so responses get routed via pending-requests map
+    for engine in &engines {
+        let (s, _) = spawn_engine(engine);
+        shutdowns.push(s);
+    }
+    tokio::task::yield_now().await;
 
     // Bootstrap each subsequent engine from the previous one
-    for i in 1..10 {
+    for (i, engine) in engines.iter().enumerate().skip(1) {
         let prev_port = 20001 + (i as u16 - 1);
-        engines[i].bootstrap(&[addr(prev_port)]).await.unwrap();
-        let (s, _) = spawn_engine(&engines[i]);
-        shutdowns.push(s);
+        engine.bootstrap(&[addr(prev_port)]).await.unwrap();
         tokio::task::yield_now().await;
     }
 
@@ -130,8 +131,11 @@ async fn publish_and_find_tessera() {
     let e2 = create_engine(&net, 30002).await;
     let e3 = create_engine(&net, 30003).await;
 
-    // e1 is the storage/seed node
+    // Start all run loops so responses get routed via pending-requests map
     let (s1, _) = spawn_engine(&e1);
+    let (s2, _) = spawn_engine(&e2);
+    let (s3, _) = spawn_engine(&e3);
+    tokio::task::yield_now().await;
 
     // e2 bootstraps and publishes a pointer
     e2.bootstrap(&[addr(30001)]).await.unwrap();
@@ -152,10 +156,6 @@ async fn publish_and_find_tessera() {
         "storage node should hold the pointer"
     );
 
-    // Start e2's run loop so e3 can query it during iterative lookup
-    let (s2, _) = spawn_engine(&e2);
-    tokio::task::yield_now().await;
-
     // e3 bootstraps and finds the pointer
     e3.bootstrap(&[addr(30001)]).await.unwrap();
     let found = e3.find_tessera(&pointer.tessera_hash).await.unwrap();
@@ -166,6 +166,7 @@ async fn publish_and_find_tessera() {
 
     s1.send(true).ok();
     s2.send(true).ok();
+    s3.send(true).ok();
 }
 
 #[tokio::test]
@@ -174,8 +175,12 @@ async fn node_departure_detected() {
     let e1 = create_engine(&net, 40001).await;
     let e2 = create_engine(&net, 40002).await;
 
-    // Bootstrap e2 from e1
+    // Start both run loops so responses get routed
     let (s1, h1) = spawn_engine(&e1);
+    let (s2, h2) = spawn_engine(&e2);
+    tokio::task::yield_now().await;
+
+    // Bootstrap e2 from e1
     e2.bootstrap(&[addr(40001)]).await.unwrap();
     assert!(e2.routing_table_size().await >= 1);
 
@@ -183,11 +188,14 @@ async fn node_departure_detected() {
     s1.send(true).unwrap();
     h1.await.unwrap();
 
-    // Ping should fail (no run loop to handle it, RPC times out)
+    // Ping should fail (e1 is shut down, RPC times out)
     assert!(
         !e2.ping(addr(40001)).await,
         "ping should fail after node departure"
     );
+
+    s2.send(true).ok();
+    let _ = h2.await;
 }
 
 #[tokio::test]
@@ -205,6 +213,10 @@ async fn pow_rejection() {
     };
     let e_bad = DhtEngine::new(bad_identity, Box::new(transport), test_config());
 
+    // Start e_bad's run loop so it can receive the Pong response
+    let (s_bad, _) = spawn_engine(&e_bad);
+    tokio::task::yield_now().await;
+
     // Bad node pings good node — gets a Pong (good node always responds)
     // but good node does NOT add the bad node to its routing table
     assert!(e_bad.ping(addr(50001)).await, "should get Pong response");
@@ -215,4 +227,5 @@ async fn pow_rejection() {
     );
 
     s.send(true).ok();
+    s_bad.send(true).ok();
 }

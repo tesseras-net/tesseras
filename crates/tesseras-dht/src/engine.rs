@@ -1,8 +1,8 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use tokio::sync::Mutex;
+use tokio::sync::{oneshot, Mutex};
 
 use tesseras_core::*;
 use tesseras_net::codec::{self as wire_codec, WireBody, WireMessage};
@@ -23,6 +23,7 @@ pub struct DhtEngine {
     routing: Mutex<RoutingTable>,
     store: Mutex<PointerStore>,
     request_counter: Mutex<u64>,
+    pending: Mutex<HashMap<u64, oneshot::Sender<(WireMessage, PeerAddr)>>>,
 }
 
 impl DhtEngine {
@@ -42,6 +43,7 @@ impl DhtEngine {
             transport,
             config,
             request_counter: Mutex::new(0),
+            pending: Mutex::new(HashMap::new()),
         })
     }
 
@@ -86,7 +88,14 @@ impl DhtEngine {
 
         let body_bytes = match &wire_msg.body {
             WireBody::Request(b) => b,
-            WireBody::Response(_) | WireBody::Error { .. } => return, // responses handled by RPC callers
+            WireBody::Response(_) | WireBody::Error { .. } => {
+                // Route to pending RPC caller
+                let mut pending = self.pending.lock().await;
+                if let Some(tx) = pending.remove(&wire_msg.request_id) {
+                    let _ = tx.send((wire_msg, envelope.peer));
+                }
+                return;
+            }
         };
 
         let msg = match message::decode(body_bytes) {
@@ -198,30 +207,29 @@ impl DhtEngine {
         };
         let wire_bytes = wire_codec::encode(&wire_msg).map_err(DhtError::Transport)?;
 
+        let (tx, rx) = oneshot::channel();
+        self.pending.lock().await.insert(request_id, tx);
+
         self.transport.send(peer, &wire_bytes).await?;
 
-        // Wait for response with timeout
-        let result = tokio::time::timeout(self.config.rpc_timeout, async {
-            // In a real implementation, we'd use a pending-requests map.
-            // For now, we read the next message from transport.
-            let envelope = self.transport.recv().await?;
-            let (resp_wire, _) =
-                wire_codec::decode(&envelope.payload).map_err(DhtError::Transport)?;
-            if let WireBody::Response(resp_bytes) = resp_wire.body {
-                let resp = message::decode(&resp_bytes).map_err(DhtError::Codec)?;
-                Ok::<_, DhtError>(Some(resp))
-            } else if let WireBody::Error { reason, .. } = resp_wire.body {
-                Err(DhtError::LookupFailed(reason))
-            } else {
-                Ok(None)
-            }
-        })
-        .await;
+        let result = tokio::time::timeout(self.config.rpc_timeout, rx).await;
+
+        // Clean up on timeout (sender may already be removed if response arrived)
+        self.pending.lock().await.remove(&request_id);
 
         match result {
-            Ok(Ok(resp)) => Ok(resp),
-            Ok(Err(e)) => Err(e),
-            Err(_) => Ok(None), // timeout
+            Ok(Ok((wire_resp, _peer))) => {
+                if let WireBody::Response(resp_bytes) = wire_resp.body {
+                    let resp = message::decode(&resp_bytes).map_err(DhtError::Codec)?;
+                    Ok(Some(resp))
+                } else if let WireBody::Error { reason, .. } = wire_resp.body {
+                    Err(DhtError::LookupFailed(reason))
+                } else {
+                    Ok(None)
+                }
+            }
+            Ok(Err(_)) => Ok(None), // sender dropped
+            Err(_) => Ok(None),     // timeout
         }
     }
 
@@ -734,11 +742,18 @@ mod tests {
         let e1 = create_engine(&net, 700).await;
         let e2 = create_engine(&net, 701).await;
 
-        // Spawn e2's message handler
+        // Spawn e2's message handler (handles the Ping request, sends Pong)
         let e2_clone = Arc::clone(&e2);
         let handler = tokio::spawn(async move {
             let envelope = e2_clone.transport.recv().await.unwrap();
             e2_clone.handle_envelope(envelope).await;
+        });
+
+        // Spawn a recv loop for e1 so the Pong response gets routed to the pending RPC
+        let e1_clone = Arc::clone(&e1);
+        let e1_recv = tokio::spawn(async move {
+            let envelope = e1_clone.transport.recv().await.unwrap();
+            e1_clone.handle_envelope(envelope).await;
         });
 
         // e1 pings e2
@@ -746,6 +761,7 @@ mod tests {
         assert!(result);
 
         handler.await.unwrap();
+        e1_recv.await.unwrap();
 
         // e1 should now have e2 in its routing table
         assert_eq!(e1.routing_table_size().await, 1);
@@ -757,22 +773,30 @@ mod tests {
         let e1 = create_engine(&net, 800).await;
         let e2 = create_engine(&net, 801).await;
 
-        // Start e2's run loop
-        let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
-        let e2_clone = Arc::clone(&e2);
-        let run_handle = tokio::spawn(async move {
-            e2_clone.run(shutdown_rx).await;
+        // Start both engines' run loops so responses get routed correctly
+        let (shutdown_tx1, shutdown_rx1) = tokio::sync::watch::channel(false);
+        let e1_clone = Arc::clone(&e1);
+        let run_handle1 = tokio::spawn(async move {
+            e1_clone.run(shutdown_rx1).await;
         });
 
-        // e1 pings e2 (handled by e2's run loop)
+        let (shutdown_tx2, shutdown_rx2) = tokio::sync::watch::channel(false);
+        let e2_clone = Arc::clone(&e2);
+        let run_handle2 = tokio::spawn(async move {
+            e2_clone.run(shutdown_rx2).await;
+        });
+
+        // e1 pings e2 (handled by e2's run loop, response routed by e1's run loop)
         let result = e1.ping(addr(801)).await;
         assert!(result);
 
         // e1 should know about e2
         assert_eq!(e1.routing_table_size().await, 1);
 
-        // Shutdown e2
-        shutdown_tx.send(true).unwrap();
-        run_handle.await.unwrap();
+        // Shutdown both engines
+        shutdown_tx1.send(true).unwrap();
+        shutdown_tx2.send(true).unwrap();
+        run_handle1.await.unwrap();
+        run_handle2.await.unwrap();
     }
 }
