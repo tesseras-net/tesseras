@@ -9,4 +9,7 @@ pub mod ed25519;
 #[cfg(feature = "classical")]
 pub mod hasher;
 
+#[cfg(feature = "erasure")]
+pub mod erasure;
+
 pub use error::CryptoError;
