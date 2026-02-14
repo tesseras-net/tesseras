@@ -1,6 +1,11 @@
 [workspace]
 resolver = "3"
-members = ["crates/*"]
+members = [
+    "crates/tesseras-core",
+    "crates/tesseras-crypto",
+    "crates/tesseras-storage",
+    "crates/tesseras-cli",
+]
 
 [workspace.package]
 edition = "2024"
