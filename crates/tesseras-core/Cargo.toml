@@ -24,6 +24,7 @@ rand = { workspace = true }
 tempfile = { workspace = true }
 tesseras-storage = { workspace = true }
 rusqlite = { workspace = true }
+rmp-serde = { workspace = true }
 
 [features]
 default = []

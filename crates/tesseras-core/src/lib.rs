@@ -5,6 +5,7 @@ pub mod error;
 pub mod manifest;
 pub mod memory;
 pub mod metadata;
+pub mod network;
 #[cfg(feature = "service")]
 pub mod ports;
 #[cfg(feature = "service")]
@@ -17,6 +18,7 @@ pub use error::CoreError;
 pub use manifest::{Manifest, ManifestEntry};
 pub use memory::Memory;
 pub use metadata::{Location, MemoryMetadata, Person};
+pub use network::*;
 #[cfg(feature = "service")]
 pub use ports::*;
 #[cfg(feature = "service")]
