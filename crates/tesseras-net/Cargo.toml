@@ -14,8 +14,15 @@ tracing = { workspace = true }
 rmp-serde = { workspace = true }
 serde = { workspace = true }
 
+# Optional QUIC dependencies
+quinn = { workspace = true, optional = true }
+rustls = { workspace = true, optional = true }
+rcgen = { workspace = true, optional = true }
+dashmap = { workspace = true, optional = true }
+
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
 
 [features]
-default = []
+default = ["quic"]
+quic = ["quinn", "rustls", "rcgen", "dashmap"]

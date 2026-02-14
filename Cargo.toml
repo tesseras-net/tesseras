@@ -30,6 +30,12 @@ anyhow = "1"
 tokio = { version = "1", features = ["full"] }
 async-trait = "0.1"
 
+# Network
+quinn = "0.11"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+rcgen = "0.13"
+dashmap = "6"
+
 # Crypto
 blake3 = "1"
 ed25519-dalek = { version = "2", features = ["rand_core"] }
