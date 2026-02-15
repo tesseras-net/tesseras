@@ -97,6 +97,12 @@ enum Commands {
     #[command(visible_alias = "ls")]
     List,
 
+    /// Manage heir key recovery shares
+    Heir {
+        #[command(subcommand)]
+        command: commands::heir::HeirCommands,
+    },
+
     /// Generate shell completions for your shell to stdout
     #[command(hide = true)]
     Completions {
@@ -141,6 +147,35 @@ async fn main() -> Result<()> {
             commands::export::run(hash, dest, &cli.data_dir).await
         }
         Commands::List => commands::list::run(&cli.data_dir).await,
+        Commands::Heir { command } => match command {
+            commands::heir::HeirCommands::Create {
+                threshold,
+                shares,
+                output_dir,
+                yes,
+            } => {
+                commands::heir::run_create(threshold, shares, &output_dir, yes, &cli.data_dir)
+                    .await
+            }
+            commands::heir::HeirCommands::Reconstruct {
+                share_files,
+                output_dir,
+                install,
+                verify_identity,
+            } => {
+                commands::heir::run_reconstruct(
+                    &share_files,
+                    &output_dir,
+                    install,
+                    verify_identity.as_deref(),
+                    &cli.data_dir,
+                )
+                .await
+            }
+            commands::heir::HeirCommands::Info { share_file } => {
+                commands::heir::run_info(&share_file).await
+            }
+        },
         Commands::Completions { shell } => {
             let mut cmd = Cli::command();
             clap_complete::generate(shell, &mut cmd, "tes", &mut io::stdout());
