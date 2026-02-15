@@ -138,6 +138,7 @@ pub trait ReciprocityLedger: Send + Sync {
 }
 
 /// Search index for public tesseras (institutional nodes).
+#[allow(clippy::too_many_arguments)]
 pub trait SearchIndex: Send + Sync {
     fn index_tessera(
         &self,

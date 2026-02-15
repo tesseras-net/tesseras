@@ -13,11 +13,11 @@ pub mod sqlite;
 
 pub use blob::FsBlobStore;
 pub use cache::CachedFragmentStore;
-pub use database::{open_database, open_in_memory, StorageConfig};
+pub use database::{StorageConfig, open_database, open_in_memory};
 pub use error::StorageError;
 pub use fragment::FsFragmentStore;
-pub use metrics::StorageMetrics;
 pub use identity::FsIdentityStore;
+pub use metrics::StorageMetrics;
 pub use reciprocity::SqliteReciprocityLedger;
 pub use search_index::SqliteSearchIndex;
 pub use sqlite::{SqliteMemoryRepository, SqliteTesseraRepository};
@@ -28,8 +28,25 @@ pub fn run_migrations(conn: &rusqlite::Connection) -> Result<(), StorageError> {
         .map_err(|e| StorageError::Database(e.to_string()))?;
     conn.execute_batch(include_str!("../migrations/002_replication.sql"))
         .map_err(|e| StorageError::Database(e.to_string()))?;
+
+    // 003: ALTER TABLE ADD COLUMN is not idempotent in SQLite, so check first.
+    let has_is_institutional: bool = conn
+        .prepare(
+            "SELECT COUNT(*) FROM pragma_table_info('reciprocity') WHERE name = 'is_institutional'",
+        )
+        .and_then(|mut s| s.query_row([], |r| r.get::<_, i64>(0)))
+        .unwrap_or(0)
+        > 0;
+    if !has_is_institutional {
+        conn.execute(
+            "ALTER TABLE reciprocity ADD COLUMN is_institutional INTEGER NOT NULL DEFAULT 0",
+            [],
+        )
+        .map_err(|e| StorageError::Database(e.to_string()))?;
+    }
     conn.execute_batch(include_str!("../migrations/003_institutional.sql"))
         .map_err(|e| StorageError::Database(e.to_string()))?;
+
     Ok(())
 }
 

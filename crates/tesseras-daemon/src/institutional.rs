@@ -56,8 +56,7 @@ pub fn parse_txt_record(txt: &str) -> Result<InstitutionalRecord, VerifyError> {
         }
     }
 
-    let version =
-        version.ok_or_else(|| VerifyError::InvalidFormat("missing v= field".into()))?;
+    let version = version.ok_or_else(|| VerifyError::InvalidFormat("missing v= field".into()))?;
 
     if version != "tesseras1" {
         return Err(VerifyError::InvalidFormat(format!(
@@ -117,6 +116,7 @@ pub fn verify_identity(
 }
 
 /// Format the DNS TXT record string for a given identity.
+#[allow(dead_code)]
 pub fn format_txt_record(domain: &str, identity: &NodeIdentity) -> String {
     let node_hex = hex::encode(identity.node_id.as_bytes());
     let pubkey_hex = hex::encode(identity.public_key);
@@ -126,10 +126,7 @@ pub fn format_txt_record(domain: &str, identity: &NodeIdentity) -> String {
 /// Resolve DNS TXT record and verify against local identity.
 ///
 /// Returns `Ok(())` if verification succeeds.
-pub async fn verify_dns(
-    domain: &str,
-    identity: &NodeIdentity,
-) -> Result<(), VerifyError> {
+pub async fn verify_dns(domain: &str, identity: &NodeIdentity) -> Result<(), VerifyError> {
     use hickory_resolver::TokioResolver;
 
     let resolver: TokioResolver = TokioResolver::builder_tokio()
@@ -140,9 +137,7 @@ pub async fn verify_dns(
     let response = resolver
         .txt_lookup(lookup_name.as_str())
         .await
-        .map_err(|e: hickory_resolver::ResolveError| {
-            VerifyError::DnsLookupFailed(e.to_string())
-        })?;
+        .map_err(|e: hickory_resolver::ResolveError| VerifyError::DnsLookupFailed(e.to_string()))?;
 
     for txt_data in response.iter() {
         let txt = txt_data.to_string();

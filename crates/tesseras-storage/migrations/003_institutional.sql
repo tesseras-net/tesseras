@@ -1,7 +1,8 @@
 -- Institutional node support: search index and reciprocity extension.
 
--- Add institutional flag to reciprocity table.
-ALTER TABLE reciprocity ADD COLUMN is_institutional INTEGER NOT NULL DEFAULT 0;
+-- Add institutional flag to reciprocity table (idempotent via pragma check).
+-- SQLite ALTER TABLE ADD COLUMN does not support IF NOT EXISTS,
+-- so we check pragma table_info first via the migration runner.
 
 -- FTS5 virtual table for title/description text search.
 CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(

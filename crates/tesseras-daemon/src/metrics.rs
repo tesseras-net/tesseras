@@ -1,6 +1,7 @@
 use prometheus::{Gauge, IntCounter, IntGauge, Registry};
 
 /// Prometheus metrics for institutional node monitoring.
+#[allow(dead_code)]
 pub struct InstitutionalMetrics {
     pub pledge_bytes: IntGauge,
     pub stored_bytes: IntGauge,
@@ -12,6 +13,7 @@ pub struct InstitutionalMetrics {
     pub dns_verification_last: IntGauge,
 }
 
+#[allow(dead_code)]
 impl InstitutionalMetrics {
     pub fn new(registry: &Registry) -> Result<Self, prometheus::Error> {
         let pledge_bytes = IntGauge::new(
