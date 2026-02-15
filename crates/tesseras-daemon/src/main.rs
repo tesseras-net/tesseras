@@ -213,14 +213,17 @@ async fn main() -> Result<()> {
     // 7d. Create replication service
     let dht_adapter = DhtPortAdapter::new(Arc::clone(&engine));
     let replication_config = config.to_replication_config();
-    let replication = Arc::new(ReplicationService::new(
-        identity,
-        Box::new(dht_adapter),
-        Box::new(fragment_store),
-        Box::new(reciprocity_ledger),
-        Box::new(blob_store),
-        replication_config,
-    ));
+    let replication = Arc::new(
+        ReplicationService::new(
+            identity,
+            Box::new(dht_adapter),
+            Box::new(fragment_store),
+            Box::new(reciprocity_ledger),
+            Box::new(blob_store),
+            replication_config,
+        )
+        .with_cas(Arc::clone(&cas)),
+    );
 
     // 7e. Wire replication handler into DHT engine
     let handler = ReplicationHandlerAdapter {

@@ -47,6 +47,7 @@ pub struct ReplicationService {
     ledger: Box<dyn ReciprocityLedger>,
     blobs: Box<dyn BlobStore>,
     config: ReplicationConfig,
+    cas: Option<std::sync::Arc<tesseras_storage::CasStore>>,
 }
 
 impl ReplicationService {
@@ -65,7 +66,13 @@ impl ReplicationService {
             ledger,
             blobs,
             config,
+            cas: None,
         }
+    }
+
+    pub fn with_cas(mut self, cas: std::sync::Arc<tesseras_storage::CasStore>) -> Self {
+        self.cas = Some(cas);
+        self
     }
 
     /// Receive a fragment from a remote peer. Validates checksum and reciprocity.
@@ -339,9 +346,22 @@ impl ReplicationService {
 
     /// Execute one repair sweep over all locally tracked tesseras.
     async fn run_repair_sweep(&self) {
-        // For now, this is a placeholder that verifies local fragment integrity.
-        // Full repair (finding holders, checking attestations, re-replicating) will
-        // be wired when the daemon has a holders index.
+        // Run CAS dedup sweep if available
+        if let Some(ref cas) = self.cas {
+            match cas.sweep() {
+                Ok(stats) => {
+                    tracing::info!(
+                        orphans_removed = stats.orphan_files_removed,
+                        orphans_skipped_young = stats.orphan_files_skipped_young,
+                        leaked_refs_removed = stats.leaked_refs_removed,
+                        "CAS sweep complete"
+                    );
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, "CAS sweep failed");
+                }
+            }
+        }
         tracing::info!("repair sweep complete");
     }
 
