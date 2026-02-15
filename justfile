@@ -43,6 +43,16 @@ build-android:
 test-flutter:
     cd apps/flutter && flutter test
 
+# Check for outdated and vulnerable dependencies
+deps-check:
+    cargo audit
+    cargo outdated --root-deps-only
+    cargo deny check advisories
+
+# Submit dependency check job to SourceHut builds
+deps-check-submit:
+    infra/scripts/srht-deps-check.sh
+
 # Run dependency security audit
 audit:
     cargo audit
