@@ -10,6 +10,7 @@ pub mod network;
 #[cfg(feature = "service")]
 pub mod ports;
 pub mod replication;
+pub mod search;
 #[cfg(feature = "service")]
 pub mod service;
 pub mod tessera;
@@ -24,6 +25,7 @@ pub use network::*;
 #[cfg(feature = "service")]
 pub use ports::*;
 pub use replication::*;
+pub use search::*;
 #[cfg(feature = "service")]
 pub use service::{CreateInput, FileInput, FileVerification, TesseraService, VerifyReport};
 pub use tessera::{HeirShareMeta, HybridEncryptionPublic, Tessera, TesseraIdentity};
