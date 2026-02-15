@@ -21,6 +21,21 @@ pub enum CryptoError {
     #[error("erasure coding error: {0}")]
     ErasureError(String),
 
+    #[error("shamir: invalid config — {0}")]
+    ShamirInvalidConfig(String),
+
+    #[error("shamir: split failed — {0}")]
+    ShamirSplitFailed(String),
+
+    #[error("shamir: reconstruction failed — {0}")]
+    ShamirReconstructFailed(String),
+
+    #[error("shamir: share validation failed — {0}")]
+    ShareValidationFailed(String),
+
+    #[error("shamir: owner verification failed — reconstructed key does not match expected fingerprint")]
+    ShamirOwnerMismatch,
+
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
 }
