@@ -141,4 +141,18 @@ mod tests {
             .unwrap();
         assert_eq!(sync_val, 1); // NORMAL = 1
     }
+
+    #[test]
+    fn open_on_disk_enables_wal() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let db_path = dir.path().join("test.db");
+        let conn = open_database(&db_path, &StorageConfig::default()).unwrap();
+        let mode: String = conn
+            .query_row("PRAGMA journal_mode", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(mode, "wal");
+        // WAL creates .db-wal and .db-shm files
+        assert!(dir.path().join("test.db-wal").exists());
+        assert!(dir.path().join("test.db-shm").exists());
+    }
 }
