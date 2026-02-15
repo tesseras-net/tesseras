@@ -133,7 +133,9 @@ fn parse_visibility(s: &str) -> Result<Visibility> {
 
 pub fn build_service(base: &Path) -> Result<tesseras_core::TesseraService> {
     let db_path = base.join("db/tesseras.db");
-    let conn = rusqlite::Connection::open(&db_path).context("failed to open database")?;
+    let conn =
+        tesseras_storage::open_database(&db_path, &tesseras_storage::StorageConfig::default())
+            .context("failed to open database")?;
     let conn = Arc::new(Mutex::new(conn));
 
     let identity_store = FsIdentityStore::new(base.to_path_buf());

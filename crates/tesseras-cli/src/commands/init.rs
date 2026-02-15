@@ -28,10 +28,12 @@ pub async fn run(data_dir: &str) -> Result<()> {
         println!("Ed25519 identity already exists");
     }
 
-    // 3. Initialize SQLite
+    // 3. Initialize SQLite with WAL mode
     let db_path = base.join("db/tesseras.db");
-    let conn = rusqlite::Connection::open(&db_path).context("failed to open database")?;
-    tesseras_storage::run_migrations(&conn).context("failed to run migrations")?;
+    let conn =
+        tesseras_storage::open_database(&db_path, &tesseras_storage::StorageConfig::default())
+            .context("failed to open database")?;
+    drop(conn); // CLI doesn't hold the connection open
     println!("Database initialized");
 
     // 4. Write default config.toml if not present
