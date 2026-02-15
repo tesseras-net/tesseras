@@ -211,12 +211,12 @@ impl DhtEngine {
         match msg {
             Message::Ping { sender } => {
                 if pow::verify_pow(sender) {
-                    self.record_peer(peer.addr, sender, Capabilities::phase1_default(), &[])
+                    self.record_peer(peer.addr, sender, self.config.capabilities, &[])
                         .await;
                 }
                 Some(Message::Pong {
                     sender: self.identity.clone(),
-                    capabilities: Capabilities::phase1_default(),
+                    capabilities: self.config.capabilities,
                     listen_addrs: self.transport.local_addrs().into_iter().skip(1).collect(),
                     nat_type: None,
                     relay_slots_available: None,

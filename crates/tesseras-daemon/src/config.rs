@@ -231,6 +231,11 @@ impl DaemonConfig {
             max_stored_pointers: self.dht.max_stored_pointers,
             ping_failure_threshold: self.dht.ping_failure_threshold,
             stale_check_interval: std::time::Duration::from_secs(900),
+            capabilities: if self.institutional.is_some() {
+                tesseras_core::Capabilities::institutional_default()
+            } else {
+                tesseras_core::Capabilities::phase2_default()
+            },
         }
     }
 

@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use tesseras_core::Capabilities;
+
 #[derive(Debug, Clone)]
 pub struct DhtConfig {
     pub k: usize,
@@ -11,6 +13,8 @@ pub struct DhtConfig {
     pub max_stored_pointers: usize,
     pub ping_failure_threshold: u32,
     pub stale_check_interval: Duration,
+    /// Capabilities advertised in Pong responses.
+    pub capabilities: Capabilities,
 }
 
 impl Default for DhtConfig {
@@ -25,6 +29,7 @@ impl Default for DhtConfig {
             max_stored_pointers: 100_000,
             ping_failure_threshold: 3,
             stale_check_interval: Duration::from_secs(900),
+            capabilities: Capabilities::phase2_default(),
         }
     }
 }

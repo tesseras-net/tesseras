@@ -151,6 +151,28 @@ async fn main() -> Result<()> {
 
     tracing::info!(node_id = %identity.node_id, "node identity loaded");
 
+    // 5b. Verify institutional DNS identity (if configured)
+    if let Some(ref inst_config) = config.institutional {
+        match institutional::verify_dns(&inst_config.domain, &identity).await {
+            Ok(()) => {
+                tracing::info!(
+                    domain = %inst_config.domain,
+                    pledge_bytes = inst_config.pledge_bytes,
+                    "institutional identity verified via DNS"
+                );
+            }
+            Err(e) => {
+                tracing::warn!(
+                    domain = %inst_config.domain,
+                    error = %e,
+                    "institutional DNS verification failed, starting as normal full node"
+                );
+                // Downgrade to non-institutional config
+                config.institutional = None;
+            }
+        }
+    }
+
     // 6. Create QUIC transport (multi-endpoint for dual-stack)
     let pool_config = config.to_pool_config();
     let transport = QuinnTransport::bind_multiple_with_config(&effective_addrs, pool_config)
