@@ -40,7 +40,7 @@ O dono da tessera envia os fragmentos aos pares. Os pares não puxam — isso ma
 
 Cada fragmento carrega um checksum BLAKE3. Quando um nó recebe um fragmento, ele recalcula o hash e compara com o checksum esperado. Se não coincidem, o fragmento é rejeitado. Isso detecta tanto erros de transmissão quanto adulteração deliberada.
 
-Os fragmentos são armazenados em disco como arquivos individuais com um índice de metadados SQLite rastreando seus checksums, tamanhos e propriedade.
+Os fragmentos sao armazenados em um **armazenamento enderecavel por conteudo (CAS)** onde cada dado unico existe exatamente uma vez em disco, indexado pelo seu hash BLAKE3. Uma tabela de referencias no SQLite mapeia identificadores logicos de fragmentos para hashes CAS, habilitando deduplicacao automatica — se duas tesseras compartilham dados de fragmento identicos, apenas uma copia e armazenada. Contagem de referencias garante que os dados sejam limpos apenas quando nenhuma tessera os referencia.
 
 ## Loop de reparo
 

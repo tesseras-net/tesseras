@@ -90,7 +90,7 @@ A funcao `encode()` foi trocada de serializacao MessagePack posicional para nome
 
 ## O que vem a seguir
 
-- **Fase 4 continuacao** — auditorias de seguranca, deduplicacao de armazenamento, empacotamento para OS (Alpine, Arch, Debian, OpenBSD, FreeBSD)
+- **Fase 4 continuacao** — deduplicacao de armazenamento (armazenamento enderecavel por conteudo com BLAKE3), auditorias de seguranca, empacotamento para OS (Alpine, Arch, Debian, OpenBSD, FreeBSD)
 - **Fase 5: Exploracao e Cultura** — navegador publico de tesseras por era/localizacao/tema/idioma, curadoria institucional, integracao genealogica (FamilySearch, Ancestry), exportacao para midia fisica (M-DISC, microfilme, papel livre de acido com QR), contexto assistido por IA
 
 O onboarding institucional fecha uma lacuna critica no modelo de preservacao do Tesseras. Nos individuais fornecem resiliencia de base — milhares de dispositivos ao redor do globo, cada um armazenando alguns fragmentos. Nos institucionais fornecem ancoragem — organizacoes com infraestrutura profissional, armazenamento redundante e horizontes operacionais de multiplas decadas. Juntos, formam uma rede onde memorias podem sobreviver tanto a dispositivos individuais quanto a instituicoes individuais.

@@ -40,7 +40,7 @@ The tessera owner pushes fragments to peers. Peers don't pull — this keeps the
 
 Every fragment carries a BLAKE3 checksum. When a node receives a fragment, it recomputes the hash and compares it to the expected checksum. If they don't match, the fragment is rejected. This catches both transmission errors and deliberate tampering.
 
-Fragments are stored on disk as individual files with a SQLite metadata index tracking their checksums, sizes, and ownership.
+Fragments are stored in a **content-addressable store (CAS)** where each unique piece of data exists exactly once on disk, keyed by its BLAKE3 hash. A SQLite reference table maps logical fragment identifiers to CAS hashes, enabling automatic deduplication — if two tesseras share identical fragment data, only one copy is stored. Reference counting ensures data is cleaned up only when no tessera references it.
 
 ## Repair loop
 

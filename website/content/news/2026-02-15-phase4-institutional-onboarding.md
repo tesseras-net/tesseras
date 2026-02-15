@@ -90,7 +90,7 @@ The `encode()` function was switched from positional to named MessagePack serial
 
 ## What comes next
 
-- **Phase 4 continued** — security audits, storage deduplication, OS packaging (Alpine, Arch, Debian, OpenBSD, FreeBSD)
+- **Phase 4 continued** — storage deduplication (content-addressable store with BLAKE3 keying), security audits, OS packaging (Alpine, Arch, Debian, OpenBSD, FreeBSD)
 - **Phase 5: Exploration and Culture** — public tessera browser by era/location/theme/language, institutional curation, genealogy integration (FamilySearch, Ancestry), physical media export (M-DISC, microfilm, acid-free paper with QR), AI-assisted context
 
 Institutional onboarding closes a critical gap in Tesseras' preservation model. Individual nodes provide grassroots resilience — thousands of devices across the globe, each storing a few fragments. Institutional nodes provide anchoring — organizations with professional infrastructure, redundant storage, and multi-decade operational horizons. Together, they form a network where memories can outlast both individual devices and individual institutions.
