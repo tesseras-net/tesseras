@@ -43,6 +43,25 @@ build-android:
 test-flutter:
     cd apps/flutter && flutter test
 
+# Run dependency security audit
+audit:
+    cargo audit
+    cargo deny check
+
+# Run fuzz tests (proptest backend, stable Rust, ~60s per target)
+audit-fuzz:
+    cargo test -p tesseras-crypto --test fuzz_shamir --features shamir
+    cargo test -p tesseras-crypto --test fuzz_erasure --features erasure
+    cargo test -p tesseras-crypto --test fuzz_sealed --features encryption
+
+# Run mutation testing on security-critical files
+audit-mutants:
+    cargo mutants --file crates/tesseras-crypto/src/dual.rs -p tesseras-crypto -- --all-features
+    cargo mutants --file crates/tesseras-crypto/src/sealed.rs -p tesseras-crypto --features encryption
+
+# Run full audit suite (audit + fuzz + mutants)
+audit-full: audit audit-fuzz audit-mutants
+
 [private]
 _install-completions:
     #!/usr/bin/env sh
