@@ -378,4 +378,34 @@ mod tests {
             assert!(tokens.insert(token), "duplicate token generated");
         }
     }
+
+    mod proptests {
+        use super::*;
+        use proptest::prelude::*;
+
+        proptest! {
+            #[test]
+            fn session_tokens_always_unique_pairwise(
+                port_a in 1024u16..60000,
+                port_b in 1024u16..60000,
+            ) {
+                let mgr = RelaySessionManager::new(DEFAULT_IDLE_TIMEOUT);
+                let a = addr(&format!("10.0.0.1:{port_a}"));
+                let b = addr(&format!("10.0.0.2:{port_b}"));
+                let t1 = mgr.create_session(a, b, [1; 32], [2; 32], true);
+                let t2 = mgr.create_session(a, b, [1; 32], [2; 32], true);
+                prop_assert_ne!(t1, t2);
+            }
+
+            #[test]
+            fn forward_too_short_always_rejected(
+                data_len in 0usize..16,
+            ) {
+                let mgr = RelaySessionManager::new(DEFAULT_IDLE_TIMEOUT);
+                let data = vec![0u8; data_len];
+                let result = mgr.forward(&data, addr("10.0.0.1:4433"));
+                prop_assert_eq!(result, ForwardResult::TooShort);
+            }
+        }
+    }
 }

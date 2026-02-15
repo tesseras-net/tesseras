@@ -16,8 +16,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use ed25519_dalek::SigningKey;
 use rand::rngs::OsRng;
-use tesseras_core::network::NodeIdentity;
 use tesseras_core::NodeId;
+use tesseras_core::network::NodeIdentity;
 use tesseras_dht::message::{self, Message};
 use tesseras_net::punch::{sign_punch_intro, verify_punch_intro};
 use tesseras_net::transport::PeerAddr;

@@ -223,4 +223,45 @@ mod tests {
         let sig = sign_relay_request(&target, ts, &key);
         assert!(verify_relay_request(&target, ts, &sig, &key.verifying_key()).is_ok());
     }
+
+    mod proptests {
+        use super::*;
+        use proptest::prelude::*;
+
+        proptest! {
+            #[test]
+            fn punch_intro_signature_always_verifies(
+                target_bytes in prop::array::uniform20(any::<u8>()),
+                port in 1024u16..65535,
+            ) {
+                let key = SigningKey::generate(&mut OsRng);
+                let target = NodeId::new(target_bytes);
+                let addr: SocketAddr = format!("203.0.113.5:{port}").parse().unwrap();
+                let ts = now_secs();
+                let sig = sign_punch_intro(&target, &addr, ts, &key);
+                prop_assert!(verify_punch_intro(&target, &addr, ts, &sig, &key.verifying_key()).is_ok());
+            }
+
+            #[test]
+            fn relay_request_signature_always_verifies(
+                target_bytes in prop::array::uniform20(any::<u8>()),
+            ) {
+                let key = SigningKey::generate(&mut OsRng);
+                let target = NodeId::new(target_bytes);
+                let ts = now_secs();
+                let sig = sign_relay_request(&target, ts, &key);
+                prop_assert!(verify_relay_request(&target, ts, &sig, &key.verifying_key()).is_ok());
+            }
+
+            #[test]
+            fn relay_migrate_signature_always_verifies(
+                token in prop::array::uniform16(any::<u8>()),
+            ) {
+                let key = SigningKey::generate(&mut OsRng);
+                let ts = now_secs();
+                let sig = sign_relay_migrate(&token, ts, &key);
+                prop_assert!(verify_relay_migrate(&token, ts, &sig, &key.verifying_key()).is_ok());
+            }
+        }
+    }
 }

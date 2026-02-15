@@ -557,6 +557,42 @@ mod tests {
         assert!(matches!(result, Err(StunError::AllRetriesFailed { .. })));
     }
 
+    mod proptests {
+        use super::*;
+        use proptest::prelude::*;
+
+        proptest! {
+            #[test]
+            fn nat_classification_deterministic(
+                ip1 in 1u32..=0xFFFFFFFFu32,
+                port1 in 1024u16..65535,
+                ip2 in 1u32..=0xFFFFFFFFu32,
+                port2 in 1024u16..65535,
+            ) {
+                let local: SocketAddr = "192.168.1.1:4433".parse().unwrap();
+                let s1: SocketAddr = "1.1.1.1:3478".parse().unwrap();
+                let s2: SocketAddr = "2.2.2.2:3478".parse().unwrap();
+                let m1 = SocketAddr::new(std::net::Ipv4Addr::from(ip1).into(), port1);
+                let m2 = SocketAddr::new(std::net::Ipv4Addr::from(ip2).into(), port2);
+                let results = vec![(s1, m1), (s2, m2)];
+                let r1 = classify_nat(local, &results);
+                let r2 = classify_nat(local, &results);
+                prop_assert_eq!(r1, r2);
+            }
+
+            #[test]
+            fn stun_binding_request_always_valid(
+                txn_id in prop::array::uniform12(any::<u8>()),
+            ) {
+                let pkt = encode_binding_request(&txn_id);
+                prop_assert!(is_stun_packet(&pkt));
+                prop_assert_eq!(pkt.len(), 20);
+                // Transaction ID is preserved
+                prop_assert_eq!(&pkt[8..20], &txn_id[..]);
+            }
+        }
+    }
+
     #[tokio::test]
     async fn test_discover_nat_loopback_is_public() {
         // On loopback, mapped address == local address → Public
