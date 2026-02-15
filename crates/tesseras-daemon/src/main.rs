@@ -202,12 +202,8 @@ async fn main() -> Result<()> {
     ));
 
     // 7c2. Run CAS dedup migration if needed (storage_version 1 -> 2)
-    let migration_stats = tesseras_storage::migrate_to_cas(
-        &config.node.data_dir,
-        &cas,
-        &conn,
-    )
-    .with_context(|| "failed to run CAS dedup migration")?;
+    let migration_stats = tesseras_storage::migrate_to_cas(&config.node.data_dir, &cas, &conn)
+        .with_context(|| "failed to run CAS dedup migration")?;
     if migration_stats.files_migrated > 0 {
         tracing::info!(
             files = migration_stats.files_migrated,

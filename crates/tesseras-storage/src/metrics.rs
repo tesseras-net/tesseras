@@ -35,14 +35,9 @@ impl StorageMetrics {
             "Current fragment cache size in bytes",
         )?;
 
-        let cas_objects = IntGauge::new(
-            "tesseras_cas_objects_total",
-            "Total unique objects in CAS",
-        )?;
-        let cas_bytes = IntGauge::new(
-            "tesseras_cas_bytes_total",
-            "Total bytes on disk in CAS",
-        )?;
+        let cas_objects =
+            IntGauge::new("tesseras_cas_objects_total", "Total unique objects in CAS")?;
+        let cas_bytes = IntGauge::new("tesseras_cas_bytes_total", "Total bytes on disk in CAS")?;
         let cas_dedup_hits = IntCounter::new(
             "tesseras_cas_dedup_hits_total",
             "Writes that found existing CAS object (dedup hit)",

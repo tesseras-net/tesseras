@@ -42,11 +42,9 @@ pub async fn run(data_dir: &str, upgrade: bool) -> Result<()> {
 
         // 4. Initialize SQLite with WAL mode
         let db_path = base.join("db/tesseras.db");
-        let conn = tesseras_storage::open_database(
-            &db_path,
-            &tesseras_storage::StorageConfig::default(),
-        )
-        .context("failed to open database")?;
+        let conn =
+            tesseras_storage::open_database(&db_path, &tesseras_storage::StorageConfig::default())
+                .context("failed to open database")?;
         drop(conn);
         println!("Database initialized");
 

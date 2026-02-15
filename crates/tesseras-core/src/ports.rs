@@ -165,6 +165,23 @@ pub trait SearchIndex: Send + Sync {
     ) -> Result<(Vec<crate::search::SearchHit>, u64), CoreError>;
 }
 
+/// Content encryption port for sealed/private tesseras.
+pub trait ContentEncryptor: Send + Sync {
+    /// Encrypt content, returning ciphertext as opaque bytes (nonce + ciphertext).
+    fn encrypt(&self, content: &[u8], key: &[u8; 32], aad: &[u8]) -> Result<Vec<u8>, CoreError>;
+
+    /// Generate a random 256-bit content key.
+    fn generate_content_key(&self) -> [u8; 32];
+
+    /// Encapsulate content key to owner's public key.
+    /// Returns base64-encoded envelope for storage in manifest.
+    fn seal_content_key(
+        &self,
+        content_key: &[u8; 32],
+        encryption_public: &crate::tessera::HybridEncryptionPublic,
+    ) -> Result<String, CoreError>;
+}
+
 /// Manifest verification port.
 pub trait ManifestVerifier: Send + Sync {
     /// Verify manifest bytes against signature and public key.

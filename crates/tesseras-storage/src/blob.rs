@@ -54,11 +54,7 @@ impl BlobStore for FsBlobStore {
             .query_row(
                 "SELECT blake3_hash FROM blob_refs
                  WHERE tessera_hash = ?1 AND memory_hash = ?2 AND filename = ?3",
-                rusqlite::params![
-                    tessera_hash.to_string(),
-                    memory_hash.to_string(),
-                    name,
-                ],
+                rusqlite::params![tessera_hash.to_string(), memory_hash.to_string(), name,],
                 |row| row.get(0),
             )
             .map_err(|e| CoreError::Database(e.to_string()))?;

@@ -83,25 +83,25 @@ pub async fn run(args: &CreateArgs, data_dir: &str) -> Result<()> {
     };
 
     let identity_store = FsIdentityStore::new(base.clone());
-    let encryption_public =
-        if matches!(visibility, Visibility::Sealed { .. } | Visibility::Private) {
-            let x_mat = identity_store
-                .load_keypair(KeyAlgorithm::X25519)
-                .context("encryption keys not found — run `tes init --upgrade`")?;
-            let m_mat = identity_store
-                .load_keypair(KeyAlgorithm::MlKem768)
-                .context("encryption keys not found — run `tes init --upgrade`")?;
-            Some(tesseras_core::tessera::HybridEncryptionPublic {
-                x25519: x_mat
-                    .public
-                    .as_slice()
-                    .try_into()
-                    .context("X25519 public key must be 32 bytes")?,
-                mlkem768: m_mat.public.clone(),
-            })
-        } else {
-            None
-        };
+    let encryption_public = if matches!(visibility, Visibility::Sealed { .. } | Visibility::Private)
+    {
+        let x_mat = identity_store
+            .load_keypair(KeyAlgorithm::X25519)
+            .context("encryption keys not found — run `tes init --upgrade`")?;
+        let m_mat = identity_store
+            .load_keypair(KeyAlgorithm::MlKem768)
+            .context("encryption keys not found — run `tes init --upgrade`")?;
+        Some(tesseras_core::tessera::HybridEncryptionPublic {
+            x25519: x_mat
+                .public
+                .as_slice()
+                .try_into()
+                .context("X25519 public key must be 32 bytes")?,
+            mlkem768: m_mat.public.clone(),
+        })
+    } else {
+        None
+    };
 
     let tags = args
         .tags
@@ -241,9 +241,7 @@ impl tesseras_core::ContentEncryptor for CryptoEncryptor {
         aad: &[u8],
     ) -> Result<Vec<u8>, tesseras_core::CoreError> {
         use tesseras_core::enums::EncryptionContext;
-        let content_hash = tesseras_core::ContentHash::new(
-            aad.try_into().unwrap_or([0u8; 32]),
-        );
+        let content_hash = tesseras_core::ContentHash::new(aad.try_into().unwrap_or([0u8; 32]));
         let ctx = EncryptionContext::Sealed {
             content_hash,
             open_after: chrono::Utc::now(),

@@ -170,8 +170,5 @@ fn heir_full_lifecycle_with_encryption_keys() {
 
     // 6. Verify Ed25519 public key matches
     let recovered_signing = ed25519_dalek::SigningKey::from_bytes(&parsed.ed25519_secret);
-    assert_eq!(
-        recovered_signing.verifying_key(),
-        ed_keypair.verifying_key
-    );
+    assert_eq!(recovered_signing.verifying_key(), ed_keypair.verifying_key);
 }

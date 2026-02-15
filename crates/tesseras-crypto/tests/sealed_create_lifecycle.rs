@@ -2,8 +2,8 @@
 
 #![cfg(all(feature = "encryption", feature = "shamir"))]
 
-use tesseras_core::enums::EncryptionContext;
 use tesseras_core::ContentHash;
+use tesseras_core::enums::EncryptionContext;
 use tesseras_crypto::encryption::Aes256GcmEncryptor;
 use tesseras_crypto::kem::{HybridKem, HybridKeyPair};
 use tesseras_crypto::sealed::SealedKeyEnvelope;
@@ -62,7 +62,6 @@ fn sealed_tessera_create_and_heir_decrypt() {
     assert_eq!(content_key, recovered_content_key);
 
     // 8. Heirs decrypt the content
-    let decrypted =
-        Aes256GcmEncryptor::decrypt(&encrypted, &recovered_content_key, &ctx).unwrap();
+    let decrypted = Aes256GcmEncryptor::decrypt(&encrypted, &recovered_content_key, &ctx).unwrap();
     assert_eq!(decrypted, original);
 }

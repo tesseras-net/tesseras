@@ -242,7 +242,10 @@ pub async fn run_create(
     println!();
     for share in &heir_shares {
         let idx = share.share_index;
-        println!("  Share {idx}: {}/heir_share_{idx}.{{bin,txt,qr.png}}", output_dir);
+        println!(
+            "  Share {idx}: {}/heir_share_{idx}.{{bin,txt,qr.png}}",
+            output_dir
+        );
     }
     println!();
     println!("IMPORTANT: Distribute shares to different people/locations.");
@@ -288,8 +291,8 @@ pub async fn run_reconstruct(
         .context("reconstruction failed")?;
 
     // Parse the blob using shared secret_blob module
-    let parsed = secret_blob::parse(&recovered_blob)
-        .context("failed to parse reconstructed secret blob")?;
+    let parsed =
+        secret_blob::parse(&recovered_blob).context("failed to parse reconstructed secret blob")?;
 
     // Derive Ed25519 public key to verify
     let signing_key = ed25519_dalek::SigningKey::from_bytes(&parsed.ed25519_secret);
@@ -319,7 +322,7 @@ pub async fn run_reconstruct(
     std::fs::create_dir_all(&out_path).context("failed to create output directory")?;
 
     // Write Ed25519 key pair
-    std::fs::write(out_path.join("node.ed25519.key"), &parsed.ed25519_secret)?;
+    std::fs::write(out_path.join("node.ed25519.key"), parsed.ed25519_secret)?;
     std::fs::write(out_path.join("node.ed25519.pub"), public_key.as_bytes())?;
 
     // Write X25519 if present
@@ -376,7 +379,9 @@ pub async fn run_reconstruct(
             let entry = entry?;
             let name = entry.file_name();
             let name_str = name.to_string_lossy();
-            if name_str.starts_with("node.") && (name_str.ends_with(".key") || name_str.ends_with(".pub")) {
+            if name_str.starts_with("node.")
+                && (name_str.ends_with(".key") || name_str.ends_with(".pub"))
+            {
                 std::fs::copy(entry.path(), identity_dir.join(&name))?;
             }
         }

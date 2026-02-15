@@ -40,11 +40,7 @@ impl FragmentStore for FsFragmentStore {
         conn.execute(
             "INSERT OR REPLACE INTO fragment_refs (tessera_hash, fragment_index, blake3_hash)
              VALUES (?1, ?2, ?3)",
-            rusqlite::params![
-                id.tessera_hash.to_string(),
-                id.index,
-                cas_hash.to_string(),
-            ],
+            rusqlite::params![id.tessera_hash.to_string(), id.index, cas_hash.to_string(),],
         )
         .map_err(|e| CoreError::Database(e.to_string()))?;
         drop(conn);

@@ -53,6 +53,16 @@ deps-check:
 deps-check-submit:
     infra/scripts/srht-deps-check.sh
 
+# Enable SourceHut patch validation (auto-runs on push)
+ci-enable:
+    mv .builds/validate-patch.yml.todo .builds/validate-patch.yml
+    @echo "Enabled: .builds/validate-patch.yml"
+
+# Disable SourceHut patch validation
+ci-disable:
+    mv .builds/validate-patch.yml .builds/validate-patch.yml.todo
+    @echo "Disabled: .builds/validate-patch.yml.todo"
+
 # Run dependency security audit
 audit:
     cargo audit

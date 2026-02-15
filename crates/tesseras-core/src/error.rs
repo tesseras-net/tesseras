@@ -30,6 +30,9 @@ pub enum CoreError {
     #[error("missing encryption keys for visibility {visibility}")]
     MissingEncryptionKeys { visibility: String },
 
+    #[error("crypto error: {0}")]
+    CryptoError(String),
+
     #[error("database error: {0}")]
     Database(String),
 

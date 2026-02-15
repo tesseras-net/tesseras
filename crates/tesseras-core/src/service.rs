@@ -1,11 +1,12 @@
 use std::path::Path;
 
 use crate::enums::{MemoryType, SchemaVersion, Visibility};
+use crate::manifest::ManifestEncryption;
 use crate::manifest::{Manifest, ManifestEntry};
 use crate::metadata::{Location, MemoryMetadata};
 use crate::ports::{
-    BlobStore, Hasher, ManifestSigner, ManifestVerifier, MemoryRecord, MemoryRepository,
-    TesseraRecord, TesseraRepository,
+    BlobStore, ContentEncryptor, Hasher, ManifestSigner, ManifestVerifier, MemoryRecord,
+    MemoryRepository, TesseraRecord, TesseraRepository,
 };
 use crate::tessera::HybridEncryptionPublic;
 use crate::{ContentHash, CoreError};
@@ -45,6 +46,7 @@ pub struct TesseraService {
     hasher: Box<dyn Hasher>,
     signer: Box<dyn ManifestSigner>,
     verifier: Box<dyn ManifestVerifier>,
+    encryptor: Option<Box<dyn ContentEncryptor>>,
 }
 
 impl TesseraService {
@@ -63,6 +65,27 @@ impl TesseraService {
             hasher,
             signer,
             verifier,
+            encryptor: None,
+        }
+    }
+
+    pub fn new_with_encryption(
+        repo: Box<dyn TesseraRepository>,
+        memory_repo: Box<dyn MemoryRepository>,
+        blobs: Box<dyn BlobStore>,
+        hasher: Box<dyn Hasher>,
+        signer: Box<dyn ManifestSigner>,
+        verifier: Box<dyn ManifestVerifier>,
+        encryptor: Box<dyn ContentEncryptor>,
+    ) -> Self {
+        Self {
+            repo,
+            memory_repo,
+            blobs,
+            hasher,
+            signer,
+            verifier,
+            encryptor: Some(encryptor),
         }
     }
 
@@ -81,6 +104,18 @@ impl TesseraService {
                 visibility: input.visibility.to_string(),
             });
         }
+        if requires_encryption && self.encryptor.is_none() {
+            return Err(CoreError::MissingEncryptionKeys {
+                visibility: format!("{} (no encryptor configured)", input.visibility),
+            });
+        }
+
+        // Generate content key for encrypted tesseras
+        let content_key = if requires_encryption {
+            Some(self.encryptor.as_ref().unwrap().generate_content_key())
+        } else {
+            None
+        };
 
         // 1. For each file: read bytes, hash with hasher
         let mut memory_entries = Vec::new();
@@ -108,30 +143,64 @@ impl TesseraService {
         }
         let content_hash = self.hasher.hash(&hash_concat);
 
+        // Build AAD for encryption (content_hash bytes)
+        let aad = content_hash.as_bytes().to_vec();
+
         // 3. Build manifest entries and store blobs
         let mut manifest_entries = Vec::new();
         let mut memory_records = Vec::new();
 
         for (memory_hash, data, media_name, mime_type, file) in &memory_entries {
-            let path = format!("memories/{memory_hash}/{media_name}");
+            // Encrypt data if needed
+            let (store_data, store_name, store_mime, store_size) = if let Some(ck) = &content_key {
+                let encryptor = self.encryptor.as_ref().unwrap();
+                let encrypted = encryptor.encrypt(data, ck, &aad)?;
+                let size = encrypted.len() as u64;
+                (
+                    encrypted,
+                    "encrypted.bin".to_string(),
+                    "application/octet-stream".to_string(),
+                    size,
+                )
+            } else {
+                (
+                    data.clone(),
+                    media_name.clone(),
+                    mime_type.clone(),
+                    data.len() as u64,
+                )
+            };
+
+            let path = format!("memories/{memory_hash}/{store_name}");
             manifest_entries.push(ManifestEntry {
                 path: path.clone(),
                 hash: *memory_hash,
-                mime_type: mime_type.clone(),
-                size: data.len() as u64,
+                mime_type: store_mime,
+                size: store_size,
             });
 
-            // Store media blob
+            // Store blob (encrypted or plain)
             self.blobs
-                .write(&content_hash, memory_hash, media_name, data)?;
+                .write(&content_hash, memory_hash, &store_name, &store_data)?;
 
-            // Store context if present
+            // Store context if present (also encrypted if needed)
             if let Some(ctx) = &file.context {
-                self.blobs
-                    .write(&content_hash, memory_hash, "context.txt", ctx.as_bytes())?;
+                if let Some(ck) = &content_key {
+                    let encryptor = self.encryptor.as_ref().unwrap();
+                    let encrypted_ctx = encryptor.encrypt(ctx.as_bytes(), ck, &aad)?;
+                    self.blobs.write(
+                        &content_hash,
+                        memory_hash,
+                        "context.encrypted.bin",
+                        &encrypted_ctx,
+                    )?;
+                } else {
+                    self.blobs
+                        .write(&content_hash, memory_hash, "context.txt", ctx.as_bytes())?;
+                }
             }
 
-            // Store metadata JSON
+            // Store metadata JSON (not encrypted — contains no sensitive data)
             let meta = MemoryMetadata {
                 version: SchemaVersion::V1,
                 created_at: chrono::Utc::now(),
@@ -140,7 +209,11 @@ impl TesseraService {
                 people: vec![],
                 tags: input.tags.clone(),
                 language: input.language.clone(),
-                description: file.context.clone().unwrap_or_default(),
+                description: if content_key.is_some() {
+                    "[encrypted]".to_string()
+                } else {
+                    file.context.clone().unwrap_or_default()
+                },
             };
             let meta_json = serde_json::to_string_pretty(&meta)?;
             self.blobs.write(
@@ -151,6 +224,15 @@ impl TesseraService {
             )?;
 
             // Collect memory record for DB (stored after tessera)
+            let context_path = if file.context.is_some() {
+                if content_key.is_some() {
+                    Some(format!("memories/{memory_hash}/context.encrypted.bin"))
+                } else {
+                    Some(format!("memories/{memory_hash}/context.txt"))
+                }
+            } else {
+                None
+            };
             memory_records.push(MemoryRecord {
                 hash: *memory_hash,
                 tessera_hash: content_hash,
@@ -159,10 +241,7 @@ impl TesseraService {
                     .trim_matches('"')
                     .to_string(),
                 media_path: path,
-                context_path: file
-                    .context
-                    .as_ref()
-                    .map(|_| format!("memories/{memory_hash}/context.txt")),
+                context_path,
                 meta_json: Some(meta_json),
                 created_at: chrono::Utc::now(),
             });
@@ -171,13 +250,31 @@ impl TesseraService {
         // 4. Build and sign manifest
         let (_, pub_key_hex) = self.signer.sign(b""); // Get the public key
         let now = chrono::Utc::now();
+
+        // Seal content key and build encryption block if needed
+        let encryption = if let (Some(ck), Some(enc_pub)) = (&content_key, &input.encryption_public)
+        {
+            let encryptor = self.encryptor.as_ref().unwrap();
+            let envelope_base64 = encryptor.seal_content_key(ck, enc_pub)?;
+            Some(ManifestEncryption {
+                scheme: "hybrid-kem-v1".to_string(),
+                envelope_base64,
+                open_after: match &input.visibility {
+                    Visibility::Sealed { open_after } => Some(*open_after),
+                    _ => None,
+                },
+            })
+        } else {
+            None
+        };
+
         let manifest = Manifest {
             version: SchemaVersion::V1,
             created_at: now,
             creator: pub_key_hex.clone(),
             content_hash,
             entries: manifest_entries,
-            encryption: None,
+            encryption,
         };
         let manifest_text = manifest.to_string();
         let (sig_bytes, _) = self.signer.sign(manifest_text.as_bytes());
@@ -757,5 +854,83 @@ mod tests {
                 .to_string()
                 .contains("missing encryption keys")
         );
+    }
+
+    struct MockEncryptor;
+    impl ContentEncryptor for MockEncryptor {
+        fn encrypt(
+            &self,
+            content: &[u8],
+            _key: &[u8; 32],
+            _aad: &[u8],
+        ) -> Result<Vec<u8>, CoreError> {
+            // Prefix with "ENC:" so we can detect encryption happened
+            let mut out = b"ENC:".to_vec();
+            out.extend_from_slice(content);
+            Ok(out)
+        }
+        fn generate_content_key(&self) -> [u8; 32] {
+            [0x42; 32]
+        }
+        fn seal_content_key(
+            &self,
+            _content_key: &[u8; 32],
+            _encryption_public: &crate::tessera::HybridEncryptionPublic,
+        ) -> Result<String, CoreError> {
+            Ok("bW9ja19lbnZlbG9wZQ==".to_string()) // base64 of "mock_envelope"
+        }
+    }
+
+    fn build_service_with_encryption() -> TesseraService {
+        TesseraService::new_with_encryption(
+            Box::new(InMemoryTesseraRepo::new()),
+            Box::new(InMemoryMemoryRepo::new()),
+            Box::new(InMemoryBlobStore::new()),
+            Box::new(TestHasher),
+            Box::new(TestSigner::new()),
+            Box::new(TestVerifier),
+            Box::new(MockEncryptor),
+        )
+    }
+
+    #[tokio::test]
+    async fn create_sealed_tessera_encrypts_memories() {
+        use chrono::TimeZone;
+        let service = build_service_with_encryption();
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let file_path = dir.path().join("photo.jpg");
+        std::fs::write(&file_path, b"secret photo data").unwrap();
+
+        let input = CreateInput {
+            files: vec![FileInput {
+                path: file_path,
+                context: Some("A sealed memory".to_string()),
+                memory_type: MemoryType::Moment,
+            }],
+            visibility: Visibility::Sealed {
+                open_after: chrono::Utc.with_ymd_and_hms(2050, 1, 1, 0, 0, 0).unwrap(),
+            },
+            language: "en".to_string(),
+            tags: vec![],
+            location: None,
+            encryption_public: Some(HybridEncryptionPublic {
+                x25519: [0x01; 32],
+                mlkem768: vec![0x02; 1184],
+            }),
+        };
+
+        let hash = service.create(input).await.unwrap();
+
+        // Verify manifest has encryption block
+        let manifest_data = service.blobs.read(&hash, &hash, "MANIFEST").unwrap();
+        let manifest_text = String::from_utf8(manifest_data).unwrap();
+        assert!(manifest_text.contains("ENCRYPTION:"));
+        assert!(manifest_text.contains("scheme: hybrid-kem-v1"));
+        assert!(manifest_text.contains("open_after: 2050-01-01T00:00:00Z"));
+
+        // Verify entries use encrypted.bin not media.jpg
+        let manifest = Manifest::parse(&manifest_text).unwrap();
+        assert!(manifest.entries[0].path.ends_with("encrypted.bin"));
     }
 }

@@ -273,13 +273,9 @@ mod tests {
 
     fn setup() -> (Arc<Mutex<rusqlite::Connection>>, Arc<CasStore>, TempDir) {
         let dir = TempDir::new().unwrap();
-        let conn =
-            crate::database::open_in_memory(&crate::StorageConfig::default()).unwrap();
+        let conn = crate::database::open_in_memory(&crate::StorageConfig::default()).unwrap();
         let conn = Arc::new(Mutex::new(conn));
-        let cas = Arc::new(CasStore::new(
-            Arc::clone(&conn),
-            dir.path().join("cas"),
-        ));
+        let cas = Arc::new(CasStore::new(Arc::clone(&conn), dir.path().join("cas")));
         (conn, cas, dir)
     }
 
