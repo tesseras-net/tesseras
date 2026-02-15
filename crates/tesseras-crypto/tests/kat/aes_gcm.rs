@@ -51,8 +51,8 @@ fn kat_aes256gcm_nist_test_case_16_empty() {
 /// pre-computed (nonce, ciphertext) pair.
 #[test]
 fn kat_aes256gcm_decrypt_known_blob() {
-    use tesseras_core::enums::EncryptionContext;
     use tesseras_core::ContentHash;
+    use tesseras_core::enums::EncryptionContext;
     use tesseras_crypto::encryption::Aes256GcmEncryptor;
 
     // Encrypt with known key, capture the blob
@@ -82,8 +82,8 @@ fn kat_aes256gcm_decrypt_known_blob() {
 /// Verify AAD binding: same ciphertext decrypted with different AAD must fail.
 #[test]
 fn kat_aes256gcm_aad_binding() {
-    use tesseras_core::enums::EncryptionContext;
     use tesseras_core::ContentHash;
+    use tesseras_core::enums::EncryptionContext;
     use tesseras_crypto::encryption::Aes256GcmEncryptor;
 
     let key = [0x42u8; 32];

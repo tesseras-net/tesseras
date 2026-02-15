@@ -163,22 +163,16 @@ impl NatMetrics {
         )?;
         registry.register(Box::new(pool_size.clone()))?;
 
-        let pool_hits_total = IntCounter::new(
-            "tesseras_conn_pool_hits_total",
-            "Total pool cache hits",
-        )?;
+        let pool_hits_total =
+            IntCounter::new("tesseras_conn_pool_hits_total", "Total pool cache hits")?;
         registry.register(Box::new(pool_hits_total.clone()))?;
 
-        let pool_misses_total = IntCounter::new(
-            "tesseras_conn_pool_misses_total",
-            "Total pool cache misses",
-        )?;
+        let pool_misses_total =
+            IntCounter::new("tesseras_conn_pool_misses_total", "Total pool cache misses")?;
         registry.register(Box::new(pool_misses_total.clone()))?;
 
-        let pool_evictions_total = IntCounter::new(
-            "tesseras_conn_pool_evictions_total",
-            "Total pool evictions",
-        )?;
+        let pool_evictions_total =
+            IntCounter::new("tesseras_conn_pool_evictions_total", "Total pool evictions")?;
         registry.register(Box::new(pool_evictions_total.clone()))?;
 
         let network_change_total = IntCounter::new(

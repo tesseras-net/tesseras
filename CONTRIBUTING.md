@@ -132,8 +132,8 @@ File issues on the [SourceHut ticket tracker](https://todo.sr.ht/~ijanc/tesseras
 
 - Search existing issues before opening a new one.
 - Include Rust version (`rustc --version`), OS, and steps to reproduce.
-- For security issues, email **murilo@ijanc.org** directly — do not open a
-  public issue.
+- For security issues, follow the process described in
+  [SECURITY.md](SECURITY.md) — do not open a public issue.
 
 ## Code of Conduct
 

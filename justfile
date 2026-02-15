@@ -62,6 +62,14 @@ audit-mutants:
 # Run full audit suite (audit + fuzz + mutants)
 audit-full: audit audit-fuzz audit-mutants
 
+# Generate full CHANGELOG.md from all tags
+changelog:
+    git cliff --output CHANGELOG.md
+
+# Preview changelog for unreleased commits
+changelog-preview:
+    git cliff --unreleased
+
 [private]
 _install-completions:
     #!/usr/bin/env sh

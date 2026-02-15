@@ -23,8 +23,7 @@ fn fuzz_shamir_split_recombine() {
 
                     // Reconstruct with exactly threshold shares
                     if shares.len() >= *threshold as usize && *threshold > 0 {
-                        let subset: Vec<HeirShare> =
-                            shares[..*threshold as usize].to_vec();
+                        let subset: Vec<HeirShare> = shares[..*threshold as usize].to_vec();
                         let recovered = ShamirSplitter::reconstruct(&subset, None).unwrap();
                         assert_eq!(recovered, *secret);
                     }
@@ -38,21 +37,19 @@ fn fuzz_shamir_split_recombine() {
 
 #[test]
 fn fuzz_shamir_reconstruct_insufficient() {
-    bolero::check!()
-        .with_type::<Vec<u8>>()
-        .for_each(|secret| {
-            if secret.is_empty() {
-                return;
-            }
-            let config = ShamirConfig {
-                threshold: 3,
-                total_shares: 5,
-            };
-            let owner = [0xAAu8; 32];
-            let shares = ShamirSplitter::split(secret, &config, &owner).unwrap();
+    bolero::check!().with_type::<Vec<u8>>().for_each(|secret| {
+        if secret.is_empty() {
+            return;
+        }
+        let config = ShamirConfig {
+            threshold: 3,
+            total_shares: 5,
+        };
+        let owner = [0xAAu8; 32];
+        let shares = ShamirSplitter::split(secret, &config, &owner).unwrap();
 
-            // threshold - 1 shares must fail
-            let insufficient: Vec<HeirShare> = shares[..2].to_vec();
-            assert!(ShamirSplitter::reconstruct(&insufficient, None).is_err());
-        });
+        // threshold - 1 shares must fail
+        let insufficient: Vec<HeirShare> = shares[..2].to_vec();
+        assert!(ShamirSplitter::reconstruct(&insufficient, None).is_err());
+    });
 }

@@ -2,9 +2,8 @@ use tesseras_crypto::erasure::{Fragment, ReedSolomonCoder};
 
 #[test]
 fn fuzz_erasure_encode_decode() {
-    bolero::check!()
-        .with_type::<(u8, u8, Vec<u8>)>()
-        .for_each(|(data_shards, parity_shards, payload)| {
+    bolero::check!().with_type::<(u8, u8, Vec<u8>)>().for_each(
+        |(data_shards, parity_shards, payload)| {
             let ds = (*data_shards as usize).max(1).min(32);
             let ps = (*parity_shards as usize).max(1).min(32);
 
@@ -18,8 +17,7 @@ fn fuzz_erasure_encode_decode() {
                     assert_eq!(fragments.len(), ds + ps);
 
                     // All fragments available -> reconstruct must succeed
-                    let all: Vec<Option<Fragment>> =
-                        fragments.iter().cloned().map(Some).collect();
+                    let all: Vec<Option<Fragment>> = fragments.iter().cloned().map(Some).collect();
                     let recovered = ReedSolomonCoder::decode(&all, ds, ps).unwrap();
                     assert_eq!(&recovered[..payload.len()], payload.as_slice());
                 }
@@ -27,7 +25,8 @@ fn fuzz_erasure_encode_decode() {
                     // Invalid params are fine
                 }
             }
-        });
+        },
+    );
 }
 
 #[test]
@@ -48,8 +47,7 @@ fn fuzz_erasure_corrupt_reconstruct() {
             };
 
             // Drop up to parity_shards fragments -> must still reconstruct
-            let mut partial: Vec<Option<Fragment>> =
-                fragments.iter().cloned().map(Some).collect();
+            let mut partial: Vec<Option<Fragment>> = fragments.iter().cloned().map(Some).collect();
             let partial_len = partial.len();
             for (i, byte) in corruption.iter().enumerate().take(ps) {
                 if *byte % 2 == 0 {

@@ -186,10 +186,13 @@ impl QuinnTransport {
                 }
             };
             let remote = conn.remote_address();
-            connections.insert(remote, PooledConnection {
-                conn: conn.clone(),
-                last_used: Instant::now(),
-            });
+            connections.insert(
+                remote,
+                PooledConnection {
+                    conn: conn.clone(),
+                    last_used: Instant::now(),
+                },
+            );
 
             // Spawn a task to handle streams from this connection
             tokio::spawn(async move {
@@ -265,10 +268,13 @@ impl QuinnTransport {
             .await
             .map_err(|e| NetError::ConnectionFailed(e.to_string()))?;
 
-        self.connections.insert(addr, PooledConnection {
-            conn: conn.clone(),
-            last_used: Instant::now(),
-        });
+        self.connections.insert(
+            addr,
+            PooledConnection {
+                conn: conn.clone(),
+                last_used: Instant::now(),
+            },
+        );
         Ok(conn)
     }
 }
