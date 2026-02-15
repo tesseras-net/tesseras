@@ -4,7 +4,7 @@ date = 2026-02-15T18:00:00+00:00
 description = "Os nos Tesseras agora podem descobrir seu tipo de NAT via STUN, coordenar UDP hole punching atraves de introdutores e usar relay transparente quando a conectividade direta falha."
 +++
 
-A maioria dos dispositivos das pessoas fica atras de um NAT — um tradutor de enderecos de rede que permite acessar a internet mas impede conexoes de entrada. Para uma rede P2P, isso e um problema existencial: se dois nos atras de NATs nao conseguem se comunicar, a rede se fragmenta. A Fase 4 continua com uma pilha completa de travessia de NAT: descoberta via STUN, hole punching coordenado e fallback por relay.
+A maioria dos dispositivos das pessoas ficam atras de um NAT — um tradutor de enderecos de rede que permite acessar a internet mas impede conexoes de entrada. Para uma rede P2P, isso e um problema existencial: se dois nos atras de NATs nao conseguem se comunicar, a rede se fragmenta. A Fase 4 continua com uma pilha completa de travessia de NAT: descoberta via STUN, hole punching coordenado e fallback por relay.
 
 A abordagem segue o mesmo padrao da maioria dos sistemas P2P consolidados (WebRTC, BitTorrent, IPFS): tente a opcao mais barata primeiro, escale apenas quando necessario. Conectividade direta nao custa nada. Hole punching custa alguns pacotes coordenados. Relay custa largura de banda sustentada de um terceiro. Tesseras tenta nessa ordem.
 

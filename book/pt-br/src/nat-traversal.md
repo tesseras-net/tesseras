@@ -1,6 +1,6 @@
 # Travessia de NAT
 
-A maioria dos dispositivos na internet fica atras de um **NAT** (Network Address Translator). Seu roteador atribui ao seu dispositivo um endereco privado (como `192.168.1.100`) e o traduz para um endereco publico quando voce conecta para fora. Isso funciona bem para navegar na web, mas cria um problema para redes P2P: dois dispositivos atras de NATs diferentes nao conseguem se conectar diretamente sem ajuda.
+A maioria dos dispositivos na internet ficam atras de um **NAT** (Network Address Translator). Seu roteador atribui ao seu dispositivo um endereco privado (como `192.168.1.100`) e o traduz para um endereco publico quando voce conecta para fora. Isso funciona bem para navegar na web, mas cria um problema para redes P2P: dois dispositivos atras de NATs diferentes nao conseguem se conectar diretamente sem ajuda.
 
 Tesseras resolve isso com uma abordagem em tres camadas, tentando a opcao mais barata primeiro:
 
