@@ -6,6 +6,7 @@ pub mod database;
 pub mod error;
 pub mod fragment;
 pub mod identity;
+pub mod metrics;
 pub mod reciprocity;
 pub mod sqlite;
 
@@ -14,6 +15,7 @@ pub use cache::CachedFragmentStore;
 pub use database::{open_database, open_in_memory, StorageConfig};
 pub use error::StorageError;
 pub use fragment::FsFragmentStore;
+pub use metrics::StorageMetrics;
 pub use identity::FsIdentityStore;
 pub use reciprocity::SqliteReciprocityLedger;
 pub use sqlite::{SqliteMemoryRepository, SqliteTesseraRepository};

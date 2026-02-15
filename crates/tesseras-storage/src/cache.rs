@@ -6,12 +6,15 @@ use tesseras_core::ports::FragmentStore;
 use tesseras_core::replication::FragmentId;
 use tesseras_core::{ContentHash, CoreError};
 
+use crate::metrics::StorageMetrics;
+
 /// LRU-cached decorator over a FragmentStore implementation.
 /// Caches blob data in memory, keyed by (tessera_hash, fragment_index).
 /// Thread-safe via internal Mutex (FragmentStore is sync).
 pub struct CachedFragmentStore {
     inner: Box<dyn FragmentStore>,
     cache: Mutex<CacheInner>,
+    metrics: Option<StorageMetrics>,
 }
 
 struct CacheInner {
@@ -29,7 +32,13 @@ impl CachedFragmentStore {
                 current_bytes: 0,
                 max_bytes,
             }),
+            metrics: None,
         }
+    }
+
+    pub fn with_metrics(mut self, metrics: StorageMetrics) -> Self {
+        self.metrics = Some(metrics);
+        self
     }
 
     fn evict_until_fits(cache: &mut CacheInner, needed: usize) {
@@ -50,6 +59,9 @@ impl FragmentStore for CachedFragmentStore {
         if let Some(old) = cache.lru.pop(&(id.tessera_hash, id.index)) {
             cache.current_bytes -= old.len();
         }
+        if let Some(ref m) = self.metrics {
+            m.fragment_cache_bytes.set(cache.current_bytes as i64);
+        }
         Ok(())
     }
 
@@ -57,8 +69,14 @@ impl FragmentStore for CachedFragmentStore {
         {
             let mut cache = self.cache.lock().unwrap();
             if let Some(data) = cache.lru.get(&(id.tessera_hash, id.index)) {
+                if let Some(ref m) = self.metrics {
+                    m.fragment_cache_hits.inc();
+                }
                 return Ok(data.clone());
             }
+        }
+        if let Some(ref m) = self.metrics {
+            m.fragment_cache_misses.inc();
         }
         let data = self.inner.read_fragment(id)?;
         {
@@ -66,6 +84,9 @@ impl FragmentStore for CachedFragmentStore {
             Self::evict_until_fits(&mut cache, data.len());
             cache.current_bytes += data.len();
             cache.lru.put((id.tessera_hash, id.index), data.clone());
+            if let Some(ref m) = self.metrics {
+                m.fragment_cache_bytes.set(cache.current_bytes as i64);
+            }
         }
         Ok(data)
     }
@@ -75,6 +96,9 @@ impl FragmentStore for CachedFragmentStore {
         let mut cache = self.cache.lock().unwrap();
         if let Some(old) = cache.lru.pop(&(id.tessera_hash, id.index)) {
             cache.current_bytes -= old.len();
+        }
+        if let Some(ref m) = self.metrics {
+            m.fragment_cache_bytes.set(cache.current_bytes as i64);
         }
         Ok(())
     }
