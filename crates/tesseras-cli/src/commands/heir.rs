@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result, bail};
 use clap::Subcommand;
 use tesseras_core::ports::{IdentityStore, KeyAlgorithm};
+use tesseras_crypto::secret_blob;
 use tesseras_crypto::shamir::{
     ShamirConfig, ShamirSplitter, share_from_msgpack, share_from_text, share_to_msgpack,
     share_to_text,
@@ -58,15 +59,6 @@ pub enum HeirCommands {
     },
 }
 
-/// Secret blob layout v1.
-fn assemble_secret_blob(ed25519_secret: &[u8]) -> Vec<u8> {
-    let mut blob = Vec::new();
-    blob.push(0x01); // version
-    blob.push(0x00); // flags: ed25519 only (x25519 and mlkem768 not yet integrated)
-    blob.extend_from_slice(ed25519_secret);
-    blob
-}
-
 fn load_share(path: &str) -> Result<tesseras_crypto::shamir::HeirShare> {
     let data = std::fs::read(path).with_context(|| format!("failed to read {path}"))?;
 
@@ -97,18 +89,51 @@ pub async fn run_create(
     let base = expand_tilde(data_dir);
     let identity_store = FsIdentityStore::new(base.clone());
 
-    // Load Ed25519 key material
+    // Load Ed25519 key material (required)
     let ed_material = identity_store
         .load_keypair(KeyAlgorithm::Ed25519)
         .context("no Ed25519 identity found — run `tes init` first")?;
 
-    let secret_blob = assemble_secret_blob(&ed_material.secret);
+    // Load encryption keys (optional — old installs may not have them)
+    let x25519_material = identity_store.load_keypair(KeyAlgorithm::X25519).ok();
+    let mlkem_material = identity_store.load_keypair(KeyAlgorithm::MlKem768).ok();
+
+    // Both encryption keys must be present or both absent
+    let (x25519_secret, mlkem_secret_ref) = match (&x25519_material, &mlkem_material) {
+        (Some(x), Some(m)) => {
+            let x_arr: [u8; 32] = x
+                .secret
+                .as_slice()
+                .try_into()
+                .context("X25519 secret must be 32 bytes")?;
+            (Some(x_arr), Some(m.secret.as_slice()))
+        }
+        (None, None) => (None, None),
+        _ => bail!("inconsistent encryption keys: run `tes init --upgrade`"),
+    };
+
+    let ed_secret: [u8; 32] = ed_material
+        .secret
+        .as_slice()
+        .try_into()
+        .context("Ed25519 secret must be 32 bytes")?;
+    let secret_blob_data =
+        secret_blob::assemble(&ed_secret, x25519_secret.as_ref(), mlkem_secret_ref);
+
+    let key_desc = if x25519_secret.is_some() {
+        format!(
+            "Ed25519 + X25519 + ML-KEM-768 ({} bytes)",
+            secret_blob_data.len()
+        )
+    } else {
+        format!("Ed25519 ({} bytes)", secret_blob_data.len())
+    };
 
     // Confirmation prompt
     if !yes {
         println!("About to create heir shares:");
         println!("  Threshold: {} of {}", threshold, shares);
-        println!("  Key material: Ed25519 ({} bytes)", secret_blob.len());
+        println!("  Key material: {key_desc}");
         println!("  Output: {output_dir}/");
         println!();
         println!("WARNING: These shares can reconstruct your full identity.");
@@ -132,7 +157,7 @@ pub async fn run_create(
         threshold,
         total_shares: shares,
     };
-    let heir_shares = ShamirSplitter::split(&secret_blob, &config, &ed_material.public)
+    let heir_shares = ShamirSplitter::split(&secret_blob_data, &config, &ed_material.public)
         .context("failed to split key material")?;
 
     // Create output directory
