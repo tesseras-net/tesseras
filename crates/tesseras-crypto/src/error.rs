@@ -33,7 +33,9 @@ pub enum CryptoError {
     #[error("shamir: share validation failed — {0}")]
     ShareValidationFailed(String),
 
-    #[error("shamir: owner verification failed — reconstructed key does not match expected fingerprint")]
+    #[error(
+        "shamir: owner verification failed — reconstructed key does not match expected fingerprint"
+    )]
     ShamirOwnerMismatch,
 
     #[error("io error: {0}")]

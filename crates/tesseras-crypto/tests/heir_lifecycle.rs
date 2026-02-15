@@ -13,8 +13,8 @@
 
 use tesseras_crypto::ed25519::Ed25519KeyGenerator;
 use tesseras_crypto::shamir::{
-    share_from_msgpack, share_from_text, share_to_msgpack, share_to_text, ShamirConfig,
-    ShamirSplitter,
+    ShamirConfig, ShamirSplitter, share_from_msgpack, share_from_text, share_to_msgpack,
+    share_to_text,
 };
 
 /// Secret blob layout:
@@ -128,32 +128,23 @@ fn heir_reconstruct_then_decrypt_sealed_tessera() {
             content_hash,
             open_after: chrono::Utc::now(),
         };
-        let encrypted =
-            Aes256GcmEncryptor::encrypt(original_content, &content_key, &ctx).unwrap();
+        let encrypted = Aes256GcmEncryptor::encrypt(original_content, &content_key, &ctx).unwrap();
 
         // Split identity keys
         let config = ShamirConfig {
             threshold: 2,
             total_shares: 3,
         };
-        let shares = ShamirSplitter::split(
-            &blob,
-            &config,
-            ed_keypair.verifying_key.as_bytes(),
-        )
-        .unwrap();
+        let shares =
+            ShamirSplitter::split(&blob, &config, ed_keypair.verifying_key.as_bytes()).unwrap();
 
         // Heir reconstructs
-        let recovered_blob = ShamirSplitter::reconstruct(
-            &[shares[0].clone(), shares[1].clone()],
-            None,
-        )
-        .unwrap();
+        let recovered_blob =
+            ShamirSplitter::reconstruct(&[shares[0].clone(), shares[1].clone()], None).unwrap();
         assert_eq!(recovered_blob, blob);
 
         // Heir uses content key to decrypt (in real use, they'd unseal the envelope first)
-        let decrypted =
-            Aes256GcmEncryptor::decrypt(&encrypted, &content_key, &ctx).unwrap();
+        let decrypted = Aes256GcmEncryptor::decrypt(&encrypted, &content_key, &ctx).unwrap();
         assert_eq!(decrypted, original_content);
     }
 }

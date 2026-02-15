@@ -7,13 +7,13 @@
 mod gf256;
 
 use blake3;
-use rand::rngs::OsRng;
 use rand::RngCore;
+use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use tesseras_core::ContentHash;
 
 use crate::CryptoError;
-use gf256::{poly_eval, Gf256};
+use gf256::{Gf256, poly_eval};
 
 /// Configuration for Shamir's Secret Sharing scheme.
 #[derive(Debug, Clone)]
@@ -290,11 +290,7 @@ impl ShamirSplitter {
 
 mod hex {
     pub fn encode(bytes: impl AsRef<[u8]>) -> String {
-        bytes
-            .as_ref()
-            .iter()
-            .map(|b| format!("{b:02x}"))
-            .collect()
+        bytes.as_ref().iter().map(|b| format!("{b:02x}")).collect()
     }
 }
 
@@ -384,7 +380,7 @@ pub fn share_from_text(text: &str) -> Result<HeirShare, CryptoError> {
         None => {
             return Err(CryptoError::ShareValidationFailed(
                 "missing blank line separator in text format".into(),
-            ))
+            ));
         }
     };
 
@@ -517,11 +513,8 @@ mod tests {
         // All 3 pairs of 2 shares should reconstruct correctly
         let pairs = [(0, 1), (0, 2), (1, 2)];
         for (a, b) in pairs {
-            let recovered = ShamirSplitter::reconstruct(
-                &[shares[a].clone(), shares[b].clone()],
-                None,
-            )
-            .unwrap();
+            let recovered =
+                ShamirSplitter::reconstruct(&[shares[a].clone(), shares[b].clone()], None).unwrap();
             assert_eq!(recovered, secret, "pair ({a},{b}) failed");
         }
     }
@@ -547,18 +540,12 @@ mod tests {
             threshold: 2,
             total_shares: 3,
         };
-        let shares_a =
-            ShamirSplitter::split(b"secret a", &config, &[0xAAu8; 32]).unwrap();
-        let shares_b =
-            ShamirSplitter::split(b"secret b", &config, &[0xBBu8; 32]).unwrap();
+        let shares_a = ShamirSplitter::split(b"secret a", &config, &[0xAAu8; 32]).unwrap();
+        let shares_b = ShamirSplitter::split(b"secret b", &config, &[0xBBu8; 32]).unwrap();
 
         // Mix shares from different owners
-        let result =
-            ShamirSplitter::reconstruct(&[shares_a[0].clone(), shares_b[1].clone()], None);
-        assert!(matches!(
-            result,
-            Err(CryptoError::ShareValidationFailed(_))
-        ));
+        let result = ShamirSplitter::reconstruct(&[shares_a[0].clone(), shares_b[1].clone()], None);
+        assert!(matches!(result, Err(CryptoError::ShareValidationFailed(_))));
     }
 
     #[test]
@@ -577,12 +564,8 @@ mod tests {
         assert_ne!(shares_1[0].session_id, shares_2[0].session_id);
 
         // Mix shares from different sessions
-        let result =
-            ShamirSplitter::reconstruct(&[shares_1[0].clone(), shares_2[1].clone()], None);
-        assert!(matches!(
-            result,
-            Err(CryptoError::ShareValidationFailed(_))
-        ));
+        let result = ShamirSplitter::reconstruct(&[shares_1[0].clone(), shares_2[1].clone()], None);
+        assert!(matches!(result, Err(CryptoError::ShareValidationFailed(_))));
     }
 
     #[test]
@@ -594,11 +577,9 @@ mod tests {
         };
         let shares = ShamirSplitter::split(b"secret", &config, &owner).unwrap();
 
-        let recovered = ShamirSplitter::reconstruct(
-            &[shares[0].clone(), shares[1].clone()],
-            Some(&owner),
-        )
-        .unwrap();
+        let recovered =
+            ShamirSplitter::reconstruct(&[shares[0].clone(), shares[1].clone()], Some(&owner))
+                .unwrap();
         assert_eq!(recovered, b"secret");
     }
 
@@ -687,8 +668,7 @@ mod tests {
             threshold: 2,
             total_shares: 3,
         };
-        let shares =
-            ShamirSplitter::split(b"msgpack test", &config, &test_owner_public()).unwrap();
+        let shares = ShamirSplitter::split(b"msgpack test", &config, &test_owner_public()).unwrap();
 
         let encoded = super::share_to_msgpack(&shares[0]).unwrap();
         let decoded = super::share_from_msgpack(&encoded).unwrap();
@@ -701,8 +681,7 @@ mod tests {
             threshold: 2,
             total_shares: 3,
         };
-        let shares =
-            ShamirSplitter::split(b"text test", &config, &test_owner_public()).unwrap();
+        let shares = ShamirSplitter::split(b"text test", &config, &test_owner_public()).unwrap();
 
         let text = super::share_to_text(&shares[0], "2026-02-14").unwrap();
         let recovered = super::share_from_text(&text).unwrap();
@@ -715,8 +694,7 @@ mod tests {
             threshold: 2,
             total_shares: 3,
         };
-        let shares =
-            ShamirSplitter::split(b"header test", &config, &test_owner_public()).unwrap();
+        let shares = ShamirSplitter::split(b"header test", &config, &test_owner_public()).unwrap();
 
         // Generate text, then mangle the header
         let text = super::share_to_text(&shares[0], "2026-02-14").unwrap();
@@ -728,10 +706,7 @@ mod tests {
     #[test]
     fn base64_text_parser_rejects_missing_markers() {
         let result = super::share_from_text("just some random text");
-        assert!(matches!(
-            result,
-            Err(CryptoError::ShareValidationFailed(_))
-        ));
+        assert!(matches!(result, Err(CryptoError::ShareValidationFailed(_))));
     }
 
     mod prop_tests {

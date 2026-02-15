@@ -60,12 +60,6 @@ impl Gf256 {
         Self(self.0 ^ other.0)
     }
 
-    /// Subtraction in GF(256) is also XOR (same as addition in characteristic 2).
-    #[inline]
-    pub(crate) fn sub(self, other: Self) -> Self {
-        self.add(other)
-    }
-
     /// Multiplication using log/exp lookup tables. Constant-time.
     #[inline]
     pub(crate) fn mul(self, other: Self) -> Self {
@@ -109,11 +103,10 @@ pub(crate) fn lagrange_interpolate(points: &[(Gf256, Gf256)]) -> Gf256 {
         let (x_i, y_i) = points[i];
         let mut basis = Gf256::ONE;
 
-        for j in 0..k {
+        for (j, &(x_j, _)) in points.iter().enumerate() {
             if i == j {
                 continue;
             }
-            let (x_j, _) = points[j];
             // basis *= x_j / (x_j - x_i)
             // At x=0: basis *= (0 - x_j) / (x_i - x_j) = x_j / (x_j - x_i)
             // In GF(256): subtraction = addition (XOR)

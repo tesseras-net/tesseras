@@ -96,8 +96,8 @@ mod hex_serde {
         }
         let mut bytes = [0u8; 8];
         for (i, byte) in bytes.iter_mut().enumerate() {
-            *byte = u8::from_str_radix(&s[i * 2..i * 2 + 2], 16)
-                .map_err(serde::de::Error::custom)?;
+            *byte =
+                u8::from_str_radix(&s[i * 2..i * 2 + 2], 16).map_err(serde::de::Error::custom)?;
         }
         Ok(bytes)
     }
