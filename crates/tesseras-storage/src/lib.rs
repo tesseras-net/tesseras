@@ -47,6 +47,9 @@ pub fn run_migrations(conn: &rusqlite::Connection) -> Result<(), StorageError> {
     conn.execute_batch(include_str!("../migrations/003_institutional.sql"))
         .map_err(|e| StorageError::Database(e.to_string()))?;
 
+    conn.execute_batch(include_str!("../migrations/004_dedup.sql"))
+        .map_err(|e| StorageError::Database(e.to_string()))?;
+
     Ok(())
 }
 
@@ -123,6 +126,34 @@ mod tests {
             )
             .unwrap();
         assert!(is_inst);
+    }
+
+    #[test]
+    fn dedup_tables_exist() {
+        let conn = crate::database::open_in_memory(&crate::StorageConfig::default()).unwrap();
+        for table in ["cas_objects", "blob_refs", "fragment_refs", "storage_meta"] {
+            let exists: bool = conn
+                .prepare(&format!(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'"
+                ))
+                .unwrap()
+                .exists([])
+                .unwrap();
+            assert!(exists, "table {table} should exist");
+        }
+    }
+
+    #[test]
+    fn storage_version_defaults_to_one() {
+        let conn = crate::database::open_in_memory(&crate::StorageConfig::default()).unwrap();
+        let version: String = conn
+            .query_row(
+                "SELECT value FROM storage_meta WHERE key = 'storage_version'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(version, "1");
     }
 
     #[test]
