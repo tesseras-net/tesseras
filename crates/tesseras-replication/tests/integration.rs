@@ -3,7 +3,7 @@
 use std::sync::{Arc, Mutex};
 
 use mockall::mock;
-use tesseras_core::ports::{BlobStore, DhtPort};
+use tesseras_core::ports::{BlobStore, DhtPort, ReciprocityLedger};
 use tesseras_core::replication::*;
 use tesseras_core::types::NodeId;
 use tesseras_core::*;
@@ -224,4 +224,63 @@ async fn receive_rejects_tampered_fragment() {
         result,
         Err(ReplicationError::ChecksumMismatch { .. })
     ));
+}
+
+#[test]
+fn institutional_peer_bypasses_reciprocity() {
+    let conn =
+        tesseras_storage::open_in_memory(&tesseras_storage::StorageConfig::default()).unwrap();
+    let conn = Arc::new(Mutex::new(conn));
+    let ledger = SqliteReciprocityLedger::new(conn);
+
+    let institutional_peer = node(0x01);
+
+    // Mark peer as institutional
+    ledger.mark_institutional(&institutional_peer).unwrap();
+    assert!(ledger.is_institutional(&institutional_peer).unwrap());
+
+    // Institutional peer has massive deficit — should still be allowed
+    ledger
+        .record_stored_for_peer(&institutional_peer, 1_000_000_000)
+        .unwrap();
+    let balance = ledger.balance(&institutional_peer).unwrap();
+    assert!(balance < 0); // we owe them a lot
+
+    // But is_institutional returns true, so replication service skips the check
+    assert!(ledger.is_institutional(&institutional_peer).unwrap());
+}
+
+#[tokio::test]
+async fn institutional_node_accepts_fragment_despite_deficit() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let dht = MockDht::new();
+    let service = create_service_with_real_storage(0x01, dht, MockBlobs::new(), dir.path());
+
+    // Mark sender as institutional (massive deficit)
+    let sender = node(0xff);
+    service.ledger().mark_institutional(&sender).unwrap();
+    service
+        .ledger()
+        .record_stored_for_peer(&sender, 10_000_000_000)
+        .unwrap();
+
+    // Create a valid envelope
+    let data = vec![0xaa; 64];
+    let checksum = ContentHash::new(blake3::hash(&data).into());
+    let plan = FragmentPlan::new(hash(0x01), 100_000_000).unwrap();
+    let id = FragmentId::new(hash(0x01), 0, 16, checksum);
+    let envelope = FragmentEnvelope {
+        id,
+        plan,
+        original_tessera_size: 100_000_000,
+        fragment_size: 64,
+        data,
+    };
+
+    // Should accept despite massive deficit because sender is institutional
+    let ack = service
+        .receive_fragment(envelope, &sender)
+        .await
+        .unwrap();
+    assert!(ack.accepted);
 }
