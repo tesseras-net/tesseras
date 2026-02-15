@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use async_trait::async_trait;
 use tokio::sync::{Mutex, oneshot};
 
 use tesseras_core::ports::ReplicationHandler;
@@ -9,6 +10,52 @@ use tesseras_core::replication::{Attestation, FragmentEnvelope, ReplicateAck};
 use tesseras_core::*;
 use tesseras_net::codec::{self as wire_codec, WireBody, WireMessage};
 use tesseras_net::{Envelope, PeerAddr, Transport};
+
+/// Handler for NAT traversal operations, set by the application layer.
+#[async_trait]
+pub trait NatHandler: Send + Sync {
+    /// Called when this node is asked to introduce two peers (we're the Introducer).
+    /// Should forward PunchRequest to target if we can reach them.
+    async fn handle_punch_intro(
+        &self,
+        initiator: &NodeIdentity,
+        target: &NodeId,
+        initiator_addr: SocketAddr,
+        timestamp: u64,
+        signature: Vec<u8>,
+    ) -> Result<(), String>;
+
+    /// Called when we receive a PunchRequest (we're the target).
+    /// Should begin hole-punch attempt to initiator_addr.
+    async fn handle_punch_request(
+        &self,
+        initiator: &NodeIdentity,
+        initiator_addr: SocketAddr,
+        timestamp: u64,
+        signature: Vec<u8>,
+    ) -> Option<SocketAddr>; // Returns our external addr if ready
+
+    /// Called when a peer requests relay through us.
+    async fn handle_relay_request(
+        &self,
+        sender: &NodeIdentity,
+        target: &NodeId,
+        timestamp: u64,
+        signature: Vec<u8>,
+    ) -> Result<(SocketAddr, [u8; 16]), String>; // (relay_addr, session_token)
+
+    /// Called when a peer closes a relay session.
+    async fn handle_relay_close(&self, session_token: [u8; 16]);
+
+    /// Called when a peer migrates their relay session address.
+    async fn handle_relay_migrate(
+        &self,
+        session_token: [u8; 16],
+        timestamp: u64,
+        signature: Vec<u8>,
+        from_addr: SocketAddr,
+    ) -> bool;
+}
 
 use crate::config::DhtConfig;
 use crate::distance;
@@ -27,6 +74,7 @@ pub struct DhtEngine {
     request_counter: Mutex<u64>,
     pending: Mutex<HashMap<u64, oneshot::Sender<(WireMessage, PeerAddr)>>>,
     replication_handler: std::sync::Mutex<Option<Arc<dyn ReplicationHandler>>>,
+    nat_handler: std::sync::Mutex<Option<Arc<dyn NatHandler>>>,
 }
 
 impl DhtEngine {
@@ -48,6 +96,7 @@ impl DhtEngine {
             request_counter: Mutex::new(0),
             pending: Mutex::new(HashMap::new()),
             replication_handler: std::sync::Mutex::new(None),
+            nat_handler: std::sync::Mutex::new(None),
         })
     }
 
@@ -63,6 +112,11 @@ impl DhtEngine {
     /// Must be called after construction (breaks the circular dependency).
     pub fn set_replication_handler(&self, handler: Arc<dyn ReplicationHandler>) {
         *self.replication_handler.lock().unwrap() = Some(handler);
+    }
+
+    /// Set the handler for NAT traversal messages (punch/relay).
+    pub fn set_nat_handler(&self, handler: Arc<dyn NatHandler>) {
+        *self.nat_handler.lock().unwrap() = Some(handler);
     }
 
     async fn next_request_id(&self) -> u64 {
@@ -255,15 +309,116 @@ impl DhtEngine {
             }
             Message::AttestResponse { .. } => None,
 
-            // NAT traversal messages — dispatched to NatHandler (Task 7)
-            Message::PunchIntro { .. }
-            | Message::PunchRequest { .. }
-            | Message::PunchReady { .. }
-            | Message::RelayRequest { .. }
-            | Message::RelayOffer { .. }
-            | Message::RelayClose { .. }
-            | Message::RelayMigrate { .. } => {
-                tracing::debug!("received NAT traversal message but no handler set yet");
+            Message::PunchIntro {
+                sender,
+                target,
+                external_addr,
+                timestamp,
+                signature,
+            } => {
+                let handler = self.nat_handler.lock().unwrap().clone();
+                if let Some(handler) = handler {
+                    if let Err(e) = handler
+                        .handle_punch_intro(
+                            sender,
+                            target,
+                            *external_addr,
+                            *timestamp,
+                            signature.clone(),
+                        )
+                        .await
+                    {
+                        tracing::warn!(error = %e, "PunchIntro handler failed");
+                    }
+                } else {
+                    tracing::debug!("received PunchIntro but no NAT handler set");
+                }
+                None
+            }
+            Message::PunchRequest {
+                sender: _,
+                initiator,
+                initiator_addr,
+                timestamp,
+                signature,
+            } => {
+                let handler = self.nat_handler.lock().unwrap().clone();
+                if let Some(handler) = handler {
+                    handler
+                        .handle_punch_request(
+                            initiator,
+                            *initiator_addr,
+                            *timestamp,
+                            signature.clone(),
+                        )
+                        .await
+                        .map(|our_ext_addr| Message::PunchReady {
+                            sender: self.identity.clone(),
+                            external_addr: our_ext_addr,
+                        })
+                } else {
+                    None
+                }
+            }
+            Message::PunchReady { .. } => {
+                // Handled by RPC caller (awaiting response), not dispatch
+                None
+            }
+            Message::RelayRequest {
+                sender,
+                target,
+                timestamp,
+                signature,
+            } => {
+                let handler = self.nat_handler.lock().unwrap().clone();
+                if let Some(handler) = handler {
+                    match handler
+                        .handle_relay_request(sender, target, *timestamp, signature.clone())
+                        .await
+                    {
+                        Ok((relay_addr, session_token)) => Some(Message::RelayOffer {
+                            sender: self.identity.clone(),
+                            relay_addr,
+                            session_token,
+                        }),
+                        Err(e) => {
+                            tracing::warn!(error = %e, "RelayRequest handler failed");
+                            None
+                        }
+                    }
+                } else {
+                    tracing::debug!("received RelayRequest but no NAT handler set");
+                    None
+                }
+            }
+            Message::RelayOffer { .. } => {
+                // Handled by RPC caller
+                None
+            }
+            Message::RelayClose { session_token, .. } => {
+                let handler = self.nat_handler.lock().unwrap().clone();
+                if let Some(handler) = handler {
+                    handler.handle_relay_close(*session_token).await;
+                }
+                None
+            }
+            Message::RelayMigrate {
+                session_token,
+                timestamp,
+                signature,
+            } => {
+                let handler = self.nat_handler.lock().unwrap().clone();
+                if let Some(handler) = handler {
+                    let from_addr = peer.addr;
+                    handler
+                        .handle_relay_migrate(
+                            *session_token,
+                            *timestamp,
+                            signature.clone(),
+                            from_addr,
+                        )
+                        .await;
+                }
                 None
             }
         }
@@ -1035,5 +1190,201 @@ mod tests {
 
         let response = engine.handle_message(&msg, &peer).await;
         assert!(response.is_none(), "should return None when no handler set");
+    }
+
+    // -- NatHandler dispatch tests --
+
+    use crate::message::RelayCloseReason;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    struct MockNatHandler {
+        punch_intro_called: AtomicBool,
+        relay_request_called: AtomicBool,
+        relay_close_called: AtomicBool,
+    }
+
+    impl MockNatHandler {
+        fn new() -> Self {
+            Self {
+                punch_intro_called: AtomicBool::new(false),
+                relay_request_called: AtomicBool::new(false),
+                relay_close_called: AtomicBool::new(false),
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl NatHandler for MockNatHandler {
+        async fn handle_punch_intro(
+            &self,
+            _initiator: &NodeIdentity,
+            _target: &NodeId,
+            _initiator_addr: SocketAddr,
+            _timestamp: u64,
+            _signature: Vec<u8>,
+        ) -> Result<(), String> {
+            self.punch_intro_called.store(true, Ordering::SeqCst);
+            Ok(())
+        }
+
+        async fn handle_punch_request(
+            &self,
+            _initiator: &NodeIdentity,
+            _initiator_addr: SocketAddr,
+            _timestamp: u64,
+            _signature: Vec<u8>,
+        ) -> Option<SocketAddr> {
+            Some("203.0.113.5:4433".parse().unwrap())
+        }
+
+        async fn handle_relay_request(
+            &self,
+            _sender: &NodeIdentity,
+            _target: &NodeId,
+            _timestamp: u64,
+            _signature: Vec<u8>,
+        ) -> Result<(SocketAddr, [u8; 16]), String> {
+            self.relay_request_called.store(true, Ordering::SeqCst);
+            Ok(("198.51.100.1:5000".parse().unwrap(), [0xDD; 16]))
+        }
+
+        async fn handle_relay_close(&self, _session_token: [u8; 16]) {
+            self.relay_close_called.store(true, Ordering::SeqCst);
+        }
+
+        async fn handle_relay_migrate(
+            &self,
+            _session_token: [u8; 16],
+            _timestamp: u64,
+            _signature: Vec<u8>,
+            _from_addr: SocketAddr,
+        ) -> bool {
+            true
+        }
+    }
+
+    #[tokio::test]
+    async fn punch_intro_dispatches_to_nat_handler() {
+        let net = SimNetwork::new();
+        let engine = create_engine(&net, 930).await;
+        let handler = Arc::new(MockNatHandler::new());
+        engine.set_nat_handler(handler.clone());
+
+        let msg = Message::PunchIntro {
+            sender: engine.identity().clone(),
+            target: NodeId::new([3u8; 20]),
+            external_addr: "203.0.113.5:4433".parse().unwrap(),
+            timestamp: 12345,
+            signature: vec![0xAA; 64],
+        };
+        let peer = PeerAddr {
+            node_id: None,
+            addr: addr(931),
+        };
+
+        let response = engine.handle_message(&msg, &peer).await;
+        assert!(response.is_none()); // PunchIntro doesn't produce a response
+        assert!(handler.punch_intro_called.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn punch_request_returns_punch_ready() {
+        let net = SimNetwork::new();
+        let engine = create_engine(&net, 940).await;
+        engine.set_nat_handler(Arc::new(MockNatHandler::new()));
+
+        let msg = Message::PunchRequest {
+            sender: engine.identity().clone(),
+            initiator: engine.identity().clone(),
+            initiator_addr: "203.0.113.5:4433".parse().unwrap(),
+            timestamp: 12345,
+            signature: vec![0xBB; 64],
+        };
+        let peer = PeerAddr {
+            node_id: None,
+            addr: addr(941),
+        };
+
+        let response = engine.handle_message(&msg, &peer).await;
+        assert!(matches!(response, Some(Message::PunchReady { .. })));
+    }
+
+    #[tokio::test]
+    async fn relay_request_returns_relay_offer() {
+        let net = SimNetwork::new();
+        let engine = create_engine(&net, 950).await;
+        let handler = Arc::new(MockNatHandler::new());
+        engine.set_nat_handler(handler.clone());
+
+        let msg = Message::RelayRequest {
+            sender: engine.identity().clone(),
+            target: NodeId::new([3u8; 20]),
+            timestamp: 999,
+            signature: vec![0xCC; 64],
+        };
+        let peer = PeerAddr {
+            node_id: None,
+            addr: addr(951),
+        };
+
+        let response = engine.handle_message(&msg, &peer).await;
+        match response {
+            Some(Message::RelayOffer {
+                relay_addr,
+                session_token,
+                ..
+            }) => {
+                assert_eq!(
+                    relay_addr,
+                    "198.51.100.1:5000".parse::<SocketAddr>().unwrap()
+                );
+                assert_eq!(session_token, [0xDD; 16]);
+            }
+            _ => panic!("expected RelayOffer"),
+        }
+        assert!(handler.relay_request_called.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn relay_close_dispatches_to_nat_handler() {
+        let net = SimNetwork::new();
+        let engine = create_engine(&net, 960).await;
+        let handler = Arc::new(MockNatHandler::new());
+        engine.set_nat_handler(handler.clone());
+
+        let msg = Message::RelayClose {
+            session_token: [0xEE; 16],
+            reason: RelayCloseReason::PeerClosed,
+        };
+        let peer = PeerAddr {
+            node_id: None,
+            addr: addr(961),
+        };
+
+        let response = engine.handle_message(&msg, &peer).await;
+        assert!(response.is_none());
+        assert!(handler.relay_close_called.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn nat_messages_without_handler_return_none() {
+        let net = SimNetwork::new();
+        let engine = create_engine(&net, 970).await;
+        // No NAT handler set
+
+        let msg = Message::PunchIntro {
+            sender: engine.identity().clone(),
+            target: NodeId::new([3u8; 20]),
+            external_addr: "203.0.113.5:4433".parse().unwrap(),
+            timestamp: 12345,
+            signature: vec![0xAA; 64],
+        };
+        let peer = PeerAddr {
+            node_id: None,
+            addr: addr(971),
+        };
+
+        let response = engine.handle_message(&msg, &peer).await;
+        assert!(response.is_none());
     }
 }
