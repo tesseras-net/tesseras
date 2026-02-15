@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
 
-use tesseras_core::NodeInfo;
+use tesseras_core::{Capabilities, NodeInfo};
 
 /// Extract /24 subnet from a socket address.
 fn extract_subnet(addr: &SocketAddr) -> String {
@@ -28,6 +28,31 @@ pub fn apply_subnet_diversity(peers: &[NodeInfo], max_per_subnet: usize) -> Vec<
         let count = subnet_counts.entry(subnet).or_insert(0);
         if *count < max_per_subnet {
             *count += 1;
+            result.push(peer.clone());
+        }
+    }
+
+    result
+}
+
+/// Filter peers to limit institutional nodes to max ceil(r / 3.5) per holder set.
+///
+/// This prevents concentration risk: if 3 major institutions leave simultaneously,
+/// no fragment loses more than 2 of its 7 holders.
+pub fn apply_institutional_diversity(peers: &[NodeInfo], target_r: usize) -> Vec<NodeInfo> {
+    let max_institutional = (target_r as f64 / 3.5).ceil() as usize;
+
+    let mut institutional_count = 0;
+    let mut result = Vec::new();
+
+    // First pass: add peers respecting institutional limit
+    for peer in peers {
+        if peer.capabilities.has(Capabilities::INSTITUTIONAL) {
+            if institutional_count < max_institutional {
+                institutional_count += 1;
+                result.push(peer.clone());
+            }
+        } else {
             result.push(peer.clone());
         }
     }
@@ -82,6 +107,76 @@ mod tests {
         peers.push(different);
         let filtered = apply_subnet_diversity(&peers, 2);
         assert_eq!(filtered.len(), 3); // all pass (2 from .0, 1 from .1)
+    }
+
+    fn make_institutional_node_info(fill: u8, port: u16) -> NodeInfo {
+        NodeInfo {
+            identity: NodeIdentity {
+                node_id: node(fill),
+                public_key: [fill; 32],
+                nonce: 0,
+            },
+            addr: SocketAddr::from(([10, 0, fill, 1], port)),
+            alt_addrs: vec![],
+            capabilities: Capabilities::institutional_default(),
+        }
+    }
+
+    #[test]
+    fn institutional_diversity_limits_institutional_holders() {
+        let mut peers = vec![
+            make_institutional_node_info(1, 4433),
+            make_institutional_node_info(2, 4434),
+            make_institutional_node_info(3, 4435),
+            make_institutional_node_info(4, 4436),
+            make_node_info(5, 4437),
+            make_node_info(6, 4438),
+            make_node_info(7, 4439),
+        ];
+        // Different subnets for each
+        for (i, peer) in peers.iter_mut().enumerate() {
+            peer.addr = SocketAddr::from(([10, 0, i as u8, 1], 4433 + i as u16));
+        }
+
+        let filtered = apply_institutional_diversity(&peers, 7);
+        let inst_count = filtered
+            .iter()
+            .filter(|p| p.capabilities.has(Capabilities::INSTITUTIONAL))
+            .count();
+        // max ceil(7 / 3.5) = 2
+        assert!(inst_count <= 2, "got {inst_count} institutional, max 2");
+        assert_eq!(filtered.len(), 5); // 2 institutional + 3 personal
+    }
+
+    #[test]
+    fn institutional_diversity_allows_all_personal_when_no_institutional() {
+        let peers: Vec<NodeInfo> = (1..=7u8)
+            .map(|i| {
+                let mut p = make_node_info(i, 4433);
+                p.addr = SocketAddr::from(([10, 0, i, 1], 4433));
+                p
+            })
+            .collect();
+
+        let filtered = apply_institutional_diversity(&peers, 7);
+        assert_eq!(filtered.len(), 7);
+        let inst_count = filtered
+            .iter()
+            .filter(|p| p.capabilities.has(Capabilities::INSTITUTIONAL))
+            .count();
+        assert_eq!(inst_count, 0);
+    }
+
+    #[test]
+    fn institutional_diversity_with_fewer_peers_than_target() {
+        let peers = vec![
+            make_institutional_node_info(1, 4433),
+            make_node_info(2, 4434),
+            make_node_info(3, 4435),
+        ];
+
+        let filtered = apply_institutional_diversity(&peers, 7);
+        assert_eq!(filtered.len(), 3); // can't exceed available peers
     }
 
     #[test]
