@@ -177,6 +177,7 @@ impl TesseraService {
             creator: pub_key_hex.clone(),
             content_hash,
             entries: manifest_entries,
+            encryption: None,
         };
         let manifest_text = manifest.to_string();
         let (sig_bytes, _) = self.signer.sign(manifest_text.as_bytes());

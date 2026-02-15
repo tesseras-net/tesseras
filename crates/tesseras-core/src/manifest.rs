@@ -23,6 +23,17 @@ impl fmt::Display for ManifestEntry {
     }
 }
 
+/// Encryption metadata stored in the manifest for sealed/private tesseras.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ManifestEncryption {
+    /// Encryption scheme identifier (e.g., "hybrid-kem-v1").
+    pub scheme: String,
+    /// Base64-encoded SealedKeyEnvelope (MessagePack serialized).
+    pub envelope_base64: String,
+    /// When the tessera can be opened (None for Private).
+    pub open_after: Option<DateTime<Utc>>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Manifest {
     pub version: SchemaVersion,
@@ -30,6 +41,7 @@ pub struct Manifest {
     pub creator: String,
     pub content_hash: ContentHash,
     pub entries: Vec<ManifestEntry>,
+    pub encryption: Option<ManifestEncryption>,
 }
 
 impl Manifest {
@@ -102,12 +114,67 @@ impl Manifest {
             )));
         }
 
-        // Parse entries
+        // Collect remaining lines for entries + optional encryption
+        let remaining: Vec<&str> = lines.collect();
         let mut entries = Vec::new();
-        for line in lines {
-            let trimmed = line.trim();
+        let mut encryption = None;
+        let mut i = 0;
+
+        // Parse file entries
+        while i < remaining.len() {
+            let trimmed = remaining[i].trim();
+            i += 1;
             if trimmed.is_empty() {
                 continue;
+            }
+            if trimmed == "ENCRYPTION:" {
+                // Parse encryption block from remaining lines
+                let mut scheme = None;
+                let mut envelope = None;
+                let mut open_after = None;
+                while i < remaining.len() {
+                    let etrimmed = remaining[i].trim();
+                    i += 1;
+                    if etrimmed.is_empty() {
+                        continue;
+                    }
+                    if let Some((key, value)) = etrimmed.split_once(':') {
+                        let key = key.trim();
+                        let value = value.trim();
+                        match key {
+                            "scheme" => scheme = Some(value.to_string()),
+                            "envelope" => envelope = Some(value.to_string()),
+                            "open_after" => {
+                                open_after = Some(
+                                    DateTime::parse_from_rfc3339(value)
+                                        .map_err(|e| {
+                                            CoreError::InvalidManifest(format!(
+                                                "invalid open_after date: {e}"
+                                            ))
+                                        })?
+                                        .with_timezone(&Utc),
+                                );
+                            }
+                            _ => {
+                                return Err(CoreError::InvalidManifest(format!(
+                                    "unknown encryption key: {key}"
+                                )));
+                            }
+                        }
+                    }
+                }
+                let scheme = scheme.ok_or_else(|| {
+                    CoreError::InvalidManifest("missing encryption scheme".into())
+                })?;
+                let envelope_base64 = envelope.ok_or_else(|| {
+                    CoreError::InvalidManifest("missing encryption envelope".into())
+                })?;
+                encryption = Some(ManifestEncryption {
+                    scheme,
+                    envelope_base64,
+                    open_after,
+                });
+                break;
             }
             let parts: Vec<&str> = trimmed.split_whitespace().collect();
             if parts.len() != 4 {
@@ -144,6 +211,7 @@ impl Manifest {
             creator,
             content_hash,
             entries,
+            encryption,
         })
     }
 }
@@ -165,6 +233,21 @@ impl fmt::Display for Manifest {
         for entry in &self.entries {
             writeln!(f, "{entry}")?;
         }
+
+        if let Some(enc) = &self.encryption {
+            writeln!(f)?;
+            writeln!(f, "ENCRYPTION:")?;
+            writeln!(f, "  scheme: {}", enc.scheme)?;
+            writeln!(f, "  envelope: {}", enc.envelope_base64)?;
+            if let Some(open_after) = &enc.open_after {
+                writeln!(
+                    f,
+                    "  open_after: {}",
+                    open_after.format("%Y-%m-%dT%H:%M:%SZ")
+                )?;
+            }
+        }
+
         Ok(())
     }
 }
@@ -275,6 +358,51 @@ mod tests {
         assert!(line.contains("142032"));
     }
 
+    #[test]
+    fn manifest_with_encryption_block_roundtrip() {
+        let hash = ContentHash::from_str(&"ab".repeat(32)).unwrap();
+        let creator = "00".repeat(32);
+        let manifest = Manifest {
+            version: SchemaVersion::V1,
+            created_at: chrono::Utc::now(),
+            creator,
+            content_hash: hash,
+            entries: vec![ManifestEntry {
+                path: "memories/a1b2c3/encrypted.bin".to_string(),
+                hash,
+                mime_type: "application/octet-stream".to_string(),
+                size: 1024,
+            }],
+            encryption: Some(ManifestEncryption {
+                scheme: "hybrid-kem-v1".to_string(),
+                envelope_base64: "dGVzdGVudmVsb3Bl".to_string(),
+                open_after: Some(
+                    chrono::DateTime::parse_from_rfc3339("2050-01-01T00:00:00Z")
+                        .unwrap()
+                        .with_timezone(&chrono::Utc),
+                ),
+            }),
+        };
+        let text = manifest.to_string();
+        assert!(text.contains("ENCRYPTION:"));
+        assert!(text.contains("scheme: hybrid-kem-v1"));
+        assert!(text.contains("envelope: dGVzdGVudmVsb3Bl"));
+        assert!(text.contains("open_after: 2050-01-01T00:00:00Z"));
+
+        let reparsed = Manifest::parse(&text).unwrap();
+        let enc = reparsed.encryption.unwrap();
+        assert_eq!(enc.scheme, "hybrid-kem-v1");
+        assert_eq!(enc.envelope_base64, "dGVzdGVudmVsb3Bl");
+        assert!(enc.open_after.is_some());
+    }
+
+    #[test]
+    fn manifest_without_encryption_roundtrip() {
+        let text = sample_manifest_text();
+        let manifest = Manifest::parse(&text).unwrap();
+        assert!(manifest.encryption.is_none());
+    }
+
     mod proptests {
         use super::*;
         use crate::SchemaVersion;
@@ -312,6 +440,7 @@ mod tests {
                     creator: "aa".repeat(32),
                     content_hash: ContentHash::new(content_hash),
                     entries,
+                    encryption: None,
                 };
                 let text = manifest.to_string();
                 let reparsed = Manifest::parse(&text).unwrap();

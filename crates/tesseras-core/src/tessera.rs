@@ -152,6 +152,7 @@ mod tests {
             creator: "aa".repeat(32),
             content_hash,
             entries,
+            encryption: None,
         }
     }
 
