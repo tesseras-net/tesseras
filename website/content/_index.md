@@ -21,13 +21,13 @@ Each person creates a **tessera** — a self-contained time capsule of memories 
 
 ## Current Status
 
-Tesseras is in early development (Phase 0 — Foundation). We are building the core tools for creating, verifying, and exporting tesseras offline.
+Tesseras is in Phase 4 — Resilience and Scale. The core format, cryptographic foundations, peer-to-peer network, replication, GraphQL API, and Flutter app are built. We are now working on Shamir's Secret Sharing for heir key recovery, advanced NAT traversal, and performance tuning.
 
 See [Releases](/releases/) for download information.
 
 ## Get Involved
 
-- Join the [mailing list](/subscriptions/)
+- Join the [mailing lists](/subscriptions/)
 - Browse the [source code](https://git.sr.ht/~ijanc/tesseras)
 - Read the [FAQ](/faq/)
 - [Contact us](/contact/)

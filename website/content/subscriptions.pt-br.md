@@ -1,17 +1,39 @@
 +++
 title = "Inscrições"
-description = "Inscreva-se na lista de discussão do Tesseras"
+description = "Inscreva-se nas listas de discussão do Tesseras"
 +++
 
-### Lista de Discussão
+### Listas de Discussão
 
-A lista de discussão do Tesseras é o canal principal para anúncios do projeto, discussão de desenvolvimento e suporte da comunidade.
+Tesseras usa quatro listas de discussão hospedadas no SourceHut, cada uma com um propósito diferente.
 
-Para se inscrever, envie um e-mail para: **tesseras-subscribe@lists.tesseras.net**
+#### tesseras-announce
 
-Para cancelar a inscrição: **tesseras-unsubscribe@lists.tesseras.net**
+Anúncios de lançamento, marcos e notícias importantes do projeto. Baixo tráfego, somente leitura.
 
-[Navegue pelos arquivos da lista](https://lists.tesseras.net/tesseras/)
+- Inscrever-se: [~ijanc/tesseras-announce@lists.sr.ht](mailto:~ijanc/tesseras-announce+subscribe@lists.sr.ht)
+- [Navegar nos arquivos](https://lists.sr.ht/~ijanc/tesseras-announce)
+
+#### tesseras-devel
+
+Patches, revisão de código, discussão de arquitetura e coordenação de desenvolvimento.
+
+- Inscrever-se: [~ijanc/tesseras-devel@lists.sr.ht](mailto:~ijanc/tesseras-devel+subscribe@lists.sr.ht)
+- [Navegar nos arquivos](https://lists.sr.ht/~ijanc/tesseras-devel)
+
+#### tesseras-discuss
+
+Suporte a usuários, discussão geral, perguntas e conversa da comunidade.
+
+- Inscrever-se: [~ijanc/tesseras-discuss@lists.sr.ht](mailto:~ijanc/tesseras-discuss+subscribe@lists.sr.ht)
+- [Navegar nos arquivos](https://lists.sr.ht/~ijanc/tesseras-discuss)
+
+#### tesseras-security
+
+Divulgação responsável de vulnerabilidades de segurança. Restrita a mantenedores; relatos são bem-vindos de qualquer pessoa.
+
+- Relatar: [~ijanc/tesseras-security@lists.sr.ht](mailto:~ijanc/tesseras-security@lists.sr.ht)
+- [Navegar nos arquivos](https://lists.sr.ht/~ijanc/tesseras-security)
 
 ### Feeds Atom
 

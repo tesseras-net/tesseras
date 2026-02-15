@@ -21,13 +21,13 @@ Cada pessoa cria uma **tessera** — uma cápsula do tempo autocontida de memór
 
 ## Status Atual
 
-Tesseras está em desenvolvimento inicial (Fase 0 — Fundação). Estamos construindo as ferramentas básicas para criar, verificar e exportar tesseras offline.
+Tesseras está na Fase 4 — Resiliência e Escala. O formato base, as fundações criptográficas, a rede peer-to-peer, a replicação, a API GraphQL e o app Flutter estão construídos. Estamos agora trabalhando em Shamir's Secret Sharing para recuperação de chaves por herdeiros, NAT traversal avançado e ajuste de performance.
 
 Veja [Lançamentos](/pt-br/releases/) para informações de download.
 
 ## Participe
 
-- Entre na [lista de discussão](/pt-br/subscriptions/)
+- Entre nas [listas de discussão](/pt-br/subscriptions/)
 - Navegue pelo [código-fonte](https://git.sr.ht/~ijanc/tesseras)
 - Leia o [FAQ](/pt-br/faq/)
 - [Fale conosco](/pt-br/contact/)

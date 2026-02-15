@@ -1,17 +1,39 @@
 +++
 title = "Subscriptions"
-description = "Subscribe to the Tesseras mailing list"
+description = "Subscribe to the Tesseras mailing lists"
 +++
 
-### Mailing List
+### Mailing Lists
 
-The Tesseras mailing list is the primary channel for project announcements, development discussion, and community support.
+Tesseras uses four mailing lists hosted on SourceHut, each serving a different purpose.
 
-To subscribe, send an email to: **tesseras-subscribe@lists.tesseras.net**
+#### tesseras-announce
 
-To unsubscribe: **tesseras-unsubscribe@lists.tesseras.net**
+Release announcements, milestones, and important project news. Low-traffic, read-only.
 
-[Browse the list archives](https://lists.tesseras.net/tesseras/)
+- Subscribe: [~ijanc/tesseras-announce@lists.sr.ht](mailto:~ijanc/tesseras-announce+subscribe@lists.sr.ht)
+- [Browse archives](https://lists.sr.ht/~ijanc/tesseras-announce)
+
+#### tesseras-devel
+
+Patches, code review, architecture discussion, and development coordination.
+
+- Subscribe: [~ijanc/tesseras-devel@lists.sr.ht](mailto:~ijanc/tesseras-devel+subscribe@lists.sr.ht)
+- [Browse archives](https://lists.sr.ht/~ijanc/tesseras-devel)
+
+#### tesseras-discuss
+
+User support, general discussion, questions, and community conversation.
+
+- Subscribe: [~ijanc/tesseras-discuss@lists.sr.ht](mailto:~ijanc/tesseras-discuss+subscribe@lists.sr.ht)
+- [Browse archives](https://lists.sr.ht/~ijanc/tesseras-discuss)
+
+#### tesseras-security
+
+Responsible disclosure of security vulnerabilities. Restricted to maintainers; reports are welcome from anyone.
+
+- Report: [~ijanc/tesseras-security@lists.sr.ht](mailto:~ijanc/tesseras-security@lists.sr.ht)
+- [Browse archives](https://lists.sr.ht/~ijanc/tesseras-security)
 
 ### Atom Feeds
 

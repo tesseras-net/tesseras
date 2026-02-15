@@ -80,7 +80,7 @@ Não há capital de risco por trás do Tesseras. Nenhuma métrica de crescimento
 
 ## Status Atual
 
-Tesseras está em desenvolvimento ativo. O formato base, as fundações criptográficas e a rede básica estão construídos. Estamos trabalhando em direção a uma rede peer-to-peer totalmente funcional com replicação ativa e reparo.
+Tesseras está na Fase 4 — Resiliência e Escala. O formato base, as fundações criptográficas, a rede peer-to-peer, a replicação ativa com erasure coding, a API GraphQL e o app Flutter estão construídos. Estamos agora trabalhando em Shamir's Secret Sharing para recuperação de chaves por herdeiros, NAT traversal avançado e ajuste de performance.
 
 Este é um projeto de longo prazo. Medimos progresso em décadas, não em trimestres.
 
@@ -89,6 +89,6 @@ Este é um projeto de longo prazo. Medimos progresso em décadas, não em trimes
 Se você acredita que a memória humana merece ser preservada — não como um produto, não como um serviço, mas como um direito fundamental — adoraríamos sua ajuda.
 
 - Leia o [FAQ](/pt-br/faq/) para saber mais
-- Entre na [lista de discussão](/pt-br/subscriptions/) para atualizações
+- Entre nas [listas de discussão](/pt-br/subscriptions/) para atualizações
 - Navegue pelo [código-fonte](https://git.sr.ht/~ijanc/tesseras)
 - [Fale conosco](/pt-br/contact/) diretamente

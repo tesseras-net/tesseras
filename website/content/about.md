@@ -80,7 +80,7 @@ There is no venture capital behind Tesseras. No growth metrics to hit. No exit s
 
 ## Current Status
 
-Tesseras is in active development. The core format, cryptographic foundations, and basic network are built. We are working toward a fully functional peer-to-peer network with active replication and repair.
+Tesseras is in Phase 4 — Resilience and Scale. The core format, cryptographic foundations, peer-to-peer network, active replication with erasure coding, GraphQL API, and Flutter app are built. We are now working on Shamir's Secret Sharing for heir key recovery, advanced NAT traversal, and performance tuning.
 
 This is a long-term project. We measure progress in decades, not quarters.
 
@@ -89,6 +89,6 @@ This is a long-term project. We measure progress in decades, not quarters.
 If you believe that human memory is worth preserving — not as a product, not as a service, but as a fundamental right — we'd love your help.
 
 - Read the [FAQ](/faq/) to learn more
-- Join the [mailing list](/subscriptions/) for updates
+- Join the [mailing lists](/subscriptions/) for updates
 - Browse the [source code](https://git.sr.ht/~ijanc/tesseras)
 - [Contact us](/contact/) directly

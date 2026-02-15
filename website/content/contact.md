@@ -3,9 +3,14 @@ title = "Contact"
 description = "Contact the Tesseras project"
 +++
 
-### Mailing List
+### Mailing Lists
 
-The best way to reach the project is through the [mailing list](/subscriptions/).
+The best way to reach the project is through the [mailing lists](/subscriptions/):
+
+- [tesseras-discuss](https://lists.sr.ht/~ijanc/tesseras-discuss) — questions, support, general discussion
+- [tesseras-devel](https://lists.sr.ht/~ijanc/tesseras-devel) — patches and development
+- [tesseras-announce](https://lists.sr.ht/~ijanc/tesseras-announce) — releases and milestones
+- [tesseras-security](https://lists.sr.ht/~ijanc/tesseras-security) — vulnerability reports
 
 ### Source Code
 
