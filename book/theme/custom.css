@@ -1,0 +1,44 @@
+/* === Tesseras Light Theme === */
+.light {
+    --bg: #faf8f5;
+    --fg: #2c2c2c;
+    --sidebar-bg: #1e3a5f;
+    --sidebar-fg: #e2ddd5;
+    --sidebar-non-existant: #8da4be;
+    --sidebar-active: #d4a84b;
+    --sidebar-spacer: #2a4a6f;
+    --scrollbar: #3a5a7f;
+    --icons: #6a8aaa;
+    --icons-hover: #d4a84b;
+    --links: #2a5a8f;
+    --inline-code-color: #1e3a5f;
+    --theme-popup-bg: #faf8f5;
+    --theme-popup-border: #d4cfc8;
+    --theme-hover: #f0ece6;
+    --quote-bg: #f0ece6;
+    --quote-border: #d4a84b;
+    --warning-border: #d4a84b;
+    --table-border-color: #d4cfc8;
+    --table-header-bg: #f0ece6;
+    --table-alternate-bg: #faf8f5;
+    --searchbar-border-color: #d4cfc8;
+    --searchbar-bg: #fff;
+    --searchbar-fg: #2c2c2c;
+    --searchbar-shadow-color: rgba(30, 58, 95, 0.1);
+    --searchresults-header-fg: #1e3a5f;
+    --searchresults-border-color: #d4cfc8;
+    --searchresults-li-bg: #f0ece6;
+    --search-mark-bg: #f5dfa0;
+}
+
+/* === Sidebar Logo === */
+#mdbook-sidebar mdbook-sidebar-scrollbox {
+    top: 100px;
+}
+
+#mdbook-sidebar {
+    background-image: url("../images/logo.png");
+    background-repeat: no-repeat;
+    background-position: center 20px;
+    background-size: 60px auto;
+}
