@@ -1,0 +1,39 @@
+# Mutation Testing Report v1
+# Date: 2026-02-15
+# cargo-mutants version: 26.2.0
+# Files: dual.rs, sealed.rs
+
+## dual.rs
+
+Found 3 mutants to test
+ok       Unmutated baseline in 6s build + 9s test
+3 mutants tested in 33s: 2 caught, 1 unviable
+
+Result: ALL CAUGHT (1 unviable = compile error, not a test gap)
+
+## sealed.rs
+
+Found 16 mutants to test
+ok       Unmutated baseline in 6s build + 3s test
+MISSED   crates/tesseras-crypto/src/sealed.rs:54:27: replace < with == in SealedKeyEnvelope::unseal
+MISSED   crates/tesseras-crypto/src/sealed.rs:54:27: replace < with <= in SealedKeyEnvelope::unseal
+MISSED   crates/tesseras-crypto/src/sealed.rs:106:9: replace KeyPublication::signing_message -> Vec<u8> with vec![]
+MISSED   crates/tesseras-crypto/src/sealed.rs:106:9: replace KeyPublication::signing_message -> Vec<u8> with vec![0]
+MISSED   crates/tesseras-crypto/src/sealed.rs:106:9: replace KeyPublication::signing_message -> Vec<u8> with vec![1]
+16 mutants tested in 2m: 5 missed, 9 caught, 2 unviable
+
+## Analysis of Surviving Mutations
+
+### sealed.rs:54 — unseal boundary check (< to == or <=)
+Line: `if ct_bytes.len() < 32`
+The mutations `< → ==` and `< → <=` survive because no test provides a ciphertext
+that is exactly 32 bytes long. The current test only exercises the happy path (valid
+ciphertext >> 32 bytes) and wrong keypair. Need: test with ciphertext shorter than
+32 bytes AND test with exactly 32 bytes.
+
+### sealed.rs:106 — KeyPublication::signing_message
+The mutations replacing the signing message body with empty/trivial vectors survive
+because no test verifies that changing any field in the KeyPublication causes
+verification to fail. The existing `key_publication_wrong_signer` test only tests
+wrong signing key, not tampered fields. Need: test that changing tessera_hash,
+content_key, or published_at causes verify() to fail.
