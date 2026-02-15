@@ -103,10 +103,7 @@ impl FragmentStore for CachedFragmentStore {
         Ok(())
     }
 
-    fn list_fragments(
-        &self,
-        tessera_hash: &ContentHash,
-    ) -> Result<Vec<FragmentId>, CoreError> {
+    fn list_fragments(&self, tessera_hash: &ContentHash) -> Result<Vec<FragmentId>, CoreError> {
         self.inner.list_fragments(tessera_hash)
     }
 

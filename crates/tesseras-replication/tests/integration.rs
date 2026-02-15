@@ -278,9 +278,6 @@ async fn institutional_node_accepts_fragment_despite_deficit() {
     };
 
     // Should accept despite massive deficit because sender is institutional
-    let ack = service
-        .receive_fragment(envelope, &sender)
-        .await
-        .unwrap();
+    let ack = service.receive_fragment(envelope, &sender).await.unwrap();
     assert!(ack.accepted);
 }

@@ -199,8 +199,7 @@ impl ReplicationService {
         };
 
         let peers = apply_subnet_diversity(&candidates, 2);
-        let peers =
-            crate::distributor::apply_institutional_diversity(&peers, replication_factor);
+        let peers = crate::distributor::apply_institutional_diversity(&peers, replication_factor);
 
         let target_peers = &peers[..peers.len().min(replication_factor)];
         let mut peers_contacted = 0;

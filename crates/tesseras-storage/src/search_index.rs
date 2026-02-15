@@ -1,10 +1,10 @@
 use std::sync::{Arc, Mutex};
 
+use tesseras_core::CoreError;
 use tesseras_core::enums::Visibility;
 use tesseras_core::ports::SearchIndex;
 use tesseras_core::search::{MetadataExcerpt, SearchFilters, SearchHit};
 use tesseras_core::types::ContentHash;
-use tesseras_core::CoreError;
 
 /// SQLite-backed search index using FTS5 and R-tree.
 pub struct SqliteSearchIndex {
@@ -289,10 +289,7 @@ mod tests {
         assert_eq!(total, 1);
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].hash, hash(0x01));
-        assert_eq!(
-            hits[0].metadata.title,
-            Some("São Paulo memories".into())
-        );
+        assert_eq!(hits[0].metadata.title, Some("São Paulo memories".into()));
     }
 
     #[test]
@@ -315,9 +312,7 @@ mod tests {
             .unwrap();
         }
 
-        let (hits, total) = idx
-            .search("", &SearchFilters::default(), 0, 10)
-            .unwrap();
+        let (hits, total) = idx.search("", &SearchFilters::default(), 0, 10).unwrap();
         assert_eq!(total, 3);
         assert_eq!(hits.len(), 3);
     }
@@ -342,15 +337,11 @@ mod tests {
             .unwrap();
         }
 
-        let (hits, total) = idx
-            .search("", &SearchFilters::default(), 0, 2)
-            .unwrap();
+        let (hits, total) = idx.search("", &SearchFilters::default(), 0, 2).unwrap();
         assert_eq!(total, 5);
         assert_eq!(hits.len(), 2);
 
-        let (hits2, _) = idx
-            .search("", &SearchFilters::default(), 1, 2)
-            .unwrap();
+        let (hits2, _) = idx.search("", &SearchFilters::default(), 1, 2).unwrap();
         assert_eq!(hits2.len(), 2);
     }
 
@@ -374,9 +365,7 @@ mod tests {
 
         idx.remove_tessera(&hash(0x01)).unwrap();
 
-        let (hits, total) = idx
-            .search("", &SearchFilters::default(), 0, 10)
-            .unwrap();
+        let (hits, total) = idx.search("", &SearchFilters::default(), 0, 10).unwrap();
         assert_eq!(total, 0);
         assert!(hits.is_empty());
     }

@@ -41,9 +41,7 @@ pub async fn run_setup(domain: &str, check: bool, data_dir: &str) -> Result<()> 
         run_check(domain, &identity).await
     } else {
         println!("Add this DNS TXT record:\n");
-        println!(
-            "  _tesseras.{domain} TXT \"v=tesseras1 node={node_hex} pubkey={pubkey_hex}\""
-        );
+        println!("  _tesseras.{domain} TXT \"v=tesseras1 node={node_hex} pubkey={pubkey_hex}\"");
         println!();
         println!("Then add to ~/.tesseras/config.toml:");
         println!();
@@ -57,10 +55,7 @@ pub async fn run_setup(domain: &str, check: bool, data_dir: &str) -> Result<()> 
     }
 }
 
-async fn run_check(
-    domain: &str,
-    identity: &tesseras_core::NodeIdentity,
-) -> Result<()> {
+async fn run_check(domain: &str, identity: &tesseras_core::NodeIdentity) -> Result<()> {
     use hickory_resolver::TokioResolver;
 
     let resolver: TokioResolver = TokioResolver::builder_tokio()
