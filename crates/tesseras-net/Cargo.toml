@@ -15,6 +15,7 @@ rmp-serde = { workspace = true }
 serde = { workspace = true }
 rand = { workspace = true }
 ed25519-dalek = { workspace = true }
+prometheus = { workspace = true }
 
 # Optional QUIC dependencies
 quinn = { workspace = true, optional = true }

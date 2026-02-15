@@ -3,6 +3,7 @@
 pub mod codec;
 pub mod error;
 pub mod mem;
+pub mod metrics;
 pub mod punch;
 #[cfg(feature = "quic")]
 pub mod quinn_transport;
