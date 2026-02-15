@@ -259,18 +259,12 @@ pub async fn run_reconstruct(
     let recovered_blob = ShamirSplitter::reconstruct(&shares, expected_public.as_deref())
         .context("reconstruction failed")?;
 
-    // Parse the blob
-    if recovered_blob.len() < 34 || recovered_blob[0] != 0x01 {
-        bail!("reconstructed blob has invalid format");
-    }
-    let ed25519_secret = &recovered_blob[2..34];
+    // Parse the blob using shared secret_blob module
+    let parsed = secret_blob::parse(&recovered_blob)
+        .context("failed to parse reconstructed secret blob")?;
 
-    // Derive public key to verify
-    let signing_key = ed25519_dalek::SigningKey::from_bytes(
-        ed25519_secret
-            .try_into()
-            .context("invalid ed25519 secret length")?,
-    );
+    // Derive Ed25519 public key to verify
+    let signing_key = ed25519_dalek::SigningKey::from_bytes(&parsed.ed25519_secret);
     let public_key = signing_key.verifying_key();
 
     let fingerprint: String = {
@@ -281,6 +275,14 @@ pub async fn run_reconstruct(
             .collect()
     };
 
+    // Verify fingerprint if requested
+    if let Some(expected_fp) = verify_identity {
+        if fingerprint != expected_fp {
+            bail!("fingerprint mismatch: reconstructed={fingerprint}, expected={expected_fp}");
+        }
+        println!("Fingerprint verified: {fingerprint}");
+    }
+
     println!("Reconstruction successful.");
     println!("Owner fingerprint: {fingerprint}");
 
@@ -289,8 +291,24 @@ pub async fn run_reconstruct(
     std::fs::create_dir_all(&out_path).context("failed to create output directory")?;
 
     // Write Ed25519 key pair
-    std::fs::write(out_path.join("node.ed25519.key"), ed25519_secret)?;
+    std::fs::write(out_path.join("node.ed25519.key"), &parsed.ed25519_secret)?;
     std::fs::write(out_path.join("node.ed25519.pub"), public_key.as_bytes())?;
+
+    // Write X25519 if present
+    if let Some(x_secret) = &parsed.x25519_secret {
+        let x_static = x25519_dalek::StaticSecret::from(*x_secret);
+        let x_public = x25519_dalek::PublicKey::from(&x_static);
+        std::fs::write(out_path.join("node.x25519.key"), x_secret)?;
+        std::fs::write(out_path.join("node.x25519.pub"), x_public.as_bytes())?;
+        println!("  X25519 keys recovered");
+    }
+
+    // Write ML-KEM-768 if present
+    if let Some(mlkem_secret) = &parsed.mlkem768_secret {
+        std::fs::write(out_path.join("node.mlkem768.key"), mlkem_secret)?;
+        println!("  ML-KEM-768 secret recovered (public key regenerated on next init)");
+    }
+
     println!("Keys written to {output_dir}/");
 
     // Install if requested
@@ -325,15 +343,15 @@ pub async fn run_reconstruct(
         }
         std::fs::create_dir_all(&identity_dir)?;
 
-        // Copy reconstructed keys
-        std::fs::copy(
-            out_path.join("node.ed25519.key"),
-            identity_dir.join("node.ed25519.key"),
-        )?;
-        std::fs::copy(
-            out_path.join("node.ed25519.pub"),
-            identity_dir.join("node.ed25519.pub"),
-        )?;
+        // Copy all reconstructed keys
+        for entry in std::fs::read_dir(&out_path)? {
+            let entry = entry?;
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+            if name_str.starts_with("node.") && (name_str.ends_with(".key") || name_str.ends_with(".pub")) {
+                std::fs::copy(entry.path(), identity_dir.join(&name))?;
+            }
+        }
 
         println!("Identity installed at {}", identity_dir.display());
     }
