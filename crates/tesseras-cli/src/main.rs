@@ -154,8 +154,7 @@ async fn main() -> Result<()> {
                 output_dir,
                 yes,
             } => {
-                commands::heir::run_create(threshold, shares, &output_dir, yes, &cli.data_dir)
-                    .await
+                commands::heir::run_create(threshold, shares, &output_dir, yes, &cli.data_dir).await
             }
             commands::heir::HeirCommands::Reconstruct {
                 share_files,

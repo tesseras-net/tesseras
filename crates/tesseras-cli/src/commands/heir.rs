@@ -189,10 +189,7 @@ pub async fn run_create(
     println!();
     for share in &heir_shares {
         let idx = share.share_index;
-        println!(
-            "  Share {idx}: {}/heir_share_{idx}.{{bin,txt}}",
-            output_dir
-        );
+        println!("  Share {idx}: {}/heir_share_{idx}.{{bin,txt}}", output_dir);
     }
     println!();
     println!("IMPORTANT: Distribute shares to different people/locations.");
@@ -234,8 +231,8 @@ pub async fn run_reconstruct(
         None
     };
 
-    let recovered_blob =
-        ShamirSplitter::reconstruct(&shares, expected_public.as_deref()).context("reconstruction failed")?;
+    let recovered_blob = ShamirSplitter::reconstruct(&shares, expected_public.as_deref())
+        .context("reconstruction failed")?;
 
     // Parse the blob
     if recovered_blob.len() < 34 || recovered_blob[0] != 0x01 {
