@@ -52,6 +52,7 @@ pqcrypto-traits = "0.3"
 
 # Storage
 rusqlite = { version = "0.33" }
+lru = "0.12"
 
 # CLI
 clap = { version = "4", features = ["derive", "color"] }
