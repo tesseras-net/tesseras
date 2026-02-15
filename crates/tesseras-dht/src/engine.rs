@@ -421,6 +421,9 @@ impl DhtEngine {
                 }
                 None
             }
+
+            // Search messages are handled at the application layer, not the DHT engine.
+            Message::Search { .. } | Message::SearchResult { .. } => None,
         }
     }
 

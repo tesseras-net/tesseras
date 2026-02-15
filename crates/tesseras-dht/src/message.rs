@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use tesseras_core::network::NatType;
 use tesseras_core::replication::{Attestation, FragmentEnvelope, ReplicateAck};
+use tesseras_core::search::{SearchFilters, SearchHit};
 use tesseras_core::{Capabilities, ContentHash, NodeId, NodeIdentity, NodeInfo, TesseraPointer};
 
 /// Why a relay session was closed.
@@ -137,6 +138,19 @@ pub enum Message {
         /// Ed25519 signature over (session_token || timestamp).
         signature: Vec<u8>,
     },
+
+    // --- Institutional Search (Phase 5) ---
+    /// Full-text search request forwarded to institutional nodes with SEARCH_INDEX capability.
+    Search {
+        query: String,
+        filters: SearchFilters,
+        page: u32,
+    },
+    /// Search results returned by an institutional node.
+    SearchResult {
+        hits: Vec<SearchHit>,
+        total: u64,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -145,9 +159,9 @@ pub enum FindValueResult {
     Nodes(Vec<NodeInfo>),
 }
 
-/// Encode a Message to MessagePack bytes.
+/// Encode a Message to MessagePack bytes (named fields for forward-compatibility).
 pub fn encode(msg: &Message) -> Result<Vec<u8>, String> {
-    rmp_serde::to_vec(msg).map_err(|e| e.to_string())
+    rmp_serde::to_vec_named(msg).map_err(|e| e.to_string())
 }
 
 /// Decode a Message from MessagePack bytes.
@@ -522,6 +536,68 @@ mod tests {
             } => {
                 assert_eq!(nat_type, None);
                 assert_eq!(relay_slots_available, None);
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    // --- Institutional Search message round-trips ---
+
+    #[test]
+    fn search_message_serde_roundtrip() {
+        use tesseras_core::enums::MemoryType;
+        use tesseras_core::search::SearchFilters;
+
+        let msg = Message::Search {
+            query: "memórias de São Paulo".to_string(),
+            filters: SearchFilters {
+                memory_type: Some(MemoryType::Moment),
+                language: Some("pt-BR".to_string()),
+                ..Default::default()
+            },
+            page: 0,
+        };
+        let decoded = roundtrip(&msg);
+        match decoded {
+            Message::Search {
+                query,
+                filters,
+                page,
+            } => {
+                assert_eq!(query, "memórias de São Paulo");
+                assert_eq!(filters.language.as_deref(), Some("pt-BR"));
+                assert_eq!(page, 0);
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn search_result_message_serde_roundtrip() {
+        use tesseras_core::enums::MemoryType;
+        use tesseras_core::search::{MetadataExcerpt, SearchHit};
+
+        let msg = Message::SearchResult {
+            hits: vec![SearchHit {
+                hash: ContentHash::new([0xaa; 32]),
+                metadata: MetadataExcerpt {
+                    title: Some("Dia em SP".to_string()),
+                    description: Some("Um dia qualquer".to_string()),
+                    memory_type: Some(MemoryType::Daily),
+                    created_at: Some(chrono::Utc::now()),
+                    visibility: Visibility::Public,
+                    language: Some("pt-BR".to_string()),
+                    tags: vec!["cotidiano".into()],
+                },
+            }],
+            total: 42,
+        };
+        let decoded = roundtrip(&msg);
+        match decoded {
+            Message::SearchResult { hits, total } => {
+                assert_eq!(total, 42);
+                assert_eq!(hits.len(), 1);
+                assert_eq!(hits[0].metadata.title.as_deref(), Some("Dia em SP"));
             }
             _ => panic!("wrong variant"),
         }
