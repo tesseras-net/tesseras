@@ -2301,6 +2301,7 @@ name = "tesseras-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "blake3",
  "chrono",
  "clap",
  "clap_complete",
@@ -2308,6 +2309,8 @@ dependencies = [
  "dialoguer",
  "ed25519-dalek",
  "rusqlite",
+ "serde",
+ "serde_json",
  "tesseras-core",
  "tesseras-crypto",
  "tesseras-storage",
@@ -2342,6 +2345,7 @@ name = "tesseras-crypto"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",
+ "base64",
  "blake3",
  "chrono",
  "ed25519-dalek",
@@ -2350,6 +2354,8 @@ dependencies = [
  "proptest",
  "rand 0.8.5",
  "reed-solomon-erasure",
+ "rmp-serde",
+ "serde",
  "tesseras-core",
  "thiserror 2.0.18",
  "x25519-dalek",
