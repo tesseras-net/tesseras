@@ -64,6 +64,8 @@ pub struct KeyMaterial {
 pub enum KeyAlgorithm {
     Ed25519,
     MlDsa,
+    X25519,
+    MlKem768,
 }
 
 /// Content hasher port (abstracts BLAKE3 or other hash).

@@ -1,9 +1,18 @@
 use crate::{ContentHash, CoreError, Manifest, Memory};
 
+/// Public half of a hybrid encryption keypair (X25519 + ML-KEM-768).
+/// Both keys are always present together — impossible to have one without the other.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HybridEncryptionPublic {
+    pub x25519: [u8; 32],
+    pub mlkem768: Vec<u8>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct TesseraIdentity {
     pub ed25519_public: Vec<u8>,
     pub mldsa_public: Option<Vec<u8>>,
+    pub encryption_public: Option<HybridEncryptionPublic>,
     pub heir_keys: Vec<Vec<u8>>,
 }
 
@@ -68,6 +77,7 @@ mod tests {
         TesseraIdentity {
             ed25519_public: vec![0xaa; 32],
             mldsa_public: None,
+            encryption_public: None,
             heir_keys: vec![],
         }
     }

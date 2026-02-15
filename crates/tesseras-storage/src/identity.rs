@@ -16,6 +16,8 @@ impl FsIdentityStore {
         let name = match algorithm {
             KeyAlgorithm::Ed25519 => "node.ed25519",
             KeyAlgorithm::MlDsa => "node.mldsa",
+            KeyAlgorithm::X25519 => "node.x25519",
+            KeyAlgorithm::MlKem768 => "node.mlkem768",
         };
         self.base_path.join("identity").join(name)
     }
