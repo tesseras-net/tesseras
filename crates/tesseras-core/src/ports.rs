@@ -133,6 +133,8 @@ pub trait ReciprocityLedger: Send + Sync {
     fn record_peer_stores_for_us(&self, peer: &NodeId, bytes: u64) -> Result<(), CoreError>;
     fn balance(&self, peer: &NodeId) -> Result<i64, CoreError>;
     fn best_peers_for_replication(&self, count: usize) -> Result<Vec<NodeId>, CoreError>;
+    fn mark_institutional(&self, peer: &NodeId) -> Result<(), CoreError>;
+    fn is_institutional(&self, peer: &NodeId) -> Result<bool, CoreError>;
 }
 
 /// Search index for public tesseras (institutional nodes).

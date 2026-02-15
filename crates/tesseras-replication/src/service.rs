@@ -99,18 +99,21 @@ impl ReplicationService {
             });
         }
 
-        // 4. Check reciprocity balance
-        let balance = self.ledger.balance(sender)?;
-        if balance < -(self.config.accept_deficit_up_to_bytes as i64) {
-            tracing::warn!(
-                peer = %sender,
-                balance,
-                "rejecting fragment: reciprocity deficit too high"
-            );
-            return Ok(ReplicateAck {
-                accepted: false,
-                fragments_held: Vec::new(),
-            });
+        // 4. Check reciprocity balance (skip for institutional peers)
+        let is_institutional = self.ledger.is_institutional(sender)?;
+        if !is_institutional {
+            let balance = self.ledger.balance(sender)?;
+            if balance < -(self.config.accept_deficit_up_to_bytes as i64) {
+                tracing::warn!(
+                    peer = %sender,
+                    balance,
+                    "rejecting fragment: reciprocity deficit too high"
+                );
+                return Ok(ReplicateAck {
+                    accepted: false,
+                    fragments_held: Vec::new(),
+                });
+            }
         }
 
         // 5. Store the fragment
@@ -412,6 +415,8 @@ mod tests {
             fn record_peer_stores_for_us(&self, peer: &NodeId, bytes: u64) -> Result<(), CoreError>;
             fn balance(&self, peer: &NodeId) -> Result<i64, CoreError>;
             fn best_peers_for_replication(&self, count: usize) -> Result<Vec<NodeId>, CoreError>;
+            fn mark_institutional(&self, peer: &NodeId) -> Result<(), CoreError>;
+            fn is_institutional(&self, peer: &NodeId) -> Result<bool, CoreError>;
         }
     }
 
@@ -475,6 +480,7 @@ mod tests {
             .returning(|_| Ok(vec![]));
 
         let mut ledger = MockLedger::new();
+        ledger.expect_is_institutional().returning(|_| Ok(false));
         ledger.expect_balance().returning(|_| Ok(100));
         ledger
             .expect_record_stored_for_peer()
@@ -504,8 +510,7 @@ mod tests {
 
     #[tokio::test]
     async fn receive_fragment_rejects_bad_checksum() {
-        let mut ledger = MockLedger::new();
-        ledger.expect_balance().returning(|_| Ok(100));
+        let ledger = MockLedger::new();
 
         let service = ReplicationService::new(
             NodeIdentity {
@@ -532,6 +537,7 @@ mod tests {
     #[tokio::test]
     async fn receive_fragment_rejects_high_deficit() {
         let mut ledger = MockLedger::new();
+        ledger.expect_is_institutional().returning(|_| Ok(false));
         ledger.expect_balance().returning(|_| Ok(-500_000_000)); // -500 MB
 
         let service = ReplicationService::new(
@@ -553,6 +559,48 @@ mod tests {
             .await
             .unwrap();
         assert!(!ack.accepted);
+    }
+
+    #[tokio::test]
+    async fn receive_fragment_accepts_from_institutional_despite_deficit() {
+        let mut fragments = MockFragments::new();
+        fragments
+            .expect_store_fragment()
+            .once()
+            .returning(|_, _| Ok(()));
+        fragments
+            .expect_list_fragments()
+            .once()
+            .returning(|_| Ok(vec![]));
+
+        let mut ledger = MockLedger::new();
+        ledger.expect_is_institutional().returning(|_| Ok(true));
+        // balance() should NOT be called when institutional
+        ledger.expect_balance().never();
+        ledger
+            .expect_record_stored_for_peer()
+            .once()
+            .returning(|_, _| Ok(()));
+
+        let service = ReplicationService::new(
+            NodeIdentity {
+                node_id: node(0xff),
+                public_key: [0; 32],
+                nonce: 0,
+            },
+            Box::new(MockDht::new()),
+            Box::new(fragments),
+            Box::new(ledger),
+            Box::new(MockBlobs::new()),
+            ReplicationConfig::default(),
+        );
+
+        let envelope = make_valid_envelope();
+        let ack = service
+            .receive_fragment(envelope, &node(0x01))
+            .await
+            .unwrap();
+        assert!(ack.accepted);
     }
 
     fn make_node_info(fill: u8, port: u16) -> NodeInfo {

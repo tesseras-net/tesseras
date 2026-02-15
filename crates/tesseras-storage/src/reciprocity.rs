@@ -66,6 +66,32 @@ impl ReciprocityLedger for SqliteReciprocityLedger {
         }
     }
 
+    fn mark_institutional(&self, peer: &NodeId) -> Result<(), CoreError> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO reciprocity (peer_id, bytes_stored_for_them, bytes_they_store_for_us, is_institutional, last_updated)
+             VALUES (?1, 0, 0, 1, ?2)
+             ON CONFLICT(peer_id) DO UPDATE SET is_institutional = 1, last_updated = ?2",
+            rusqlite::params![peer.to_string(), chrono::Utc::now().to_rfc3339()],
+        )
+        .map_err(|e| CoreError::Database(e.to_string()))?;
+        Ok(())
+    }
+
+    fn is_institutional(&self, peer: &NodeId) -> Result<bool, CoreError> {
+        let conn = self.conn.lock().unwrap();
+        let result = conn.query_row(
+            "SELECT is_institutional FROM reciprocity WHERE peer_id = ?1",
+            rusqlite::params![peer.to_string()],
+            |row| row.get::<_, bool>(0),
+        );
+        match result {
+            Ok(v) => Ok(v),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false),
+            Err(e) => Err(CoreError::Database(e.to_string())),
+        }
+    }
+
     fn best_peers_for_replication(&self, count: usize) -> Result<Vec<NodeId>, CoreError> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn
@@ -133,6 +159,17 @@ mod tests {
         ledger.record_stored_for_peer(&node(0x01), 1000).unwrap();
         ledger.record_peer_stores_for_us(&node(0x01), 700).unwrap();
         assert_eq!(ledger.balance(&node(0x01)).unwrap(), -300); // 700 - 1000
+    }
+
+    #[test]
+    fn mark_and_check_institutional() {
+        let ledger = setup();
+        let peer = node(0x01);
+        // Not institutional by default
+        assert!(!ledger.is_institutional(&peer).unwrap());
+        // Mark as institutional
+        ledger.mark_institutional(&peer).unwrap();
+        assert!(ledger.is_institutional(&peer).unwrap());
     }
 
     #[test]
