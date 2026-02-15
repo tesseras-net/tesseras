@@ -2,6 +2,7 @@
 
 pub mod blob;
 pub mod cache;
+pub mod cas;
 pub mod database;
 pub mod error;
 pub mod fragment;
@@ -13,6 +14,7 @@ pub mod sqlite;
 
 pub use blob::FsBlobStore;
 pub use cache::CachedFragmentStore;
+pub use cas::CasStore;
 pub use database::{StorageConfig, open_database, open_in_memory};
 pub use error::StorageError;
 pub use fragment::FsFragmentStore;
