@@ -195,27 +195,52 @@ async fn main() -> Result<()> {
     tracing::info!("database opened with WAL mode");
     let conn = Arc::new(Mutex::new(conn));
 
-    // 7c. Create storage instances with LRU fragment cache
-    let fs_fragments =
-        FsFragmentStore::new(Arc::clone(&conn), config.node.data_dir.join("fragments"));
+    // 7c. Create CAS store (shared by blob and fragment stores)
+    let cas = Arc::new(tesseras_storage::CasStore::new(
+        Arc::clone(&conn),
+        config.node.data_dir.join("cas"),
+    ));
+
+    // 7c2. Run CAS dedup migration if needed (storage_version 1 -> 2)
+    let migration_stats = tesseras_storage::migrate_to_cas(
+        &config.node.data_dir,
+        &cas,
+        &conn,
+    )
+    .with_context(|| "failed to run CAS dedup migration")?;
+    if migration_stats.files_migrated > 0 {
+        tracing::info!(
+            files = migration_stats.files_migrated,
+            duplicates = migration_stats.duplicates_found,
+            bytes_saved = migration_stats.bytes_saved,
+            failed = migration_stats.files_failed,
+            "CAS dedup migration completed"
+        );
+    }
+
+    // 7d. Create storage instances with LRU fragment cache
+    let fs_fragments = FsFragmentStore::new(Arc::clone(&conn), Arc::clone(&cas));
     let fragment_store = tesseras_storage::CachedFragmentStore::new(
         Box::new(fs_fragments),
         (storage_config.fragment_cache_size_mb as usize) * 1024 * 1024,
     );
     let reciprocity_ledger = SqliteReciprocityLedger::new(Arc::clone(&conn));
-    let blob_store = FsBlobStore::new(config.node.data_dir.join("blobs"));
+    let blob_store = FsBlobStore::new(Arc::clone(&conn), Arc::clone(&cas));
 
     // 7d. Create replication service
     let dht_adapter = DhtPortAdapter::new(Arc::clone(&engine));
     let replication_config = config.to_replication_config();
-    let replication = Arc::new(ReplicationService::new(
-        identity,
-        Box::new(dht_adapter),
-        Box::new(fragment_store),
-        Box::new(reciprocity_ledger),
-        Box::new(blob_store),
-        replication_config,
-    ));
+    let replication = Arc::new(
+        ReplicationService::new(
+            identity,
+            Box::new(dht_adapter),
+            Box::new(fragment_store),
+            Box::new(reciprocity_ledger),
+            Box::new(blob_store),
+            replication_config,
+        )
+        .with_cas(Arc::clone(&cas)),
+    );
 
     // 7e. Wire replication handler into DHT engine
     let handler = ReplicationHandlerAdapter {

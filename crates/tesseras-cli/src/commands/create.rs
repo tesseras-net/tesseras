@@ -149,10 +149,15 @@ pub fn build_service(base: &Path) -> Result<tesseras_core::TesseraService> {
     let verifier = CryptoVerifier;
     let hasher = CryptoHasher;
 
+    let cas = Arc::new(tesseras_storage::CasStore::new(
+        Arc::clone(&conn),
+        base.join("cas"),
+    ));
+
     Ok(tesseras_core::TesseraService::new(
         Box::new(tesseras_storage::SqliteTesseraRepository::new(conn.clone())),
-        Box::new(tesseras_storage::SqliteMemoryRepository::new(conn)),
-        Box::new(tesseras_storage::FsBlobStore::new(base.join("blobs"))),
+        Box::new(tesseras_storage::SqliteMemoryRepository::new(conn.clone())),
+        Box::new(tesseras_storage::FsBlobStore::new(conn, cas)),
         Box::new(hasher),
         Box::new(signer),
         Box::new(verifier),

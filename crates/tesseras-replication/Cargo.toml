@@ -15,6 +15,7 @@ tracing = { workspace = true }
 chrono = { workspace = true }
 blake3 = { workspace = true }
 rand = { workspace = true }
+tesseras-storage = { workspace = true }
 
 [dev-dependencies]
 mockall = { workspace = true }

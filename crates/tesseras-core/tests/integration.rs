@@ -82,10 +82,14 @@ fn setup() -> (TesseraService, TempDir) {
     let conn = rusqlite::Connection::open_in_memory().unwrap();
     tesseras_storage::run_migrations(&conn).unwrap();
     let conn = Arc::new(Mutex::new(conn));
+    let cas = Arc::new(tesseras_storage::CasStore::new(
+        Arc::clone(&conn),
+        dir.path().join("cas"),
+    ));
     let service = TesseraService::new(
         Box::new(SqliteTesseraRepository::new(conn.clone())),
-        Box::new(SqliteMemoryRepository::new(conn)),
-        Box::new(FsBlobStore::new(dir.path().join("blobs"))),
+        Box::new(SqliteMemoryRepository::new(conn.clone())),
+        Box::new(FsBlobStore::new(conn, cas)),
         Box::new(TestHasher),
         Box::new(TestSigner::new()),
         Box::new(TestVerifier),
@@ -179,15 +183,20 @@ async fn verify_detects_tampered_file() {
 
     let hash = service.create(input).await.unwrap();
 
-    // Tamper with the stored blob
-    let blob_dir = dir.path().join("blobs").join(hash.to_string());
-    for entry in std::fs::read_dir(&blob_dir).unwrap() {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        if path.is_dir() {
-            let media = path.join("media.jpg");
-            if media.exists() {
-                std::fs::write(&media, b"tampered data").unwrap();
+    // Tamper with the file-content blob in CAS (only the one matching our original data)
+    let cas_dir = dir.path().join("cas");
+    for prefix_entry in std::fs::read_dir(&cas_dir).unwrap() {
+        let prefix_entry = prefix_entry.unwrap();
+        if prefix_entry.file_type().unwrap().is_dir() {
+            for blob_entry in std::fs::read_dir(prefix_entry.path()).unwrap() {
+                let blob_entry = blob_entry.unwrap();
+                let path = blob_entry.path();
+                if path.extension().and_then(|e| e.to_str()) == Some("blob") {
+                    let content = std::fs::read(&path).unwrap();
+                    if content == b"original data" {
+                        std::fs::write(&path, b"tampered data").unwrap();
+                    }
+                }
             }
         }
     }
@@ -218,19 +227,28 @@ async fn verify_detects_bad_signature() {
 
     let hash = service.create(input).await.unwrap();
 
-    // Tamper with the signature (swap bytes to invalidate)
-    let sig_path = dir
-        .path()
-        .join("blobs")
-        .join(hash.to_string())
-        .join(hash.to_string())
-        .join("ed25519.sig");
-    let mut sig_bytes = std::fs::read(&sig_path).unwrap();
-    // Flip some bytes to invalidate the signature
-    for b in sig_bytes.iter_mut().take(8) {
-        *b ^= 0xff;
+    // Tamper with the signature in CAS (swap bytes to invalidate)
+    let cas_dir = dir.path().join("cas");
+    for prefix_entry in std::fs::read_dir(&cas_dir).unwrap() {
+        let prefix_entry = prefix_entry.unwrap();
+        if prefix_entry.file_type().unwrap().is_dir() {
+            for blob_entry in std::fs::read_dir(prefix_entry.path()).unwrap() {
+                let blob_entry = blob_entry.unwrap();
+                let path = blob_entry.path();
+                if path.extension().and_then(|e| e.to_str()) == Some("blob") {
+                    let content = std::fs::read(&path).unwrap();
+                    // Signature files are exactly 64 bytes (ed25519 signature)
+                    if content.len() == 64 {
+                        let mut sig_bytes = content;
+                        for b in sig_bytes.iter_mut().take(8) {
+                            *b ^= 0xff;
+                        }
+                        std::fs::write(&path, &sig_bytes).unwrap();
+                    }
+                }
+            }
+        }
     }
-    std::fs::write(&sig_path, &sig_bytes).unwrap();
 
     let report = service.verify(&hash).await.unwrap();
     assert!(!report.signature_valid);
