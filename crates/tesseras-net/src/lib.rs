@@ -5,6 +5,7 @@ pub mod error;
 pub mod mem;
 #[cfg(feature = "quic")]
 pub mod quinn_transport;
+pub mod stun;
 pub mod transport;
 
 pub use error::NetError;

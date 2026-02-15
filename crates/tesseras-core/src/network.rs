@@ -40,6 +40,31 @@ impl Capabilities {
     }
 }
 
+/// Detected NAT behavior, stored in node state and advertised in DHT.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum NatType {
+    /// Node has a public IP, directly reachable.
+    Public,
+    /// NAT preserves mapping across destinations (hole-punch works).
+    /// Covers Full Cone, Restricted Cone, and Port-Restricted Cone.
+    Cone,
+    /// NAT assigns different mapping per destination (needs relay).
+    Symmetric,
+    /// Detection failed or in progress.
+    Unknown,
+}
+
+impl std::fmt::Display for NatType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NatType::Public => write!(f, "public"),
+            NatType::Cone => write!(f, "cone"),
+            NatType::Symmetric => write!(f, "symmetric"),
+            NatType::Unknown => write!(f, "unknown"),
+        }
+    }
+}
+
 /// A node's identity: Ed25519 public key + PoW nonce = NodeId.
 /// NodeId = BLAKE3(public_key || nonce)[..20], must have POW_DIFFICULTY leading zero bits.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
