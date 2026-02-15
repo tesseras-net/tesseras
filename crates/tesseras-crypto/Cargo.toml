@@ -14,6 +14,12 @@ blake3 = { workspace = true, optional = true }
 ed25519-dalek = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
 
+# Encryption (hybrid KEM + AES-GCM)
+x25519-dalek = { workspace = true, optional = true }
+aes-gcm = { workspace = true, optional = true }
+pqcrypto-kyber = { workspace = true, optional = true }
+pqcrypto-traits = { workspace = true, optional = true }
+
 # Erasure coding
 reed-solomon-erasure = { workspace = true, optional = true }
 
@@ -24,4 +30,5 @@ proptest = { workspace = true }
 default = ["classical"]
 classical = ["blake3", "ed25519-dalek", "rand"]
 erasure = ["reed-solomon-erasure"]
+encryption = ["x25519-dalek", "aes-gcm", "pqcrypto-kyber", "pqcrypto-traits", "blake3", "rand"]
 service = ["tesseras-core/service"]

@@ -44,6 +44,10 @@ blake3 = "1"
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 rand = "0.8"
 reed-solomon-erasure = "6"
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+aes-gcm = "0.10"
+pqcrypto-kyber = "0.8"
+pqcrypto-traits = "0.3"
 
 # Storage
 rusqlite = { version = "0.33" }
