@@ -2,3 +2,6 @@
 website/public/
 book/en/book/
 book/pt-br/book/
+
+# Editor source files
+*.xcf
