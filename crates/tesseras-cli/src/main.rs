@@ -97,6 +97,12 @@ enum Commands {
     #[command(visible_alias = "ls")]
     List,
 
+    /// Manage institutional node setup
+    Institutional {
+        #[command(subcommand)]
+        command: InstitutionalCommands,
+    },
+
     /// Manage heir key recovery shares
     Heir {
         #[command(subcommand)]
@@ -109,6 +115,19 @@ enum Commands {
         /// Shell to generate completions for
         #[arg(value_enum)]
         shell: Shell,
+    },
+}
+
+#[derive(Subcommand)]
+enum InstitutionalCommands {
+    /// Set up institutional node identity and print DNS TXT record
+    Setup {
+        /// Domain to verify (e.g., archive.org)
+        #[arg(long)]
+        domain: String,
+        /// Check if DNS record is already propagated
+        #[arg(long)]
+        check: bool,
     },
 }
 
@@ -147,6 +166,11 @@ async fn main() -> Result<()> {
             commands::export::run(hash, dest, &cli.data_dir).await
         }
         Commands::List => commands::list::run(&cli.data_dir).await,
+        Commands::Institutional { command } => match command {
+            InstitutionalCommands::Setup { ref domain, check } => {
+                commands::institutional::run_setup(domain, check, &cli.data_dir).await
+            }
+        },
         Commands::Heir { command } => match command {
             commands::heir::HeirCommands::Create {
                 threshold,
