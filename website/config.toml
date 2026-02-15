@@ -11,6 +11,8 @@ feed_filenames = ["atom.xml"]
 skip_prefixes = [
     "https://git.sr.ht/~ijanc/",
     "https://lists.sr.ht/~ijanc/",
+    "https://todo.sr.ht/~ijanc/",
+    "https://sr.ht/~ijanc/",
     "https://github.com/ijanc/",
     "https://book.tesseras.net",
     "https://lists.tesseras.net",

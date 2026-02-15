@@ -35,8 +35,13 @@ Divulgação responsável de vulnerabilidades de segurança. Restrita a mantened
 - Relatar: [~ijanc/tesseras-security@lists.sr.ht](mailto:~ijanc/tesseras-security@lists.sr.ht)
 - [Navegar nos arquivos](https://lists.sr.ht/~ijanc/tesseras-security)
 
-### Feeds Atom
+### Bug Tracker
 
-Você também pode acompanhar o projeto via feeds Atom no seu leitor de feeds:
+Registre bugs e pedidos de funcionalidades no [ticket tracker](https://todo.sr.ht/~ijanc/tesseras).
+
+### Feeds
+
+Você também pode acompanhar o projeto via feeds no seu leitor de feeds:
 
 - [Feed de notícias](/pt-br/atom.xml) — anúncios e atualizações do projeto
+- [Feed SourceHut](https://sr.ht/~ijanc/tesseras/feed.rss) — commits, tickets e atividade das listas

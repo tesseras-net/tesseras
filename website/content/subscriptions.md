@@ -35,8 +35,13 @@ Responsible disclosure of security vulnerabilities. Restricted to maintainers; r
 - Report: [~ijanc/tesseras-security@lists.sr.ht](mailto:~ijanc/tesseras-security@lists.sr.ht)
 - [Browse archives](https://lists.sr.ht/~ijanc/tesseras-security)
 
-### Atom Feeds
+### Bug Tracker
 
-You can also follow the project via Atom feeds in your feed reader:
+File bug reports and feature requests on the [ticket tracker](https://todo.sr.ht/~ijanc/tesseras).
+
+### Feeds
+
+You can also follow the project via feeds in your feed reader:
 
 - [News feed](/atom.xml) — project announcements and updates
+- [SourceHut feed](https://sr.ht/~ijanc/tesseras/feed.rss) — commits, tickets, and mailing list activity

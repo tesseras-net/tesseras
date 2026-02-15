@@ -12,6 +12,10 @@ The best way to reach the project is through the [mailing lists](/subscriptions/
 - [tesseras-announce](https://lists.sr.ht/~ijanc/tesseras-announce) — releases and milestones
 - [tesseras-security](https://lists.sr.ht/~ijanc/tesseras-security) — vulnerability reports
 
+### Bug Reports
+
+File bug reports and feature requests on the [ticket tracker](https://todo.sr.ht/~ijanc/tesseras).
+
 ### Source Code
 
 - [SourceHut](https://git.sr.ht/~ijanc/tesseras) (primary)
@@ -21,3 +25,4 @@ The best way to reach the project is through the [mailing lists](/subscriptions/
 
 - [Book](https://tesseras.net/book/en/) — user documentation (coming soon)
 - [Atom feed](/atom.xml) — project news
+- [SourceHut feed](https://sr.ht/~ijanc/tesseras/feed.rss) — commits, tickets, and mailing list activity

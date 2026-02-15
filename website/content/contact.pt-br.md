@@ -12,6 +12,10 @@ A melhor forma de contatar o projeto é através das [listas de discussão](/pt-
 - [tesseras-announce](https://lists.sr.ht/~ijanc/tesseras-announce) — lançamentos e marcos
 - [tesseras-security](https://lists.sr.ht/~ijanc/tesseras-security) — relatos de vulnerabilidades
 
+### Relatórios de Bugs
+
+Registre bugs e pedidos de funcionalidades no [ticket tracker](https://todo.sr.ht/~ijanc/tesseras).
+
 ### Código-Fonte
 
 - [SourceHut](https://git.sr.ht/~ijanc/tesseras) (primário)
@@ -21,3 +25,4 @@ A melhor forma de contatar o projeto é através das [listas de discussão](/pt-
 
 - [Livro](https://tesseras.net/book/pt-br/) — documentação para usuários (em breve)
 - [Feed Atom](/pt-br/atom.xml) — notícias do projeto
+- [Feed SourceHut](https://sr.ht/~ijanc/tesseras/feed.rss) — commits, tickets e atividade das listas
