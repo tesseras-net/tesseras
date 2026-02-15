@@ -317,6 +317,7 @@ impl EmbeddedNode {
             language: "en".to_string(),
             tags: request.tags.clone(),
             location,
+            encryption_public: None,
         };
 
         let hash = self.runtime.block_on(self.tessera_service.create(input))?;

@@ -112,6 +112,7 @@ async fn create_verify_export_cycle() {
         language: "en".to_string(),
         tags: vec![],
         location: None,
+        encryption_public: None,
     };
 
     // Create
@@ -148,6 +149,7 @@ async fn create_non_interactive_empty_context() {
         language: "en".to_string(),
         tags: vec![],
         location: None,
+        encryption_public: None,
     };
 
     let hash = service.create(input).await.unwrap();
@@ -172,6 +174,7 @@ async fn verify_detects_tampered_file() {
         language: "en".to_string(),
         tags: vec![],
         location: None,
+        encryption_public: None,
     };
 
     let hash = service.create(input).await.unwrap();
@@ -210,6 +213,7 @@ async fn verify_detects_bad_signature() {
         language: "en".to_string(),
         tags: vec![],
         location: None,
+        encryption_public: None,
     };
 
     let hash = service.create(input).await.unwrap();

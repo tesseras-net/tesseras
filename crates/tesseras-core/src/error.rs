@@ -27,6 +27,9 @@ pub enum CoreError {
     #[error("tessera too big: {size} bytes exceeds maximum {max} bytes")]
     TesseraTooBig { size: u64, max: u64 },
 
+    #[error("missing encryption keys for visibility {visibility}")]
+    MissingEncryptionKeys { visibility: String },
+
     #[error("database error: {0}")]
     Database(String),
 

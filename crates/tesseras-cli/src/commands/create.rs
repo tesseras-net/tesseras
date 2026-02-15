@@ -81,6 +81,7 @@ pub async fn run(args: &CreateArgs, data_dir: &str) -> Result<()> {
         language: args.language.clone(),
         tags,
         location,
+        encryption_public: None,
     };
 
     // 5. Build service and create tessera

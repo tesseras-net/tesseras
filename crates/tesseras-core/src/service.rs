@@ -7,6 +7,7 @@ use crate::ports::{
     BlobStore, Hasher, ManifestSigner, ManifestVerifier, MemoryRecord, MemoryRepository,
     TesseraRecord, TesseraRepository,
 };
+use crate::tessera::HybridEncryptionPublic;
 use crate::{ContentHash, CoreError};
 
 pub struct CreateInput {
@@ -15,6 +16,7 @@ pub struct CreateInput {
     pub language: String,
     pub tags: Vec<String>,
     pub location: Option<Location>,
+    pub encryption_public: Option<HybridEncryptionPublic>,
 }
 
 pub struct FileInput {
@@ -67,6 +69,17 @@ impl TesseraService {
     pub async fn create(&self, input: CreateInput) -> Result<ContentHash, CoreError> {
         if input.files.is_empty() {
             return Err(CoreError::InvalidTessera("no files provided".into()));
+        }
+
+        // Validate: Sealed and Private require encryption keys
+        let requires_encryption = matches!(
+            input.visibility,
+            Visibility::Sealed { .. } | Visibility::Private
+        );
+        if requires_encryption && input.encryption_public.is_none() {
+            return Err(CoreError::MissingEncryptionKeys {
+                visibility: input.visibility.to_string(),
+            });
         }
 
         // 1. For each file: read bytes, hash with hasher
@@ -629,6 +642,7 @@ mod tests {
             language: "en".to_string(),
             tags: vec![],
             location: None,
+            encryption_public: None,
         };
 
         let hash = service.create(input).await.unwrap();
@@ -649,6 +663,7 @@ mod tests {
             language: "en".to_string(),
             tags: vec![],
             location: None,
+            encryption_public: None,
         };
 
         let result = service.create(input).await;
@@ -673,11 +688,68 @@ mod tests {
             language: "en".to_string(),
             tags: vec![],
             location: None,
+            encryption_public: None,
         };
 
         let hash = service.create(input).await.unwrap();
         let report = service.verify(&hash).await.unwrap();
         assert!(report.signature_valid);
         assert!(report.files.iter().all(|f| f.valid));
+    }
+
+    #[tokio::test]
+    async fn create_sealed_without_encryption_keys_rejected() {
+        use chrono::TimeZone;
+        let service = build_service();
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let file_path = dir.path().join("photo.jpg");
+        std::fs::write(&file_path, b"fake jpeg data").unwrap();
+
+        let input = CreateInput {
+            files: vec![FileInput {
+                path: file_path,
+                context: Some("A sealed memory".to_string()),
+                memory_type: MemoryType::Moment,
+            }],
+            visibility: Visibility::Sealed {
+                open_after: chrono::Utc.with_ymd_and_hms(2050, 1, 1, 0, 0, 0).unwrap(),
+            },
+            language: "en".to_string(),
+            tags: vec![],
+            location: None,
+            encryption_public: None, // no encryption keys!
+        };
+
+        let result = service.create(input).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("missing encryption keys"));
+    }
+
+    #[tokio::test]
+    async fn create_private_without_encryption_keys_rejected() {
+        let service = build_service();
+
+        let dir = tempfile::TempDir::new().unwrap();
+        let file_path = dir.path().join("note.txt");
+        std::fs::write(&file_path, b"private note").unwrap();
+
+        let input = CreateInput {
+            files: vec![FileInput {
+                path: file_path,
+                context: None,
+                memory_type: MemoryType::Reflection,
+            }],
+            visibility: Visibility::Private,
+            language: "en".to_string(),
+            tags: vec![],
+            location: None,
+            encryption_public: None,
+        };
+
+        let result = service.create(input).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("missing encryption keys"));
     }
 }
