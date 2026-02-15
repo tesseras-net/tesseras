@@ -9,11 +9,11 @@ build:
 
 # Serve English book for development
 serve-en:
-    mdbook serve en
+    mdbook serve en -n 0.0.0.0
 
 # Serve Portuguese book for development
 serve-pt-br:
-    mdbook serve pt-br --port 3001
+    mdbook serve pt-br -n 0.0.0.0 --port 3001
 
 # Deploy the book
 deploy server="tesseras-website":

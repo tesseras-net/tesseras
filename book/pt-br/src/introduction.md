@@ -21,9 +21,9 @@ Uma tessera contém:
 - **Criptografia mínima** — apenas conteúdo privado e selado é criptografado; todo o resto é aberto
 - **Resistente a computadores quânticos** — assinaturas duplas (Ed25519 + ML-DSA) protegem a integridade mesmo contra futuros computadores quânticos
 
-## Status atual: Fase 1
+## Status atual: Fase 4
 
-Tesseras completou a **Fase 1** — a camada de rede básica. Sobre a fundação local da Fase 0, os nós agora se descobrem, formam uma rede peer-to-peer e publicam ponteiros de tesseras que qualquer nó na rede pode encontrar.
+Tesseras completou até a **Fase 4** — criptografia e tesseras seladas. O projeto agora cobre gerenciamento local de tesseras, rede, replicação, app mobile e privacidade criptográfica.
 
 O que está disponível hoje:
 
@@ -31,10 +31,15 @@ O que está disponível hoje:
 - Criação de tesseras a partir de arquivos locais
 - Armazenamento endereçado por conteúdo (hashing BLAKE3)
 - Verificação de integridade e exportação autocontida
-- **Daemon de nó completo** com transporte QUIC
-- **Descoberta de pares** via DHT Kademlia
-- **Publicação e busca de ponteiros de tesseras** pela rede
-- **Bootstrap** a partir de nós semente ou descoberta local
+- Daemon de nó completo com transporte QUIC
+- Descoberta de pares via DHT Kademlia
+- Publicação e busca de ponteiros de tesseras pela rede
+- Codificação de apagamento Reed-Solomon com reparo automático de fragmentos
+- App mobile Flutter com nó Rust P2P embarcado
+- **Tesseras privadas** — conteúdo criptografado que apenas o dono pode acessar
+- **Tesseras seladas** — conteúdo com bloqueio temporal que abre após uma data específica
+- **Criptografia híbrida pós-quântica** — encapsulamento de chaves X25519 + ML-KEM-768
+- **AES-256-GCM** para criptografia de conteúdo com vinculação AAD
 
 ## Conceitos-chave
 
@@ -43,7 +48,8 @@ O que está disponível hoje:
 | **Tessera** | Uma cápsula do tempo autocontida de memórias |
 | **Memória** | Um item individual (foto, gravação, vídeo ou texto) dentro de uma tessera |
 | **Hash de conteúdo** | Um hash BLAKE3 que identifica unicamente uma tessera pelo seu conteúdo |
-| **Visibilidade** | Controla quem pode acessar uma tessera: pública, privada ou círculo |
+| **Visibilidade** | Controla quem pode acessar uma tessera: pública, privada, selada ou círculo |
+| **Tessera selada** | Uma cápsula do tempo que só pode ser aberta após uma data específica |
 | **MANIFEST** | Um índice em texto puro listando cada arquivo na tessera com seu checksum |
 | **Tipo de memória** | Categoriza uma memória: momento, reflexão, cotidiano, relação ou objeto |
 | **Nó** | Um dispositivo executando o daemon Tesseras, participando da rede P2P |

@@ -4,7 +4,7 @@ default:
 
 # serve the site
 serve:
-    zola serve
+    zola serve -i 0.0.0.0
 
 # build the site
 build:

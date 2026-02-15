@@ -21,9 +21,9 @@ A tessera contains:
 - **Minimal encryption** — only private and sealed content is encrypted; everything else is open
 - **Quantum-resistant** — dual signatures (Ed25519 + ML-DSA) protect integrity even against future quantum computers
 
-## Current status: Phase 1
+## Current status: Phase 4
 
-Tesseras has completed **Phase 1** — the basic networking layer. On top of the local foundation from Phase 0, nodes can now discover each other, form a peer-to-peer network, and publish tessera pointers that any node on the network can find.
+Tesseras has completed through **Phase 4** — encryption and sealed tesseras. The project now covers local tessera management, networking, replication, a mobile app, and cryptographic privacy.
 
 What's available today:
 
@@ -31,10 +31,15 @@ What's available today:
 - Tessera creation from local files
 - Content-addressed storage (BLAKE3 hashing)
 - Integrity verification and self-contained export
-- **Full node daemon** with QUIC transport
-- **Peer discovery** via Kademlia DHT
-- **Tessera pointer publishing and lookup** across the network
-- **Bootstrap** from seed nodes or local discovery
+- Full node daemon with QUIC transport
+- Peer discovery via Kademlia DHT
+- Tessera pointer publishing and lookup across the network
+- Reed-Solomon erasure coding with automatic fragment repair
+- Flutter mobile app with embedded Rust P2P node
+- **Private tesseras** — encrypted content only the owner can access
+- **Sealed tesseras** — time-locked content that opens after a specific date
+- **Hybrid post-quantum encryption** — X25519 + ML-KEM-768 key encapsulation
+- **AES-256-GCM** content encryption with AAD binding
 
 ## Key concepts
 
@@ -43,7 +48,8 @@ What's available today:
 | **Tessera** | A self-contained time capsule of memories |
 | **Memory** | A single item (photo, recording, video, or text) within a tessera |
 | **Content hash** | A BLAKE3 hash that uniquely identifies a tessera by its contents |
-| **Visibility** | Controls who can access a tessera: public, private, or circle |
+| **Visibility** | Controls who can access a tessera: public, private, sealed, or circle |
+| **Sealed tessera** | A time capsule that can only be opened after a specific date |
 | **MANIFEST** | A plain-text index listing every file in the tessera with its checksum |
 | **Memory type** | Categorizes a memory: moment, reflection, daily, relation, or object |
 | **Node** | A device running the Tesseras daemon, participating in the P2P network |

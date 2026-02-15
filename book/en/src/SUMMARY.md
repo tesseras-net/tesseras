@@ -13,4 +13,5 @@
 - [Configuration](./configuration.md)
 - [Network Concepts](./network-concepts.md)
 - [Replication and Repair](./replication.md)
+- [Encryption and Sealed Tesseras](./encryption.md)
 - [Docker](./docker.md)
