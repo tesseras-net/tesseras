@@ -13,6 +13,20 @@ install:
     cargo install --path crates/tesseras-daemon
     @just _install-completions
 
+# Run NAT traversal tests
+test-nat:
+    cargo test -p tesseras-net stun -- --nocapture
+    cargo test -p tesseras-net punch -- --nocapture
+    cargo test -p tesseras-net relay -- --nocapture
+    cargo test -p tesseras-net --test punch_integration -- --nocapture
+    cargo test -p tesseras-net --test relay_integration -- --nocapture
+    cargo test -p tesseras-dht -- --nocapture
+
+# Run chaos tests (requires Docker with tc netem)
+test-chaos:
+    @echo "Chaos tests require Docker. See docs/plans/2026-02-15-nat-traversal-design.md"
+    @echo "TODO: implement Docker Compose chaos test environment"
+
 # Test the embedded crate
 test-embedded:
     cargo test -p tesseras-embedded
