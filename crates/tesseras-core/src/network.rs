@@ -214,7 +214,10 @@ mod tests {
                 nonce: 99,
             },
             addr: "192.168.1.1:4433".parse().unwrap(),
-            alt_addrs: vec!["[::1]:4433".parse().unwrap(), "10.0.0.1:4433".parse().unwrap()],
+            alt_addrs: vec![
+                "[::1]:4433".parse().unwrap(),
+                "10.0.0.1:4433".parse().unwrap(),
+            ],
             capabilities: Capabilities::phase1_default(),
         };
         let bytes = rmp_serde::to_vec(&info).unwrap();

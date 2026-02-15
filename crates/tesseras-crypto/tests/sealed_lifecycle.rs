@@ -13,8 +13,8 @@
 #![cfg(feature = "encryption")]
 
 use chrono::TimeZone;
-use tesseras_core::enums::EncryptionContext;
 use tesseras_core::ContentHash;
+use tesseras_core::enums::EncryptionContext;
 use tesseras_crypto::dual::{DualKeyPair, DualPublicKeys};
 use tesseras_crypto::ed25519::Ed25519KeyGenerator;
 use tesseras_crypto::encryption::Aes256GcmEncryptor;

@@ -908,9 +908,7 @@ mod tests {
 
     // -- ReplicationHandler dispatch tests --
 
-    use tesseras_core::replication::{
-        AttestationEntry, FragmentId, FragmentPlan,
-    };
+    use tesseras_core::replication::{AttestationEntry, FragmentId, FragmentPlan};
 
     fn make_test_envelope() -> FragmentEnvelope {
         let data = vec![0xaa; 64];

@@ -8,9 +8,9 @@ use tokio::sync::{broadcast, watch};
 
 use tesseras_core::ports::{IdentityStore, KeyAlgorithm, ReplicationHandler};
 use tesseras_core::replication::{Attestation, FragmentEnvelope, ReplicateAck};
+use tesseras_core::service::TesseraService;
 use tesseras_core::types::NodeId;
 use tesseras_core::{ContentHash, CoreError, NodeIdentity};
-use tesseras_core::service::TesseraService;
 use tesseras_crypto::ed25519::{Ed25519KeyGenerator, Ed25519KeyPair};
 use tesseras_dht::engine::DhtEngine;
 use tesseras_dht::pow;
@@ -585,7 +585,7 @@ mod tests {
             media_path: media_path.to_str().unwrap().to_string(),
             context_text: Some("A beautiful sunset".to_string()),
             memory_type: tesseras_core::MemoryType::Moment,
-            visibility: tesseras_core::Visibility::Private,
+            visibility: tesseras_core::Visibility::Public,
             location_description: None,
             location_lat: None,
             location_lon: None,

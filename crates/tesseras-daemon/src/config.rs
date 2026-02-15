@@ -135,9 +135,7 @@ impl DaemonConfig {
 
     pub fn to_replication_config(&self) -> tesseras_replication::ReplicationConfig {
         tesseras_replication::ReplicationConfig {
-            repair_interval: std::time::Duration::from_secs(
-                self.replication.repair_interval_secs,
-            ),
+            repair_interval: std::time::Duration::from_secs(self.replication.repair_interval_secs),
             repair_jitter: std::time::Duration::from_secs(self.replication.repair_jitter_secs),
             ..tesseras_replication::ReplicationConfig::default()
         }

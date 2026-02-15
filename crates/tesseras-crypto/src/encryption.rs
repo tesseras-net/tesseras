@@ -1,6 +1,6 @@
 use aes_gcm::{
+    AeadCore, Aes256Gcm, Nonce,
     aead::{Aead, KeyInit, OsRng},
-    Aes256Gcm, AeadCore, Nonce,
 };
 use tesseras_core::enums::EncryptionContext;
 
@@ -46,8 +46,7 @@ impl Aes256GcmEncryptor {
         key: &[u8; 32],
         context: &EncryptionContext,
     ) -> Result<Vec<u8>, CryptoError> {
-        let cipher =
-            Aes256Gcm::new_from_slice(key).map_err(|_| CryptoError::DecryptFailed)?;
+        let cipher = Aes256Gcm::new_from_slice(key).map_err(|_| CryptoError::DecryptFailed)?;
         let nonce = Nonce::from_slice(&blob.nonce);
         let aad = context.to_aad_bytes();
         cipher

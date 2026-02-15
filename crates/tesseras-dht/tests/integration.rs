@@ -332,7 +332,10 @@ async fn attest_roundtrip() {
         alt_addrs: vec![],
         capabilities: Capabilities::phase1_default(),
     };
-    let attestation = e1.request_attestation(&target, &tessera_hash).await.unwrap();
+    let attestation = e1
+        .request_attestation(&target, &tessera_hash)
+        .await
+        .unwrap();
     assert_eq!(attestation.tessera_hash, tessera_hash);
     assert_eq!(attestation.entries.len(), 1);
 

@@ -25,7 +25,7 @@ fn full_lifecycle() {
             media_path: media_path.to_str().unwrap().to_string(),
             context_text: Some("Integration test memory".to_string()),
             memory_type: tesseras_core::MemoryType::Moment,
-            visibility: tesseras_core::Visibility::Private,
+            visibility: tesseras_core::Visibility::Public,
             location_description: None,
             location_lat: None,
             location_lon: None,

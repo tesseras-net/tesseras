@@ -18,9 +18,7 @@ where
     let guard = NODE
         .lock()
         .map_err(|e| TesserasError::Storage(format!("node lock poisoned: {e}")))?;
-    let node = guard
-        .as_ref()
-        .ok_or(TesserasError::NotInitialized)?;
+    let node = guard.as_ref().ok_or(TesserasError::NotInitialized)?;
     f(node)
 }
 

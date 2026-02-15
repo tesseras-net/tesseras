@@ -750,6 +750,11 @@ mod tests {
 
         let result = service.create(input).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("missing encryption keys"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("missing encryption keys")
+        );
     }
 }
