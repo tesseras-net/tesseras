@@ -41,7 +41,38 @@ just install
    cargo test --workspace
    cargo deny check
    ```
-5. **Submit a patch** via SourceHut or a pull request on GitHub.
+5. **Submit your contribution** using one of the methods below.
+
+### Submitting via Email (preferred)
+
+The primary way to contribute is by sending a patch to the SourceHut mailing
+list using `git send-email`:
+
+```sh
+# One-time setup: configure git send-email
+git config sendemail.to "~ijanc/tesseras-devel@lists.sr.ht"
+git config sendemail.annotate true
+
+# Send your commits as a patch series
+git send-email --to="~ijanc/tesseras-devel@lists.sr.ht" origin/main
+```
+
+If you are new to `git send-email`, see the
+[git-send-email tutorial](https://git-send-email.io/) for setup instructions
+on your platform.
+
+Tips for email patches:
+
+- Write a clear cover letter (`--cover-letter`) for multi-commit series.
+- Ensure your patches apply cleanly on top of `main`.
+- Respond to review feedback by sending a revised series with
+  `git send-email -v2` (or `-v3`, etc.).
+
+### Submitting via GitHub
+
+You can also open a pull request on the
+[GitHub mirror](https://github.com/ijanc/tesseras). Fork the repository,
+push your branch, and open a PR against `main`.
 
 ## Coding Conventions
 
@@ -96,6 +127,8 @@ Prefix with the affected crate when applicable: `fix(crypto):`, `feat(net):`,
 `docs(book):`, `test(storage):`, `chore:`.
 
 ## Reporting Issues
+
+File issues on the [SourceHut ticket tracker](https://todo.sr.ht/~ijanc/tesseras).
 
 - Search existing issues before opening a new one.
 - Include Rust version (`rustc --version`), OS, and steps to reproduce.
