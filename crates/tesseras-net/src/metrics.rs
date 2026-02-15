@@ -41,6 +41,16 @@ pub struct NatMetrics {
     /// Relay sessions closed due to rate limit.
     pub relay_rate_limited_total: IntCounter,
 
+    // --- Connection Pool ---
+    /// Current number of pooled connections.
+    pub pool_size: IntGauge,
+    /// Total pool cache hits.
+    pub pool_hits_total: IntCounter,
+    /// Total pool cache misses (new connection).
+    pub pool_misses_total: IntCounter,
+    /// Total pool evictions (LRU or idle reaper).
+    pub pool_evictions_total: IntCounter,
+
     // --- Reconnect ---
     /// Total network change events detected.
     pub network_change_total: IntCounter,
@@ -147,6 +157,30 @@ impl NatMetrics {
         )?;
         registry.register(Box::new(relay_rate_limited_total.clone()))?;
 
+        let pool_size = IntGauge::new(
+            "tesseras_conn_pool_size",
+            "Current number of pooled connections",
+        )?;
+        registry.register(Box::new(pool_size.clone()))?;
+
+        let pool_hits_total = IntCounter::new(
+            "tesseras_conn_pool_hits_total",
+            "Total pool cache hits",
+        )?;
+        registry.register(Box::new(pool_hits_total.clone()))?;
+
+        let pool_misses_total = IntCounter::new(
+            "tesseras_conn_pool_misses_total",
+            "Total pool cache misses",
+        )?;
+        registry.register(Box::new(pool_misses_total.clone()))?;
+
+        let pool_evictions_total = IntCounter::new(
+            "tesseras_conn_pool_evictions_total",
+            "Total pool evictions",
+        )?;
+        registry.register(Box::new(pool_evictions_total.clone()))?;
+
         let network_change_total = IntCounter::new(
             "tesseras_network_change_total",
             "Total network change events detected",
@@ -194,6 +228,10 @@ impl NatMetrics {
             relay_bytes_forwarded,
             relay_idle_timeouts_total,
             relay_rate_limited_total,
+            pool_size,
+            pool_hits_total,
+            pool_misses_total,
+            pool_evictions_total,
             network_change_total,
             reconnect_attempts_total,
             reconnect_successes_total,

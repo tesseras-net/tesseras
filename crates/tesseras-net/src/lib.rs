@@ -14,5 +14,5 @@ pub mod transport;
 pub use error::NetError;
 pub use mem::{MemTransport, SimNetwork};
 #[cfg(feature = "quic")]
-pub use quinn_transport::QuinnTransport;
+pub use quinn_transport::{PoolConfig, QuinnTransport};
 pub use transport::{Envelope, PeerAddr, Transport};
