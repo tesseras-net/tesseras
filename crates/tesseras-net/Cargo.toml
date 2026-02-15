@@ -25,6 +25,8 @@ dashmap = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
+tesseras-dht = { workspace = true }
+ed25519-dalek = { workspace = true, features = ["rand_core"] }
 
 [features]
 default = ["quic"]
