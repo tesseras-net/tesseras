@@ -22,6 +22,12 @@ pub struct CreateArgs {
     /// Visibility (public, private, circle)
     #[arg(long, default_value = "public")]
     pub visibility: String,
+    /// Create a sealed (time-locked) tessera
+    #[arg(long)]
+    pub sealed: bool,
+    /// Date when sealed tessera opens (YYYY-MM-DD, requires --sealed)
+    #[arg(long)]
+    pub open_after: Option<String>,
     /// Language code
     #[arg(long, default_value = "en")]
     pub language: String,
@@ -63,7 +69,40 @@ pub async fn run(args: &CreateArgs, data_dir: &str) -> Result<()> {
         .collect();
 
     // 4. Build CreateInput
-    let visibility = parse_visibility(&args.visibility)?;
+    let visibility = if args.sealed {
+        let open_after_str = args
+            .open_after
+            .as_deref()
+            .ok_or_else(|| anyhow::anyhow!("--sealed requires --open-after"))?;
+        let date = chrono::NaiveDate::parse_from_str(open_after_str, "%Y-%m-%d")
+            .context("--open-after must be YYYY-MM-DD")?;
+        let dt = date.and_hms_opt(0, 0, 0).unwrap().and_utc();
+        Visibility::Sealed { open_after: dt }
+    } else {
+        parse_visibility(&args.visibility)?
+    };
+
+    let identity_store = FsIdentityStore::new(base.clone());
+    let encryption_public =
+        if matches!(visibility, Visibility::Sealed { .. } | Visibility::Private) {
+            let x_mat = identity_store
+                .load_keypair(KeyAlgorithm::X25519)
+                .context("encryption keys not found — run `tes init --upgrade`")?;
+            let m_mat = identity_store
+                .load_keypair(KeyAlgorithm::MlKem768)
+                .context("encryption keys not found — run `tes init --upgrade`")?;
+            Some(tesseras_core::tessera::HybridEncryptionPublic {
+                x25519: x_mat
+                    .public
+                    .as_slice()
+                    .try_into()
+                    .context("X25519 public key must be 32 bytes")?,
+                mlkem768: m_mat.public.clone(),
+            })
+        } else {
+            None
+        };
+
     let tags = args
         .tags
         .as_deref()
@@ -83,7 +122,7 @@ pub async fn run(args: &CreateArgs, data_dir: &str) -> Result<()> {
         language: args.language.clone(),
         tags,
         location,
-        encryption_public: None,
+        encryption_public,
     };
 
     // 5. Build service and create tessera
