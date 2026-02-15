@@ -138,6 +138,83 @@ impl CasStore {
         .optional()
         .map_err(|e| CoreError::Database(e.to_string()))
     }
+
+    /// Run a GC sweep: remove orphan files and leaked refcount entries.
+    /// Grace period: files younger than 10 minutes are skipped.
+    pub fn sweep(&self) -> Result<SweepStats, CoreError> {
+        let mut stats = SweepStats::default();
+        let grace_period = std::time::Duration::from_secs(600); // 10 minutes
+        let now = std::time::SystemTime::now();
+
+        // 1. Remove leaked refcounts (cas_objects with no refs)
+        let conn = self.conn.lock().unwrap();
+        let leaked = conn
+            .execute(
+                "DELETE FROM cas_objects WHERE blake3_hash IN (
+                    SELECT c.blake3_hash FROM cas_objects c
+                    LEFT JOIN blob_refs b ON c.blake3_hash = b.blake3_hash
+                    LEFT JOIN fragment_refs f ON c.blake3_hash = f.blake3_hash
+                    WHERE b.blake3_hash IS NULL AND f.blake3_hash IS NULL
+                )",
+                [],
+            )
+            .map_err(|e| CoreError::Database(e.to_string()))?;
+        stats.leaked_refs_removed = leaked as u64;
+        drop(conn);
+
+        // 2. Scan filesystem for orphan files
+        if self.root.exists() {
+            for prefix_entry in std::fs::read_dir(&self.root)? {
+                let prefix_entry = prefix_entry?;
+                if !prefix_entry.file_type()?.is_dir() {
+                    continue;
+                }
+                for blob_entry in std::fs::read_dir(prefix_entry.path())? {
+                    let blob_entry = blob_entry?;
+                    let path = blob_entry.path();
+                    let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+                        continue;
+                    };
+
+                    // Check grace period
+                    if let Ok(metadata) = std::fs::metadata(&path) {
+                        if let Ok(mtime) = metadata.modified() {
+                            if let Ok(age) = now.duration_since(mtime) {
+                                if age < grace_period {
+                                    stats.orphan_files_skipped_young += 1;
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+
+                    // Check if hash exists in cas_objects
+                    let conn = self.conn.lock().unwrap();
+                    let exists = conn
+                        .prepare("SELECT 1 FROM cas_objects WHERE blake3_hash = ?1")
+                        .map_err(|e| CoreError::Database(e.to_string()))?
+                        .exists(rusqlite::params![stem])
+                        .map_err(|e| CoreError::Database(e.to_string()))?;
+                    drop(conn);
+
+                    if !exists {
+                        let _ = std::fs::remove_file(&path);
+                        stats.orphan_files_removed += 1;
+                    }
+                }
+            }
+        }
+
+        Ok(stats)
+    }
+}
+
+/// Statistics from a CAS sweep run.
+#[derive(Debug, Default)]
+pub struct SweepStats {
+    pub orphan_files_removed: u64,
+    pub orphan_files_skipped_young: u64,
+    pub leaked_refs_removed: u64,
 }
 
 #[cfg(test)]
@@ -227,6 +304,69 @@ mod tests {
             .join(&hex[..2])
             .join(format!("{hex}.blob"));
         assert!(expected.exists());
+    }
+
+    #[test]
+    fn sweep_removes_orphan_files() {
+        let (store, dir) = setup();
+        // Create an orphan file directly in CAS dir (no cas_objects entry)
+        let orphan_dir = dir.path().join("cas").join("ab");
+        std::fs::create_dir_all(&orphan_dir).unwrap();
+        let orphan_path = orphan_dir
+            .join("ab00000000000000000000000000000000000000000000000000000000000000.blob");
+        std::fs::write(&orphan_path, b"orphan").unwrap();
+        // Set mtime to 20 minutes ago
+        let old_time = std::time::SystemTime::now() - std::time::Duration::from_secs(1200);
+        filetime::set_file_mtime(&orphan_path, filetime::FileTime::from_system_time(old_time))
+            .unwrap();
+
+        let stats = store.sweep().unwrap();
+        assert_eq!(stats.orphan_files_removed, 1);
+        assert!(!orphan_path.exists());
+    }
+
+    #[test]
+    fn sweep_skips_young_orphan_files() {
+        let (store, dir) = setup();
+        // Create an orphan file with recent mtime (just now)
+        let orphan_dir = dir.path().join("cas").join("cd");
+        std::fs::create_dir_all(&orphan_dir).unwrap();
+        let orphan_path = orphan_dir
+            .join("cd00000000000000000000000000000000000000000000000000000000000000.blob");
+        std::fs::write(&orphan_path, b"young orphan").unwrap();
+
+        let stats = store.sweep().unwrap();
+        assert_eq!(stats.orphan_files_removed, 0);
+        assert_eq!(stats.orphan_files_skipped_young, 1);
+        assert!(orphan_path.exists());
+    }
+
+    #[test]
+    fn sweep_removes_leaked_refcounts() {
+        let (store, _dir) = setup();
+        // Manually insert a cas_objects row with no refs
+        {
+            let conn = store.conn.lock().unwrap();
+            conn.execute(
+                "INSERT INTO cas_objects (blake3_hash, size_bytes, ref_count, stored_at)
+                 VALUES ('deadbeef', 100, 1, '2026-01-01')",
+                [],
+            )
+            .unwrap();
+        }
+        let stats = store.sweep().unwrap();
+        assert_eq!(stats.leaked_refs_removed, 1);
+    }
+
+    #[test]
+    fn sweep_idempotent() {
+        let (store, _dir) = setup();
+        let stats1 = store.sweep().unwrap();
+        let stats2 = store.sweep().unwrap();
+        assert_eq!(stats1.orphan_files_removed, 0);
+        assert_eq!(stats2.orphan_files_removed, 0);
+        assert_eq!(stats1.leaked_refs_removed, 0);
+        assert_eq!(stats2.leaked_refs_removed, 0);
     }
 
     #[test]
