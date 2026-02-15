@@ -24,6 +24,11 @@ pqcrypto-traits = { workspace = true, optional = true }
 # Erasure coding
 reed-solomon-erasure = { workspace = true, optional = true }
 
+# Shamir's Secret Sharing (serialization)
+serde = { workspace = true, optional = true }
+rmp-serde = { workspace = true, optional = true }
+base64 = { workspace = true, optional = true }
+
 [dev-dependencies]
 chrono = { workspace = true }
 proptest = { workspace = true }
@@ -34,3 +39,4 @@ classical = ["blake3", "ed25519-dalek", "rand"]
 erasure = ["reed-solomon-erasure"]
 encryption = ["chrono", "x25519-dalek", "aes-gcm", "pqcrypto-kyber", "pqcrypto-traits", "blake3", "rand"]
 service = ["tesseras-core/service"]
+shamir = ["serde", "rmp-serde", "base64", "blake3", "rand"]

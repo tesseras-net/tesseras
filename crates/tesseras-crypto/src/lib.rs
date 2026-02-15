@@ -19,4 +19,7 @@ pub mod sealed;
 #[cfg(feature = "erasure")]
 pub mod erasure;
 
+#[cfg(feature = "shamir")]
+pub mod shamir;
+
 pub use error::CryptoError;
