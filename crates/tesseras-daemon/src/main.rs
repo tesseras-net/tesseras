@@ -4,6 +4,7 @@
 mod config;
 mod dht_adapter;
 mod institutional;
+mod metrics;
 
 use std::net::SocketAddr;
 use std::path::PathBuf;

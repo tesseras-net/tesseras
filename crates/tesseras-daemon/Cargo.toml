@@ -29,6 +29,7 @@ chrono = { workspace = true }
 dirs = { workspace = true }
 hex = { workspace = true }
 hickory-resolver = { workspace = true }
+prometheus = { workspace = true }
 
 [features]
 default = []
