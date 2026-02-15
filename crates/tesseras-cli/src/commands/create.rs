@@ -5,6 +5,8 @@ use tesseras_core::ports::{IdentityStore, KeyAlgorithm};
 use tesseras_core::{CreateInput, FileInput, MemoryType, Visibility};
 use tesseras_storage::FsIdentityStore;
 
+use base64::Engine;
+
 use super::init::expand_tilde;
 
 #[derive(clap::Args)]
@@ -154,13 +156,14 @@ pub fn build_service(base: &Path) -> Result<tesseras_core::TesseraService> {
         base.join("cas"),
     ));
 
-    Ok(tesseras_core::TesseraService::new(
+    Ok(tesseras_core::TesseraService::new_with_encryption(
         Box::new(tesseras_storage::SqliteTesseraRepository::new(conn.clone())),
         Box::new(tesseras_storage::SqliteMemoryRepository::new(conn.clone())),
         Box::new(tesseras_storage::FsBlobStore::new(conn, cas)),
         Box::new(hasher),
         Box::new(signer),
         Box::new(verifier),
+        Box::new(CryptoEncryptor),
     ))
 }
 
@@ -187,6 +190,56 @@ impl tesseras_core::ManifestSigner for CryptoSigner {
             .map(|b| format!("{b:02x}"))
             .collect();
         (sig.to_bytes().to_vec(), pub_hex)
+    }
+}
+
+struct CryptoEncryptor;
+impl tesseras_core::ContentEncryptor for CryptoEncryptor {
+    fn encrypt(
+        &self,
+        content: &[u8],
+        key: &[u8; 32],
+        aad: &[u8],
+    ) -> Result<Vec<u8>, tesseras_core::CoreError> {
+        use tesseras_core::enums::EncryptionContext;
+        let content_hash = tesseras_core::ContentHash::new(
+            aad.try_into().unwrap_or([0u8; 32]),
+        );
+        let ctx = EncryptionContext::Sealed {
+            content_hash,
+            open_after: chrono::Utc::now(),
+        };
+        let blob = tesseras_crypto::encryption::Aes256GcmEncryptor::encrypt(content, key, &ctx)
+            .map_err(|e| tesseras_core::CoreError::CryptoError(e.to_string()))?;
+        // Serialize EncryptedBlob as nonce (12 bytes) + ciphertext
+        let mut out = Vec::with_capacity(12 + blob.ciphertext.len());
+        out.extend_from_slice(&blob.nonce);
+        out.extend_from_slice(&blob.ciphertext);
+        Ok(out)
+    }
+
+    fn generate_content_key(&self) -> [u8; 32] {
+        rand::random()
+    }
+
+    fn seal_content_key(
+        &self,
+        content_key: &[u8; 32],
+        encryption_public: &tesseras_core::tessera::HybridEncryptionPublic,
+    ) -> Result<String, tesseras_core::CoreError> {
+        use tesseras_crypto::kem::HybridEncryptionPublic as CryptoHEP;
+        let crypto_pub = CryptoHEP {
+            x25519: encryption_public.x25519,
+            mlkem768: encryption_public.mlkem768.clone(),
+        };
+        let envelope = tesseras_crypto::sealed::SealedKeyEnvelope::seal(content_key, &crypto_pub)
+            .map_err(|e| tesseras_core::CoreError::CryptoError(e.to_string()))?;
+        // Serialize: x25519_ephemeral (32) + mlkem_ciphertext (variable)
+        let ct = &envelope.hybrid_ciphertext;
+        let mut bytes = Vec::with_capacity(32 + ct.mlkem_ciphertext.len());
+        bytes.extend_from_slice(&ct.x25519_ephemeral);
+        bytes.extend_from_slice(&ct.mlkem_ciphertext);
+        Ok(base64::engine::general_purpose::STANDARD.encode(&bytes))
     }
 }
 
