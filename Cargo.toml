@@ -75,6 +75,7 @@ prometheus = "0.13"
 dirs = "6"
 
 # Testing
+bolero = "0.11"
 mockall = "0.13"
 proptest = "1"
 tempfile = "3"
