@@ -16,6 +16,8 @@ pub struct DaemonConfig {
     pub nat: NatConfig,
     #[serde(default)]
     pub performance: PerformanceConfig,
+    #[serde(default)]
+    pub institutional: Option<InstitutionalConfig>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -167,6 +169,15 @@ impl Default for PerformanceConfig {
     }
 }
 
+/// Institutional node configuration.
+#[derive(Debug, Clone, Deserialize)]
+pub struct InstitutionalConfig {
+    /// Domain to verify via DNS TXT record.
+    pub domain: String,
+    /// Storage pledge in bytes.
+    pub pledge_bytes: u64,
+}
+
 impl Default for DaemonConfig {
     fn default() -> Self {
         Self {
@@ -201,6 +212,7 @@ impl Default for DaemonConfig {
             replication: ReplicationTomlConfig::default(),
             nat: NatConfig::default(),
             performance: PerformanceConfig::default(),
+            institutional: None,
         }
     }
 }
@@ -370,6 +382,74 @@ log_format = "json"
         assert_eq!(config.stun_servers.len(), 1);
         assert!(config.relay_enabled);
         assert_eq!(config.relay_max_sessions, 100);
+    }
+
+    #[test]
+    fn toml_without_institutional_section_defaults_to_none() {
+        let toml = r#"
+[node]
+data_dir = "/tmp/test"
+listen_addr = "127.0.0.1:4433"
+
+[dht]
+k = 20
+alpha = 3
+bucket_refresh_interval_secs = 3600
+republish_interval_secs = 3600
+pointer_ttl_secs = 86400
+max_stored_pointers = 100000
+ping_failure_threshold = 3
+
+[bootstrap]
+dns_domain = "test"
+hardcoded = []
+
+[network]
+enable_mdns = false
+
+[observability]
+metrics_addr = "127.0.0.1:9190"
+log_format = "json"
+"#;
+        let config: DaemonConfig = toml::from_str(toml).unwrap();
+        assert!(config.institutional.is_none());
+    }
+
+    #[test]
+    fn toml_with_institutional_section_parses() {
+        let toml = r#"
+[node]
+data_dir = "/tmp/test"
+listen_addr = "127.0.0.1:4433"
+
+[dht]
+k = 20
+alpha = 3
+bucket_refresh_interval_secs = 3600
+republish_interval_secs = 3600
+pointer_ttl_secs = 86400
+max_stored_pointers = 100000
+ping_failure_threshold = 3
+
+[bootstrap]
+dns_domain = "test"
+hardcoded = []
+
+[network]
+enable_mdns = false
+
+[observability]
+metrics_addr = "127.0.0.1:9190"
+log_format = "json"
+
+[institutional]
+domain = "archive.org"
+pledge_bytes = 536870912000
+"#;
+        let config: DaemonConfig = toml::from_str(toml).unwrap();
+        let inst = config.institutional.unwrap();
+        assert_eq!(inst.domain, "archive.org");
+        assert_eq!(inst.pledge_bytes, 536_870_912_000);
     }
 
     #[test]
