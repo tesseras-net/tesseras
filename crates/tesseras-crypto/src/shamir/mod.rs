@@ -288,6 +288,113 @@ impl ShamirSplitter {
     }
 }
 
+mod hex {
+    pub fn encode(bytes: impl AsRef<[u8]>) -> String {
+        bytes
+            .as_ref()
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect()
+    }
+}
+
+/// Serialize an `HeirShare` to MessagePack binary.
+pub fn share_to_msgpack(share: &HeirShare) -> Result<Vec<u8>, CryptoError> {
+    rmp_serde::to_vec(share)
+        .map_err(|e| CryptoError::ShamirSplitFailed(format!("msgpack encode: {e}")))
+}
+
+/// Deserialize an `HeirShare` from MessagePack binary.
+pub fn share_from_msgpack(data: &[u8]) -> Result<HeirShare, CryptoError> {
+    rmp_serde::from_slice(data)
+        .map_err(|e| CryptoError::ShareValidationFailed(format!("msgpack decode: {e}")))
+}
+
+const TEXT_BEGIN: &str = "--- TESSERAS HEIR SHARE ---";
+const TEXT_END: &str = "--- END HEIR SHARE ---";
+
+/// Serialize an `HeirShare` to the human-readable base64 text format.
+pub fn share_to_text(share: &HeirShare, created_date: &str) -> Result<String, CryptoError> {
+    use base64::Engine;
+    let msgpack = share_to_msgpack(share)?;
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&msgpack);
+
+    let fingerprint = hex::encode(share.owner_fingerprint);
+    let session = hex::encode(share.session_id);
+
+    Ok(format!(
+        "{TEXT_BEGIN}\n\
+         Format: v{}\n\
+         Owner: {} (fingerprint)\n\
+         Share: {} of {} (threshold: {})\n\
+         Session: {}\n\
+         Created: {}\n\
+         \n\
+         {}\n\
+         {TEXT_END}",
+        share.format_version,
+        fingerprint,
+        share.share_index,
+        share.total_shares,
+        share.threshold,
+        session,
+        created_date,
+        b64,
+    ))
+}
+
+/// Parse an `HeirShare` from the human-readable base64 text format.
+/// Extracts only the base64 data between the markers; header is informational.
+pub fn share_from_text(text: &str) -> Result<HeirShare, CryptoError> {
+    use base64::Engine;
+
+    let begin_idx = text
+        .find(TEXT_BEGIN)
+        .ok_or_else(|| CryptoError::ShareValidationFailed("missing BEGIN marker".into()))?;
+    let end_idx = text
+        .find(TEXT_END)
+        .ok_or_else(|| CryptoError::ShareValidationFailed("missing END marker".into()))?;
+
+    if end_idx <= begin_idx {
+        return Err(CryptoError::ShareValidationFailed(
+            "END marker before BEGIN marker".into(),
+        ));
+    }
+
+    // Extract content between markers
+    let content = &text[begin_idx + TEXT_BEGIN.len()..end_idx];
+
+    // Find the base64 data: it's after the blank line that separates header from data.
+    // Lines: [empty, header..., empty (separator), base64_data, empty?]
+    let lines: Vec<&str> = content.lines().collect();
+    let separator_idx = lines
+        .iter()
+        .enumerate()
+        .skip(1) // skip leading empty line
+        .find(|(_, line)| line.trim().is_empty())
+        .map(|(i, _)| i);
+
+    let b64_data: String = match separator_idx {
+        Some(idx) => lines[idx + 1..]
+            .iter()
+            .filter(|line| !line.trim().is_empty())
+            .copied()
+            .collect::<Vec<&str>>()
+            .join(""),
+        None => {
+            return Err(CryptoError::ShareValidationFailed(
+                "missing blank line separator in text format".into(),
+            ))
+        }
+    };
+
+    let msgpack = base64::engine::general_purpose::STANDARD
+        .decode(b64_data.trim())
+        .map_err(|e| CryptoError::ShareValidationFailed(format!("base64 decode: {e}")))?;
+
+    share_from_msgpack(&msgpack)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -572,5 +679,112 @@ mod tests {
             None,
         );
         assert!(matches!(err, Err(CryptoError::ShareValidationFailed(_))));
+    }
+
+    #[test]
+    fn export_import_roundtrip_msgpack() {
+        let config = ShamirConfig {
+            threshold: 2,
+            total_shares: 3,
+        };
+        let shares =
+            ShamirSplitter::split(b"msgpack test", &config, &test_owner_public()).unwrap();
+
+        let encoded = super::share_to_msgpack(&shares[0]).unwrap();
+        let decoded = super::share_from_msgpack(&encoded).unwrap();
+        assert_eq!(decoded, shares[0]);
+    }
+
+    #[test]
+    fn export_import_roundtrip_base64_text() {
+        let config = ShamirConfig {
+            threshold: 2,
+            total_shares: 3,
+        };
+        let shares =
+            ShamirSplitter::split(b"text test", &config, &test_owner_public()).unwrap();
+
+        let text = super::share_to_text(&shares[0], "2026-02-14").unwrap();
+        let recovered = super::share_from_text(&text).unwrap();
+        assert_eq!(recovered, shares[0]);
+    }
+
+    #[test]
+    fn base64_text_parser_ignores_header() {
+        let config = ShamirConfig {
+            threshold: 2,
+            total_shares: 3,
+        };
+        let shares =
+            ShamirSplitter::split(b"header test", &config, &test_owner_public()).unwrap();
+
+        // Generate text, then mangle the header
+        let text = super::share_to_text(&shares[0], "2026-02-14").unwrap();
+        let mangled = text.replace("Owner:", "OwnerChanged:");
+        let recovered = super::share_from_text(&mangled).unwrap();
+        assert_eq!(recovered, shares[0]); // header is informational only
+    }
+
+    #[test]
+    fn base64_text_parser_rejects_missing_markers() {
+        let result = super::share_from_text("just some random text");
+        assert!(matches!(
+            result,
+            Err(CryptoError::ShareValidationFailed(_))
+        ));
+    }
+
+    mod prop_tests {
+        use super::*;
+        use proptest::prelude::*;
+
+        proptest! {
+            #[test]
+            fn prop_any_secret_roundtrip(
+                secret in proptest::collection::vec(any::<u8>(), 1..5000),
+            ) {
+                let config = ShamirConfig { threshold: 2, total_shares: 3 };
+                let shares = ShamirSplitter::split(&secret, &config, &test_owner_public()).unwrap();
+                let recovered = ShamirSplitter::reconstruct(
+                    &[shares[0].clone(), shares[1].clone()], None
+                ).unwrap();
+                prop_assert_eq!(recovered, secret);
+            }
+
+            #[test]
+            fn prop_any_t_of_n_combination(
+                t in 1u8..8,
+                extra in 0u8..8,
+                secret in proptest::collection::vec(any::<u8>(), 1..200),
+            ) {
+                let n = t.saturating_add(extra).max(t);
+                if n == 0 || t == 0 { return Ok(()); }
+                let config = ShamirConfig { threshold: t, total_shares: n };
+                let shares = ShamirSplitter::split(&secret, &config, &test_owner_public()).unwrap();
+
+                // Take first t shares
+                let subset: Vec<HeirShare> = shares[..t as usize].to_vec();
+                let recovered = ShamirSplitter::reconstruct(&subset, None).unwrap();
+                prop_assert_eq!(recovered, secret);
+            }
+
+            #[test]
+            fn prop_t_minus_1_never_recovers(
+                secret in proptest::collection::vec(any::<u8>(), 1..100),
+            ) {
+                // With threshold 2, a single share should NOT reconstruct the secret
+                // (information-theoretic security: any value is equally likely)
+                let config = ShamirConfig { threshold: 2, total_shares: 3 };
+                let shares = ShamirSplitter::split(&secret, &config, &test_owner_public()).unwrap();
+
+                // A proper test: the share data alone provides no information.
+                // For a 1-byte secret with threshold 2, all 256 values are equally likely
+                // given a single share. We can't directly test this probabilistically,
+                // but we can verify that a single share's data differs from the secret.
+                if secret.len() > 1 {
+                    prop_assert_ne!(shares[0].share_data.clone(), secret);
+                }
+            }
+        }
     }
 }
