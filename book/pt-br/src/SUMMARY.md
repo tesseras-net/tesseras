@@ -15,4 +15,5 @@
 - [Replicação e Reparo](./replication.md)
 - [Criptografia e Tesseras Seladas](./encryption.md)
 - [Recuperação de Chaves por Herdeiros](./heir-recovery.md)
+- [Travessia de NAT](./nat-traversal.md)
 - [Docker](./docker.md)
