@@ -131,7 +131,7 @@ impl ReplicationService {
         })
     }
 
-    /// Handle an attestation request: list local fragments and compute checksums.
+    /// Handle an attestation request: list local fragments and return stored checksums.
     pub fn handle_attestation_request(
         &self,
         tessera_hash: &ContentHash,
@@ -140,11 +140,9 @@ impl ReplicationService {
 
         let mut entries = Vec::with_capacity(fragments.len());
         for frag in &fragments {
-            let data = self.fragments.read_fragment(frag)?;
-            let checksum = ContentHash::new(blake3::hash(&data).into());
             entries.push(AttestationEntry {
                 fragment_index: frag.index,
-                checksum,
+                checksum: frag.checksum,
             });
         }
 
@@ -663,5 +661,49 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(report.fragments_distributed, 24);
+    }
+
+    #[tokio::test]
+    async fn attestation_uses_stored_checksums_not_blob_reads() {
+        let dht = MockDht::new();
+        let mut fragments = MockFragments::new();
+        let tessera_hash = hash(0xAA);
+        let checksum_a = hash(0x11);
+        let checksum_b = hash(0x22);
+
+        let hash_clone = tessera_hash;
+        fragments.expect_list_fragments().returning(move |h| {
+            assert_eq!(*h, hash_clone);
+            Ok(vec![
+                FragmentId::new(hash_clone, 0, 16, checksum_a),
+                FragmentId::new(hash_clone, 1, 16, checksum_b),
+            ])
+        });
+
+        // read_fragment should NEVER be called for attestation
+        fragments.expect_read_fragment().never();
+
+        let ledger = MockLedger::new();
+        let blobs = MockBlobs::new();
+
+        let service = ReplicationService::new(
+            NodeIdentity {
+                node_id: node(1),
+                public_key: [0; 32],
+                nonce: 0,
+            },
+            Box::new(dht),
+            Box::new(fragments),
+            Box::new(ledger),
+            Box::new(blobs),
+            ReplicationConfig::default(),
+        );
+
+        let attestation = service.handle_attestation_request(&tessera_hash).unwrap();
+        assert_eq!(attestation.entries.len(), 2);
+        assert_eq!(attestation.entries[0].fragment_index, 0);
+        assert_eq!(attestation.entries[0].checksum, checksum_a);
+        assert_eq!(attestation.entries[1].fragment_index, 1);
+        assert_eq!(attestation.entries[1].checksum, checksum_b);
     }
 }
