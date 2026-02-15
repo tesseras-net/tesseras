@@ -9,6 +9,11 @@ pub mod ed25519;
 #[cfg(feature = "classical")]
 pub mod hasher;
 
+#[cfg(feature = "encryption")]
+pub mod encryption;
+#[cfg(feature = "encryption")]
+pub mod kem;
+
 #[cfg(feature = "erasure")]
 pub mod erasure;
 
