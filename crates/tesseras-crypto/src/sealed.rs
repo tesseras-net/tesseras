@@ -163,6 +163,101 @@ mod tests {
     }
 
     #[test]
+    fn unseal_rejects_short_ciphertext() {
+        let keypair = HybridKem::generate_keypair();
+        // Ciphertext shorter than 32 bytes must fail
+        let short_envelope = SealedKeyEnvelope {
+            hybrid_ciphertext: HybridCiphertext {
+                x25519_ephemeral: [0u8; 32],
+                mlkem_ciphertext: vec![0u8; 16], // only 16 bytes, need >= 32
+            },
+        };
+        assert!(matches!(
+            short_envelope.unseal(&keypair),
+            Err(CryptoError::DecryptFailed)
+        ));
+    }
+
+    #[test]
+    fn unseal_rejects_exactly_31_bytes_ciphertext() {
+        let keypair = HybridKem::generate_keypair();
+        // Exactly 31 bytes (< 32) must fail
+        let envelope = SealedKeyEnvelope {
+            hybrid_ciphertext: HybridCiphertext {
+                x25519_ephemeral: [0u8; 32],
+                mlkem_ciphertext: vec![0u8; 31],
+            },
+        };
+        assert!(matches!(
+            envelope.unseal(&keypair),
+            Err(CryptoError::DecryptFailed)
+        ));
+    }
+
+    #[test]
+    fn key_publication_tampered_tessera_hash_fails() {
+        let ed_keypair = Ed25519KeyGenerator::generate();
+        let dual_keys = DualKeyPair {
+            ed25519: ed_keypair,
+            mldsa: None,
+        };
+        let tessera_hash = ContentHash::new([0xaa; 32]);
+        let content_key: ContentKey = [0x42u8; 32];
+
+        let mut publication = KeyPublication::create(tessera_hash, content_key, &dual_keys);
+
+        let dual_public = DualPublicKeys {
+            ed25519: dual_keys.ed25519.verifying_key,
+            mldsa: None,
+        };
+        // Tamper the tessera_hash
+        publication.tessera_hash = ContentHash::new([0xbb; 32]);
+        assert!(publication.verify(&dual_public).is_err());
+    }
+
+    #[test]
+    fn key_publication_tampered_content_key_fails() {
+        let ed_keypair = Ed25519KeyGenerator::generate();
+        let dual_keys = DualKeyPair {
+            ed25519: ed_keypair,
+            mldsa: None,
+        };
+        let tessera_hash = ContentHash::new([0xaa; 32]);
+        let content_key: ContentKey = [0x42u8; 32];
+
+        let mut publication = KeyPublication::create(tessera_hash, content_key, &dual_keys);
+
+        let dual_public = DualPublicKeys {
+            ed25519: dual_keys.ed25519.verifying_key,
+            mldsa: None,
+        };
+        // Tamper the content_key
+        publication.content_key = [0x99u8; 32];
+        assert!(publication.verify(&dual_public).is_err());
+    }
+
+    #[test]
+    fn key_publication_tampered_timestamp_fails() {
+        let ed_keypair = Ed25519KeyGenerator::generate();
+        let dual_keys = DualKeyPair {
+            ed25519: ed_keypair,
+            mldsa: None,
+        };
+        let tessera_hash = ContentHash::new([0xaa; 32]);
+        let content_key: ContentKey = [0x42u8; 32];
+
+        let mut publication = KeyPublication::create(tessera_hash, content_key, &dual_keys);
+
+        let dual_public = DualPublicKeys {
+            ed25519: dual_keys.ed25519.verifying_key,
+            mldsa: None,
+        };
+        // Tamper the timestamp
+        publication.published_at = publication.published_at + chrono::Duration::seconds(1);
+        assert!(publication.verify(&dual_public).is_err());
+    }
+
+    #[test]
     fn key_publication_wrong_signer() {
         let dual_keys1 = DualKeyPair {
             ed25519: Ed25519KeyGenerator::generate(),

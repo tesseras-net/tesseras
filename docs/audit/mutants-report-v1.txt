@@ -1,39 +1,33 @@
-# Mutation Testing Report v1
+# Mutation Testing Report v1 (updated after gap-filling)
 # Date: 2026-02-15
 # cargo-mutants version: 26.2.0
 # Files: dual.rs, sealed.rs
 
-## dual.rs
+## dual.rs — PASS
 
 Found 3 mutants to test
-ok       Unmutated baseline in 6s build + 9s test
-3 mutants tested in 33s: 2 caught, 1 unviable
-
+3 mutants tested: 2 caught, 1 unviable
 Result: ALL CAUGHT (1 unviable = compile error, not a test gap)
 
-## sealed.rs
+## sealed.rs — PASS (1 benign equivalent)
 
 Found 16 mutants to test
-ok       Unmutated baseline in 6s build + 3s test
-MISSED   crates/tesseras-crypto/src/sealed.rs:54:27: replace < with == in SealedKeyEnvelope::unseal
-MISSED   crates/tesseras-crypto/src/sealed.rs:54:27: replace < with <= in SealedKeyEnvelope::unseal
-MISSED   crates/tesseras-crypto/src/sealed.rs:106:9: replace KeyPublication::signing_message -> Vec<u8> with vec![]
-MISSED   crates/tesseras-crypto/src/sealed.rs:106:9: replace KeyPublication::signing_message -> Vec<u8> with vec![0]
-MISSED   crates/tesseras-crypto/src/sealed.rs:106:9: replace KeyPublication::signing_message -> Vec<u8> with vec![1]
-16 mutants tested in 2m: 5 missed, 9 caught, 2 unviable
 
-## Analysis of Surviving Mutations
+### After gap-filling:
+16 mutants tested: 1 missed, 13 caught, 2 unviable
 
-### sealed.rs:54 — unseal boundary check (< to == or <=)
-Line: `if ct_bytes.len() < 32`
-The mutations `< → ==` and `< → <=` survive because no test provides a ciphertext
-that is exactly 32 bytes long. The current test only exercises the happy path (valid
-ciphertext >> 32 bytes) and wrong keypair. Need: test with ciphertext shorter than
-32 bytes AND test with exactly 32 bytes.
+### Remaining missed mutation (benign equivalent):
+MISSED: sealed.rs:54:27: replace < with <= in SealedKeyEnvelope::unseal
 
-### sealed.rs:106 — KeyPublication::signing_message
-The mutations replacing the signing message body with empty/trivial vectors survive
-because no test verifies that changing any field in the KeyPublication causes
-verification to fail. The existing `key_publication_wrong_signer` test only tests
-wrong signing key, not tampered fields. Need: test that changing tessera_hash,
-content_key, or published_at causes verify() to fail.
+This is a benign equivalent mutation: changing `ct_bytes.len() < 32` to `<= 32`
+makes the guard catch the `== 32` case instead of letting it through to
+`HybridKem::decapsulate` which would also fail. Both paths produce the same
+`Err(CryptoError::DecryptFailed)` — the behavior is identical. Any valid sealed
+ciphertext is >> 32 bytes (ML-KEM ciphertext alone is ~1088 bytes).
+
+### Gaps filled:
+- Added: unseal_rejects_short_ciphertext (kills `< → ==`)
+- Added: unseal_rejects_exactly_31_bytes_ciphertext
+- Added: key_publication_tampered_tessera_hash_fails (kills signing_message → vec![])
+- Added: key_publication_tampered_content_key_fails (kills signing_message → vec![0])
+- Added: key_publication_tampered_timestamp_fails (kills signing_message → vec![1])
