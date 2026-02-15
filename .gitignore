@@ -5,3 +5,10 @@ book/pt-br/book/
 
 # Editor source files
 *.xcf
+
+# Build artifacts
+target/
+
+# Cargo-mutants output
+mutants.out/
+mutants.out.old/
