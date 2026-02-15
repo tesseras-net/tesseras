@@ -27,12 +27,9 @@ pub fn run_migrations(conn: &rusqlite::Connection) -> Result<(), StorageError> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn migrations_run_clean() {
-        let conn = rusqlite::Connection::open_in_memory().unwrap();
-        run_migrations(&conn).unwrap();
+        let conn = crate::database::open_in_memory(&crate::StorageConfig::default()).unwrap();
         // Verify tables exist
         let tesseras_exists: bool = conn
             .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='tesseras'")
@@ -50,8 +47,7 @@ mod tests {
 
     #[test]
     fn replication_tables_exist() {
-        let conn = rusqlite::Connection::open_in_memory().unwrap();
-        run_migrations(&conn).unwrap();
+        let conn = crate::database::open_in_memory(&crate::StorageConfig::default()).unwrap();
         for table in [
             "fragments",
             "fragment_plans",
@@ -72,8 +68,7 @@ mod tests {
 
     #[test]
     fn reciprocity_generated_column() {
-        let conn = rusqlite::Connection::open_in_memory().unwrap();
-        run_migrations(&conn).unwrap();
+        let conn = crate::database::open_in_memory(&crate::StorageConfig::default()).unwrap();
         conn.execute(
             "INSERT INTO reciprocity (peer_id, bytes_stored_for_them, bytes_they_store_for_us, last_updated)
              VALUES ('peer1', 500, 300, '2026-01-01T00:00:00Z')",

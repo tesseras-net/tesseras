@@ -326,12 +326,10 @@ impl MemoryRepository for SqliteMemoryRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::run_migrations;
     use tesseras_core::ContentHash;
 
     fn setup_conn() -> Arc<Mutex<Connection>> {
-        let conn = Connection::open_in_memory().unwrap();
-        run_migrations(&conn).unwrap();
+        let conn = crate::database::open_in_memory(&crate::StorageConfig::default()).unwrap();
         Arc::new(Mutex::new(conn))
     }
 
@@ -403,11 +401,6 @@ mod tests {
     #[test]
     fn memory_cascade_delete() {
         let conn = setup_conn();
-        // Enable foreign keys for cascade to work
-        conn.lock()
-            .unwrap()
-            .execute_batch("PRAGMA foreign_keys = ON")
-            .unwrap();
         let t_repo = SqliteTesseraRepository::new(conn.clone());
         let m_repo = SqliteMemoryRepository::new(conn);
         let tessera = sample_tessera_record();

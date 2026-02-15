@@ -126,14 +126,12 @@ impl FragmentStore for FsFragmentStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::run_migrations;
     use std::sync::{Arc, Mutex};
     use tempfile::TempDir;
 
     fn setup() -> (FsFragmentStore, TempDir) {
         let dir = TempDir::new().unwrap();
-        let conn = rusqlite::Connection::open_in_memory().unwrap();
-        run_migrations(&conn).unwrap();
+        let conn = crate::database::open_in_memory(&crate::StorageConfig::default()).unwrap();
         let store = FsFragmentStore::new(Arc::new(Mutex::new(conn)), dir.path().join("fragments"));
         (store, dir)
     }
