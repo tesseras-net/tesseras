@@ -2,7 +2,7 @@ use aes_gcm::{
     aead::{Aead, KeyInit, OsRng},
     Aes256Gcm, AeadCore, Nonce,
 };
-use tesseras_core::ContentHash;
+use tesseras_core::enums::EncryptionContext;
 
 use crate::CryptoError;
 
@@ -11,43 +11,6 @@ use crate::CryptoError;
 pub struct EncryptedBlob {
     pub nonce: [u8; 12],
     pub ciphertext: Vec<u8>,
-}
-
-/// Context bound into AES-GCM AAD to prevent ciphertext swapping.
-///
-/// For `Sealed`, includes `open_after` so moving ciphertext between tesseras
-/// with different open dates causes decryption failure.
-#[derive(Debug, Clone)]
-pub enum EncryptionContext {
-    Private {
-        content_hash: ContentHash,
-    },
-    Sealed {
-        content_hash: ContentHash,
-        open_after: chrono::DateTime<chrono::Utc>,
-    },
-}
-
-impl EncryptionContext {
-    /// Deterministic serialization for use as AAD.
-    pub fn to_aad_bytes(&self) -> Vec<u8> {
-        match self {
-            Self::Private { content_hash } => {
-                let mut buf = vec![0x00]; // tag byte for Private
-                buf.extend_from_slice(content_hash.as_bytes());
-                buf
-            }
-            Self::Sealed {
-                content_hash,
-                open_after,
-            } => {
-                let mut buf = vec![0x01]; // tag byte for Sealed
-                buf.extend_from_slice(content_hash.as_bytes());
-                buf.extend_from_slice(&open_after.timestamp().to_le_bytes());
-                buf
-            }
-        }
-    }
 }
 
 /// AES-256-GCM symmetric encryption with random nonce.
@@ -102,6 +65,7 @@ impl Aes256GcmEncryptor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tesseras_core::ContentHash;
 
     fn test_key() -> [u8; 32] {
         [0x42u8; 32]

@@ -3,6 +3,8 @@ use std::fmt;
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::types::ContentHash;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MemoryType {
@@ -34,6 +36,43 @@ impl fmt::Display for Visibility {
             }
             Visibility::Sealed { open_after } => {
                 write!(f, "sealed until {}", open_after.format("%Y-%m-%d"))
+            }
+        }
+    }
+}
+
+/// Context bound into AES-GCM authenticated data (AAD) to prevent ciphertext swapping.
+///
+/// For `Sealed`, includes `open_after` timestamp — moving ciphertext from a tessera
+/// sealed until 2050 into one sealed until 2025 causes decryption failure.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EncryptionContext {
+    Private {
+        content_hash: ContentHash,
+    },
+    Sealed {
+        content_hash: ContentHash,
+        open_after: DateTime<Utc>,
+    },
+}
+
+impl EncryptionContext {
+    /// Deterministic serialization for use as AAD.
+    pub fn to_aad_bytes(&self) -> Vec<u8> {
+        match self {
+            Self::Private { content_hash } => {
+                let mut buf = vec![0x00]; // tag byte for Private
+                buf.extend_from_slice(content_hash.as_bytes());
+                buf
+            }
+            Self::Sealed {
+                content_hash,
+                open_after,
+            } => {
+                let mut buf = vec![0x01]; // tag byte for Sealed
+                buf.extend_from_slice(content_hash.as_bytes());
+                buf.extend_from_slice(&open_after.timestamp().to_le_bytes());
+                buf
             }
         }
     }

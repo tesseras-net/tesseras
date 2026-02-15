@@ -15,7 +15,7 @@ pub mod service;
 pub mod tessera;
 pub mod types;
 
-pub use enums::{ApproximateDate, MemoryType, SchemaVersion, Visibility};
+pub use enums::{ApproximateDate, EncryptionContext, MemoryType, SchemaVersion, Visibility};
 pub use error::CoreError;
 pub use manifest::{Manifest, ManifestEntry};
 pub use memory::Memory;
