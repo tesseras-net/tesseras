@@ -86,7 +86,11 @@ fn create_service_with_real_storage(
     tesseras_storage::run_migrations(&conn).unwrap();
     let conn = Arc::new(Mutex::new(conn));
 
-    let fragment_store = FsFragmentStore::new(Arc::clone(&conn), dir.join("fragments"));
+    let cas = Arc::new(tesseras_storage::CasStore::new(
+        Arc::clone(&conn),
+        dir.join("cas"),
+    ));
+    let fragment_store = FsFragmentStore::new(Arc::clone(&conn), Arc::clone(&cas));
     let ledger = SqliteReciprocityLedger::new(conn);
 
     ReplicationService::new(

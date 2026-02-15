@@ -121,22 +121,31 @@ impl EmbeddedNode {
             Ok::<Arc<DhtEngine>, TesserasError>(engine)
         })?;
 
+        // Create CAS store (shared by blob and fragment stores)
+        let cas = Arc::new(tesseras_storage::CasStore::new(
+            Arc::clone(&conn),
+            data_dir.join("cas"),
+        ));
+
         // Create storage instances for replication service
-        let fragment_store = FsFragmentStore::new(Arc::clone(&conn), data_dir.join("fragments"));
+        let fragment_store = FsFragmentStore::new(Arc::clone(&conn), Arc::clone(&cas));
         let reciprocity_ledger = SqliteReciprocityLedger::new(Arc::clone(&conn));
-        let blob_store = FsBlobStore::new(data_dir.join("blobs"));
+        let blob_store = FsBlobStore::new(Arc::clone(&conn), Arc::clone(&cas));
 
         // Create replication service
         let dht_adapter = crate::dht_adapter::DhtPortAdapter::new(Arc::clone(&engine));
         let replication_config = tesseras_replication::ReplicationConfig::default();
-        let replication = Arc::new(ReplicationService::new(
-            identity.clone(),
-            Box::new(dht_adapter),
-            Box::new(fragment_store),
-            Box::new(reciprocity_ledger),
-            Box::new(blob_store),
-            replication_config,
-        ));
+        let replication = Arc::new(
+            ReplicationService::new(
+                identity.clone(),
+                Box::new(dht_adapter),
+                Box::new(fragment_store),
+                Box::new(reciprocity_ledger),
+                Box::new(blob_store),
+                replication_config,
+            )
+            .with_cas(Arc::clone(&cas)),
+        );
 
         // Wire replication handler into DHT engine
         let handler = ReplicationHandlerAdapter {
@@ -147,7 +156,7 @@ impl EmbeddedNode {
         // Create TesseraService (separate storage instances since replication took ownership)
         let tessera_repo = SqliteTesseraRepository::new(Arc::clone(&conn));
         let memory_repo = SqliteMemoryRepository::new(Arc::clone(&conn));
-        let blob_store_for_service = FsBlobStore::new(data_dir.join("blobs"));
+        let blob_store_for_service = FsBlobStore::new(Arc::clone(&conn), Arc::clone(&cas));
 
         let tessera_service = TesseraService::new(
             Box::new(tessera_repo),
