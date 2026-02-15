@@ -5,6 +5,7 @@ import argparse
 import re
 import subprocess
 import sys
+import textwrap
 import tomllib
 from pathlib import Path
 
@@ -31,7 +32,13 @@ def slug_from_filename(path: Path) -> str:
     return m.group(1)
 
 
+def wrap(text: str) -> str:
+    """Wrap text at 72 columns per mailing list etiquette."""
+    return textwrap.fill(text, width=72)
+
+
 def compose_email(title: str, description: str, url: str) -> str:
+    body = wrap(description)
     return (
         f"From: {FROM}\n"
         f"Subject: {title}\n"
@@ -40,12 +47,12 @@ def compose_email(title: str, description: str, url: str) -> str:
         f"\n"
         f"{title}\n"
         f"\n"
-        f"{description}\n"
+        f"{body}\n"
         f"\n"
         f"Read the full post:\n"
         f"{url}\n"
         f"\n"
-        f"--\n"
+        f"-- \n"
         f"Tesseras — P2P network for preserving human memories\n"
         f"https://tesseras.net\n"
     )
@@ -82,12 +89,12 @@ def main():
         return
 
     result = subprocess.run(
-        ["sendmail", "-t"],
+        ["msmtp", "-t"],
         input=email.encode("utf-8"),
         check=False,
     )
     if result.returncode != 0:
-        sys.exit(f"error: sendmail exited with code {result.returncode}")
+        sys.exit(f"error: msmtp exited with code {result.returncode}")
 
     print(f"Sent announcement to {TO}: {title}")
 
