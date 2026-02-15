@@ -28,4 +28,4 @@ else
     RSYNC=rsync
 fi
 
-"$RSYNC" -av --delete "$BUILDDIR/" "${SERVER}:${DEST}"
+"$RSYNC" -av --delete --exclude book "$BUILDDIR/" "${SERVER}:${DEST}"
