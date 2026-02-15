@@ -164,12 +164,16 @@ impl DhtEngine {
                     sender: self.identity.clone(),
                     capabilities: Capabilities::phase1_default(),
                     listen_addrs: self.transport.local_addrs().into_iter().skip(1).collect(),
+                    nat_type: None,
+                    relay_slots_available: None,
+                    relay_bandwidth_used_kbps: None,
                 })
             }
             Message::Pong {
                 sender,
                 capabilities,
                 listen_addrs,
+                ..
             } => {
                 if pow::verify_pow(sender) {
                     self.record_peer(peer.addr, sender, *capabilities, listen_addrs)
@@ -250,6 +254,18 @@ impl DhtEngine {
                 }
             }
             Message::AttestResponse { .. } => None,
+
+            // NAT traversal messages — dispatched to NatHandler (Task 7)
+            Message::PunchIntro { .. }
+            | Message::PunchRequest { .. }
+            | Message::PunchReady { .. }
+            | Message::RelayRequest { .. }
+            | Message::RelayOffer { .. }
+            | Message::RelayClose { .. }
+            | Message::RelayMigrate { .. } => {
+                tracing::debug!("received NAT traversal message but no handler set yet");
+                None
+            }
         }
     }
 
@@ -304,6 +320,7 @@ impl DhtEngine {
                 sender,
                 capabilities,
                 listen_addrs,
+                ..
             })) => {
                 if pow::verify_pow(&sender) {
                     self.record_peer(addr, &sender, capabilities, &listen_addrs)

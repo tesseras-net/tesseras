@@ -1,7 +1,21 @@
 use serde::{Deserialize, Serialize};
 
+use tesseras_core::network::NatType;
 use tesseras_core::replication::{Attestation, FragmentEnvelope, ReplicateAck};
 use tesseras_core::{Capabilities, ContentHash, NodeId, NodeIdentity, NodeInfo, TesseraPointer};
+
+/// Why a relay session was closed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RelayCloseReason {
+    /// Peer explicitly closed.
+    PeerClosed,
+    /// No packets for idle timeout period.
+    IdleTimeout,
+    /// Rate limit exceeded.
+    RateLimitExceeded,
+    /// Relay node shutting down.
+    RelayShutdown,
+}
 
 /// Kademlia protocol messages.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -15,6 +29,15 @@ pub enum Message {
         /// Additional listen addresses (e.g. IPv6). Empty for single-address nodes.
         #[serde(default)]
         listen_addrs: Vec<std::net::SocketAddr>,
+        /// Detected NAT type of the sender.
+        #[serde(default)]
+        nat_type: Option<NatType>,
+        /// Available relay slots (only if RELAY capability is set).
+        #[serde(default)]
+        relay_slots_available: Option<u16>,
+        /// Current relay bandwidth usage in KB/s.
+        #[serde(default)]
+        relay_bandwidth_used_kbps: Option<u32>,
     },
 
     FindNode {
@@ -50,6 +73,69 @@ pub enum Message {
     },
     AttestResponse {
         attestation: Attestation,
+    },
+
+    // --- NAT Traversal (Phase 4) ---
+    /// Request hole-punch introduction. Signed to prevent reflection attacks.
+    PunchIntro {
+        sender: NodeIdentity,
+        target: NodeId,
+        /// Initiator's external address (from STUN).
+        external_addr: std::net::SocketAddr,
+        /// Prevents replay (seconds since UNIX epoch).
+        timestamp: u64,
+        /// Ed25519 signature over (target || external_addr || timestamp).
+        signature: Vec<u8>,
+    },
+
+    /// Introducer forwards punch request to target.
+    /// Carries initiator's original signature for direct verification.
+    PunchRequest {
+        sender: NodeIdentity,
+        initiator: NodeIdentity,
+        initiator_addr: std::net::SocketAddr,
+        timestamp: u64,
+        /// Original signature from PunchIntro.
+        signature: Vec<u8>,
+    },
+
+    /// Target confirms readiness for hole-punch.
+    PunchReady {
+        sender: NodeIdentity,
+        /// Target's external address (from STUN).
+        external_addr: std::net::SocketAddr,
+    },
+
+    /// Request a relay session through a public-IP node.
+    RelayRequest {
+        sender: NodeIdentity,
+        target: NodeId,
+        timestamp: u64,
+        /// Ed25519 signature over (target || timestamp).
+        signature: Vec<u8>,
+    },
+
+    /// Relay session established. Sent to both peers.
+    RelayOffer {
+        sender: NodeIdentity,
+        /// The relay's UDP address to send QUIC packets to.
+        relay_addr: std::net::SocketAddr,
+        /// Opaque token identifying this session at the relay.
+        session_token: [u8; 16],
+    },
+
+    /// Relay session closed.
+    RelayClose {
+        session_token: [u8; 16],
+        reason: RelayCloseReason,
+    },
+
+    /// Request to migrate relay session to new source address (after network change).
+    RelayMigrate {
+        session_token: [u8; 16],
+        timestamp: u64,
+        /// Ed25519 signature over (session_token || timestamp).
+        signature: Vec<u8>,
     },
 }
 
@@ -116,6 +202,9 @@ mod tests {
             sender: test_identity(),
             capabilities: Capabilities::phase1_default(),
             listen_addrs: vec![],
+            nat_type: None,
+            relay_slots_available: None,
+            relay_bandwidth_used_kbps: None,
         };
         let bytes = encode(&msg).unwrap();
         let decoded = decode(&bytes).unwrap();
@@ -131,6 +220,9 @@ mod tests {
                 "[::1]:4433".parse().unwrap(),
                 "10.0.0.1:4433".parse().unwrap(),
             ],
+            nat_type: None,
+            relay_slots_available: None,
+            relay_bandwidth_used_kbps: None,
         };
         let bytes = encode(&msg).unwrap();
         let decoded = decode(&bytes).unwrap();
@@ -144,6 +236,9 @@ mod tests {
             sender: test_identity(),
             capabilities: Capabilities::phase1_default(),
             listen_addrs: vec![],
+            nat_type: None,
+            relay_slots_available: None,
+            relay_bandwidth_used_kbps: None,
         };
         let bytes = encode(&msg_old).unwrap();
         let decoded = decode(&bytes).unwrap();
@@ -281,5 +376,154 @@ mod tests {
                 result: FindValueResult::Nodes(_)
             }
         ));
+    }
+
+    // --- NAT Traversal message round-trips ---
+
+    fn roundtrip(msg: &Message) -> Message {
+        let bytes = encode(msg).unwrap();
+        decode(&bytes).unwrap()
+    }
+
+    #[test]
+    fn punch_intro_roundtrip() {
+        let msg = Message::PunchIntro {
+            sender: test_identity(),
+            target: NodeId::new([3u8; 20]),
+            external_addr: "203.0.113.5:4433".parse().unwrap(),
+            timestamp: 1234567890,
+            signature: vec![0xAA; 64],
+        };
+        let decoded = roundtrip(&msg);
+        match decoded {
+            Message::PunchIntro {
+                target,
+                timestamp,
+                signature,
+                ..
+            } => {
+                assert_eq!(target, NodeId::new([3u8; 20]));
+                assert_eq!(timestamp, 1234567890);
+                assert_eq!(signature, vec![0xAA; 64]);
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn punch_request_roundtrip() {
+        let msg = Message::PunchRequest {
+            sender: test_identity(),
+            initiator: test_identity(),
+            initiator_addr: "203.0.113.5:4433".parse().unwrap(),
+            timestamp: 1234567890,
+            signature: vec![0xBB; 64],
+        };
+        assert!(matches!(roundtrip(&msg), Message::PunchRequest { .. }));
+    }
+
+    #[test]
+    fn punch_ready_roundtrip() {
+        let msg = Message::PunchReady {
+            sender: test_identity(),
+            external_addr: "203.0.113.5:4433".parse().unwrap(),
+        };
+        assert!(matches!(roundtrip(&msg), Message::PunchReady { .. }));
+    }
+
+    #[test]
+    fn relay_request_roundtrip() {
+        let msg = Message::RelayRequest {
+            sender: test_identity(),
+            target: NodeId::new([3u8; 20]),
+            timestamp: 999,
+            signature: vec![0xCC; 64],
+        };
+        assert!(matches!(roundtrip(&msg), Message::RelayRequest { .. }));
+    }
+
+    #[test]
+    fn relay_offer_roundtrip() {
+        let msg = Message::RelayOffer {
+            sender: test_identity(),
+            relay_addr: "198.51.100.1:5000".parse().unwrap(),
+            session_token: [0xDD; 16],
+        };
+        assert!(matches!(roundtrip(&msg), Message::RelayOffer { .. }));
+    }
+
+    #[test]
+    fn relay_close_roundtrip() {
+        let msg = Message::RelayClose {
+            session_token: [0xEE; 16],
+            reason: RelayCloseReason::IdleTimeout,
+        };
+        let decoded = roundtrip(&msg);
+        match decoded {
+            Message::RelayClose { reason, .. } => {
+                assert_eq!(reason, RelayCloseReason::IdleTimeout);
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn relay_migrate_roundtrip() {
+        let msg = Message::RelayMigrate {
+            session_token: [0xFF; 16],
+            timestamp: 42,
+            signature: vec![0x11; 64],
+        };
+        assert!(matches!(roundtrip(&msg), Message::RelayMigrate { .. }));
+    }
+
+    #[test]
+    fn pong_with_nat_metadata_roundtrip() {
+        let msg = Message::Pong {
+            sender: test_identity(),
+            capabilities: Capabilities::phase2_default(),
+            listen_addrs: vec!["[::1]:4433".parse().unwrap()],
+            nat_type: Some(NatType::Cone),
+            relay_slots_available: Some(10),
+            relay_bandwidth_used_kbps: Some(128),
+        };
+        let decoded = roundtrip(&msg);
+        match decoded {
+            Message::Pong {
+                nat_type,
+                relay_slots_available,
+                relay_bandwidth_used_kbps,
+                ..
+            } => {
+                assert_eq!(nat_type, Some(NatType::Cone));
+                assert_eq!(relay_slots_available, Some(10));
+                assert_eq!(relay_bandwidth_used_kbps, Some(128));
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn pong_backward_compatible_no_nat_fields() {
+        let old_msg = Message::Pong {
+            sender: test_identity(),
+            capabilities: Capabilities::phase1_default(),
+            listen_addrs: vec![],
+            nat_type: None,
+            relay_slots_available: None,
+            relay_bandwidth_used_kbps: None,
+        };
+        let decoded = roundtrip(&old_msg);
+        match decoded {
+            Message::Pong {
+                nat_type,
+                relay_slots_available,
+                ..
+            } => {
+                assert_eq!(nat_type, None);
+                assert_eq!(relay_slots_available, None);
+            }
+            _ => panic!("wrong variant"),
+        }
     }
 }
