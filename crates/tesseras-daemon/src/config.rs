@@ -12,6 +12,8 @@ pub struct DaemonConfig {
     pub observability: ObservabilityConfig,
     #[serde(default)]
     pub replication: ReplicationTomlConfig,
+    #[serde(default)]
+    pub nat: NatConfig,
 }
 
 #[derive(Debug, Deserialize)]
@@ -80,6 +82,62 @@ impl Default for ReplicationTomlConfig {
     }
 }
 
+/// NAT traversal configuration.
+#[derive(Debug, Clone, serde::Serialize, Deserialize)]
+pub struct NatConfig {
+    /// STUN server addresses for NAT detection.
+    #[serde(default = "default_stun_servers")]
+    pub stun_servers: Vec<String>,
+    /// Enable relay functionality (forward traffic for NATed peers).
+    #[serde(default)]
+    pub relay_enabled: bool,
+    /// Maximum relay sessions to serve simultaneously.
+    #[serde(default = "default_relay_max_sessions")]
+    pub relay_max_sessions: u16,
+    /// Bandwidth limit for reciprocal relay peers (KB/s).
+    #[serde(default = "default_relay_reciprocal_kbps")]
+    pub relay_reciprocal_kbps: u32,
+    /// Bandwidth limit for non-reciprocal (bootstrap) relay peers (KB/s).
+    #[serde(default = "default_relay_bootstrap_kbps")]
+    pub relay_bootstrap_kbps: u32,
+    /// Relay session idle timeout in seconds.
+    #[serde(default = "default_relay_idle_timeout_secs")]
+    pub relay_idle_timeout_secs: u64,
+}
+
+fn default_stun_servers() -> Vec<String> {
+    vec![
+        "stun.l.google.com:19302".to_string(),
+        "stun.cloudflare.com:3478".to_string(),
+    ]
+}
+
+fn default_relay_max_sessions() -> u16 {
+    50
+}
+fn default_relay_reciprocal_kbps() -> u32 {
+    256
+}
+fn default_relay_bootstrap_kbps() -> u32 {
+    64
+}
+fn default_relay_idle_timeout_secs() -> u64 {
+    60
+}
+
+impl Default for NatConfig {
+    fn default() -> Self {
+        Self {
+            stun_servers: default_stun_servers(),
+            relay_enabled: false,
+            relay_max_sessions: default_relay_max_sessions(),
+            relay_reciprocal_kbps: default_relay_reciprocal_kbps(),
+            relay_bootstrap_kbps: default_relay_bootstrap_kbps(),
+            relay_idle_timeout_secs: default_relay_idle_timeout_secs(),
+        }
+    }
+}
+
 impl Default for DaemonConfig {
     fn default() -> Self {
         Self {
@@ -112,6 +170,7 @@ impl Default for DaemonConfig {
                 log_format: "json".into(),
             },
             replication: ReplicationTomlConfig::default(),
+            nat: NatConfig::default(),
         }
     }
 }
@@ -241,6 +300,27 @@ log_format = "json"
         let config: DaemonConfig = toml::from_str(toml).unwrap();
         assert_eq!(config.replication.repair_interval_secs, 86400);
         assert_eq!(config.replication.repair_jitter_secs, 7200);
+    }
+
+    #[test]
+    fn nat_config_defaults() {
+        let config: NatConfig = toml::from_str("").unwrap();
+        assert_eq!(config.stun_servers.len(), 2);
+        assert!(!config.relay_enabled);
+        assert_eq!(config.relay_max_sessions, 50);
+    }
+
+    #[test]
+    fn nat_config_custom() {
+        let toml_str = r#"
+            stun_servers = ["stun.example.com:3478"]
+            relay_enabled = true
+            relay_max_sessions = 100
+        "#;
+        let config: NatConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.stun_servers.len(), 1);
+        assert!(config.relay_enabled);
+        assert_eq!(config.relay_max_sessions, 100);
     }
 
     #[test]
