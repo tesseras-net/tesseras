@@ -26,5 +26,5 @@ pub use ports::*;
 pub use replication::*;
 #[cfg(feature = "service")]
 pub use service::{CreateInput, FileInput, FileVerification, TesseraService, VerifyReport};
-pub use tessera::{HybridEncryptionPublic, Tessera, TesseraIdentity};
+pub use tessera::{HeirShareMeta, HybridEncryptionPublic, Tessera, TesseraIdentity};
 pub use types::{ContentHash, HashPrefix, NodeId};

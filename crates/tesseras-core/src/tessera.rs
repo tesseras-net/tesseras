@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::{ContentHash, CoreError, Manifest, Memory};
 
 /// Public half of a hybrid encryption keypair (X25519 + ML-KEM-768).
@@ -6,6 +8,18 @@ use crate::{ContentHash, CoreError, Manifest, Memory};
 pub struct HybridEncryptionPublic {
     pub x25519: [u8; 32],
     pub mlkem768: Vec<u8>,
+}
+
+/// Metadata about heir shares created for this identity.
+/// Stored in `heir_meta.json`, NOT in `TesseraIdentity` serialization.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HeirShareMeta {
+    pub format_version: u8,
+    #[serde(with = "hex_serde")]
+    pub session_id: [u8; 8],
+    pub threshold: u8,
+    pub total_shares: u8,
+    pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -64,6 +78,28 @@ impl Tessera {
     }
     pub fn identity(&self) -> &TesseraIdentity {
         &self.identity
+    }
+}
+
+mod hex_serde {
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(bytes: &[u8; 8], ser: S) -> Result<S::Ok, S::Error> {
+        let hex: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
+        ser.serialize_str(&hex)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(de: D) -> Result<[u8; 8], D::Error> {
+        let s = String::deserialize(de)?;
+        if s.len() != 16 {
+            return Err(serde::de::Error::custom("expected 16 hex chars"));
+        }
+        let mut bytes = [0u8; 8];
+        for (i, byte) in bytes.iter_mut().enumerate() {
+            *byte = u8::from_str_radix(&s[i * 2..i * 2 + 2], 16)
+                .map_err(serde::de::Error::custom)?;
+        }
+        Ok(bytes)
     }
 }
 
