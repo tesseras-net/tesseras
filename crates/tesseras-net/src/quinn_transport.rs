@@ -3,6 +3,7 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use dashmap::DashMap;
@@ -13,6 +14,32 @@ use crate::codec::{self, ALPN_TESSERAS_V1};
 use crate::error::NetError;
 use crate::transport::{Envelope, PeerAddr, Transport};
 
+/// Configuration for the QUIC connection pool.
+#[derive(Debug, Clone)]
+pub struct PoolConfig {
+    /// Maximum number of pooled connections. Default: 256.
+    pub max_connections: usize,
+    /// Idle timeout before a connection is reaped. Default: 5 minutes.
+    pub idle_timeout: Duration,
+    /// How often the reaper task runs. Default: 30 seconds.
+    pub reaper_interval: Duration,
+}
+
+impl Default for PoolConfig {
+    fn default() -> Self {
+        Self {
+            max_connections: 256,
+            idle_timeout: Duration::from_secs(300),
+            reaper_interval: Duration::from_secs(30),
+        }
+    }
+}
+
+struct PooledConnection {
+    conn: quinn::Connection,
+    last_used: Instant,
+}
+
 /// QUIC transport implementation using quinn.
 ///
 /// Supports binding to multiple addresses (e.g. one IPv4 and one IPv6) via
@@ -20,7 +47,8 @@ use crate::transport::{Envelope, PeerAddr, Transport};
 /// target address family.
 pub struct QuinnTransport {
     endpoints: Vec<Endpoint>,
-    connections: DashMap<SocketAddr, quinn::Connection>,
+    connections: Arc<DashMap<SocketAddr, PooledConnection>>,
+    pool_config: PoolConfig,
     incoming_tx: mpsc::Sender<Envelope>,
     incoming_rx: tokio::sync::Mutex<mpsc::Receiver<Envelope>>,
 }
@@ -31,9 +59,25 @@ impl QuinnTransport {
         Self::bind_multiple(&[addr]).await
     }
 
+    /// Bind to a single address with a custom pool configuration.
+    pub async fn bind_with_config(
+        addr: SocketAddr,
+        pool_config: PoolConfig,
+    ) -> Result<Arc<Self>, NetError> {
+        Self::bind_multiple_with_config(&[addr], pool_config).await
+    }
+
     /// Bind to multiple addresses (e.g. IPv4 + IPv6) and start accepting
     /// connections on each endpoint.
     pub async fn bind_multiple(addrs: &[SocketAddr]) -> Result<Arc<Self>, NetError> {
+        Self::bind_multiple_with_config(addrs, PoolConfig::default()).await
+    }
+
+    /// Bind to multiple addresses with a custom pool configuration.
+    pub async fn bind_multiple_with_config(
+        addrs: &[SocketAddr],
+        pool_config: PoolConfig,
+    ) -> Result<Arc<Self>, NetError> {
         if addrs.is_empty() {
             return Err(NetError::ConnectionFailed(
                 "at least one listen address required".to_string(),
@@ -50,10 +94,12 @@ impl QuinnTransport {
         }
 
         let (incoming_tx, incoming_rx) = mpsc::channel(1024);
+        let connections = Arc::new(DashMap::new());
 
         let transport = Arc::new(Self {
             endpoints,
-            connections: DashMap::new(),
+            connections: Arc::clone(&connections),
+            pool_config: pool_config.clone(),
             incoming_tx,
             incoming_rx: tokio::sync::Mutex::new(incoming_rx),
         });
@@ -66,7 +112,30 @@ impl QuinnTransport {
             });
         }
 
+        // Spawn idle connection reaper
+        Self::spawn_reaper(connections, pool_config);
+
         Ok(transport)
+    }
+
+    fn spawn_reaper(connections: Arc<DashMap<SocketAddr, PooledConnection>>, config: PoolConfig) {
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(config.reaper_interval);
+            loop {
+                interval.tick().await;
+                let now = Instant::now();
+                connections.retain(|_, pooled| {
+                    if pooled.conn.close_reason().is_some() {
+                        return false; // already dead
+                    }
+                    if now.duration_since(pooled.last_used) > config.idle_timeout {
+                        pooled.conn.close(0u32.into(), b"idle");
+                        return false;
+                    }
+                    true
+                });
+            }
+        });
     }
 
     /// Generate self-signed TLS configuration.
@@ -117,7 +186,10 @@ impl QuinnTransport {
                 }
             };
             let remote = conn.remote_address();
-            connections.insert(remote, conn.clone());
+            connections.insert(remote, PooledConnection {
+                conn: conn.clone(),
+                last_used: Instant::now(),
+            });
 
             // Spawn a task to handle streams from this connection
             tokio::spawn(async move {
@@ -164,9 +236,24 @@ impl QuinnTransport {
 
     /// Get or create a connection to a peer.
     async fn get_connection(&self, addr: SocketAddr) -> Result<quinn::Connection, NetError> {
-        if let Some(conn) = self.connections.get(&addr) {
-            if conn.close_reason().is_none() {
-                return Ok(conn.clone());
+        if let Some(mut entry) = self.connections.get_mut(&addr) {
+            if entry.conn.close_reason().is_none() {
+                entry.last_used = Instant::now();
+                return Ok(entry.conn.clone());
+            }
+        }
+
+        // Evict LRU if at capacity
+        if self.connections.len() >= self.pool_config.max_connections {
+            let lru_key = self
+                .connections
+                .iter()
+                .min_by_key(|entry| entry.last_used)
+                .map(|entry| *entry.key());
+            if let Some(key) = lru_key {
+                if let Some((_, evicted)) = self.connections.remove(&key) {
+                    evicted.conn.close(0u32.into(), b"pool-full");
+                }
             }
         }
 
@@ -178,7 +265,10 @@ impl QuinnTransport {
             .await
             .map_err(|e| NetError::ConnectionFailed(e.to_string()))?;
 
-        self.connections.insert(addr, conn.clone());
+        self.connections.insert(addr, PooledConnection {
+            conn: conn.clone(),
+            last_used: Instant::now(),
+        });
         Ok(conn)
     }
 }
@@ -226,8 +316,8 @@ impl Transport for QuinnTransport {
     }
 
     async fn disconnect(&self, peer: &PeerAddr) {
-        if let Some((_, conn)) = self.connections.remove(&peer.addr) {
-            conn.close(0u32.into(), b"disconnect");
+        if let Some((_, pooled)) = self.connections.remove(&peer.addr) {
+            pooled.conn.close(0u32.into(), b"disconnect");
         }
     }
 
