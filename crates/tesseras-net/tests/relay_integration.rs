@@ -18,8 +18,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use ed25519_dalek::SigningKey;
 use rand::rngs::OsRng;
-use tesseras_core::network::NodeIdentity;
 use tesseras_core::NodeId;
+use tesseras_core::network::NodeIdentity;
 use tesseras_dht::message::{self, Message, RelayCloseReason};
 use tesseras_net::punch::sign_relay_request;
 use tesseras_net::relay::{ForwardResult, RelaySessionManager};
