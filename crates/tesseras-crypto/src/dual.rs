@@ -13,6 +13,7 @@ pub struct DualPublicKeys {
     pub mldsa: Option<()>, // placeholder
 }
 
+#[derive(Debug, Clone)]
 pub struct DualSignature {
     pub ed25519: Ed25519Sig,
     pub mldsa: Option<Vec<u8>>, // raw bytes placeholder

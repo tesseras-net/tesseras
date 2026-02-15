@@ -13,6 +13,8 @@ pub mod hasher;
 pub mod encryption;
 #[cfg(feature = "encryption")]
 pub mod kem;
+#[cfg(feature = "encryption")]
+pub mod sealed;
 
 #[cfg(feature = "erasure")]
 pub mod erasure;
