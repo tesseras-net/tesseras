@@ -81,4 +81,8 @@ pub enum NetworkEvent {
     RepairTriggered {
         fragment_id: String,
     },
+    /// Network interface changed (Wi-Fi → cellular or vice versa).
+    NetworkChanged {
+        new_local_addr: Option<String>,
+    },
 }

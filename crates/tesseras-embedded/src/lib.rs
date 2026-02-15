@@ -6,6 +6,7 @@ pub mod dht_adapter;
 pub mod error;
 mod frb_generated;
 pub mod node;
+pub mod reconnect;
 pub mod types;
 
 pub use error::TesserasError;
