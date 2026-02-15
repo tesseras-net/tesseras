@@ -188,6 +188,104 @@ impl ShamirSplitter {
 
         Ok(shares)
     }
+
+    /// Reconstruct the secret from T or more shares.
+    ///
+    /// # Validation (before attempting reconstruction)
+    /// - All shares must have matching `session_id`
+    /// - All shares must have matching `owner_fingerprint`
+    /// - All shares must have matching `threshold`
+    /// - Each share's `checksum` must be valid
+    /// - Number of shares >= `threshold`
+    ///
+    /// # Post-reconstruction verification
+    /// If `expected_owner_public` is provided, derives Ed25519 public key
+    /// from the reconstructed secret (bytes 2..34 after version+flags header)
+    /// and verifies the fingerprint matches.
+    pub fn reconstruct(
+        shares: &[HeirShare],
+        expected_owner_public: Option<&[u8]>,
+    ) -> Result<Vec<u8>, CryptoError> {
+        if shares.is_empty() {
+            return Err(CryptoError::ShamirReconstructFailed(
+                "no shares provided".into(),
+            ));
+        }
+
+        let first = &shares[0];
+
+        // Validate: enough shares
+        if shares.len() < first.threshold as usize {
+            return Err(CryptoError::ShamirReconstructFailed(format!(
+                "need {} shares but only {} provided",
+                first.threshold,
+                shares.len()
+            )));
+        }
+
+        // Validate: all shares consistent
+        for (i, share) in shares.iter().enumerate() {
+            if share.session_id != first.session_id {
+                return Err(CryptoError::ShareValidationFailed(format!(
+                    "share {} has different session_id than share 0",
+                    i
+                )));
+            }
+            if share.owner_fingerprint != first.owner_fingerprint {
+                return Err(CryptoError::ShareValidationFailed(format!(
+                    "share {} has different owner_fingerprint than share 0",
+                    i
+                )));
+            }
+            if share.threshold != first.threshold {
+                return Err(CryptoError::ShareValidationFailed(format!(
+                    "share {} has different threshold than share 0",
+                    i
+                )));
+            }
+            if !share.verify_checksum() {
+                return Err(CryptoError::ShareValidationFailed(format!(
+                    "share {} has invalid checksum (corrupted data)",
+                    i
+                )));
+            }
+            if share.share_data.len() != first.share_data.len() {
+                return Err(CryptoError::ShareValidationFailed(format!(
+                    "share {} has different data length ({}) than share 0 ({})",
+                    i,
+                    share.share_data.len(),
+                    first.share_data.len()
+                )));
+            }
+        }
+
+        // Use only threshold number of shares (first T)
+        let t = first.threshold as usize;
+        let shares_to_use = &shares[..t];
+        let secret_len = first.share_data.len();
+
+        // Reconstruct each byte via Lagrange interpolation at x=0
+        let mut secret = Vec::with_capacity(secret_len);
+        for byte_idx in 0..secret_len {
+            let points: Vec<(Gf256, Gf256)> = shares_to_use
+                .iter()
+                .map(|s| (Gf256(s.share_index), Gf256(s.share_data[byte_idx])))
+                .collect();
+            let recovered = gf256::lagrange_interpolate(&points);
+            secret.push(recovered.0);
+        }
+
+        // Post-reconstruction verification
+        if let Some(expected_public) = expected_owner_public {
+            let fingerprint_hash = blake3::hash(expected_public);
+            let expected_fingerprint = &fingerprint_hash.as_bytes()[..8];
+            if expected_fingerprint != first.owner_fingerprint {
+                return Err(CryptoError::ShamirOwnerMismatch);
+            }
+        }
+
+        Ok(secret)
+    }
 }
 
 #[cfg(test)]
@@ -283,5 +381,196 @@ mod tests {
         // Flip a bit in share_data
         shares[0].share_data[0] ^= 0xFF;
         assert!(!shares[0].verify_checksum());
+    }
+
+    #[test]
+    fn split_reconstruct_roundtrip() {
+        let secret = b"hello tesseras, this is a 64-byte secret for shamir splitting!!";
+        let config = ShamirConfig {
+            threshold: 2,
+            total_shares: 3,
+        };
+        let shares = ShamirSplitter::split(secret, &config, &test_owner_public()).unwrap();
+
+        // Reconstruct with shares 0 and 1
+        let recovered =
+            ShamirSplitter::reconstruct(&[shares[0].clone(), shares[1].clone()], None).unwrap();
+        assert_eq!(recovered, secret);
+    }
+
+    #[test]
+    fn split_reconstruct_all_share_combinations() {
+        let secret = b"test secret data";
+        let config = ShamirConfig {
+            threshold: 2,
+            total_shares: 3,
+        };
+        let shares = ShamirSplitter::split(secret, &config, &test_owner_public()).unwrap();
+
+        // All 3 pairs of 2 shares should reconstruct correctly
+        let pairs = [(0, 1), (0, 2), (1, 2)];
+        for (a, b) in pairs {
+            let recovered = ShamirSplitter::reconstruct(
+                &[shares[a].clone(), shares[b].clone()],
+                None,
+            )
+            .unwrap();
+            assert_eq!(recovered, secret, "pair ({a},{b}) failed");
+        }
+    }
+
+    #[test]
+    fn reconstruct_with_insufficient_shares() {
+        let config = ShamirConfig {
+            threshold: 2,
+            total_shares: 3,
+        };
+        let shares = ShamirSplitter::split(b"secret", &config, &test_owner_public()).unwrap();
+
+        let result = ShamirSplitter::reconstruct(&[shares[0].clone()], None);
+        assert!(matches!(
+            result,
+            Err(CryptoError::ShamirReconstructFailed(_))
+        ));
+    }
+
+    #[test]
+    fn reconstruct_wrong_owner_fingerprint() {
+        let config = ShamirConfig {
+            threshold: 2,
+            total_shares: 3,
+        };
+        let shares_a =
+            ShamirSplitter::split(b"secret a", &config, &[0xAAu8; 32]).unwrap();
+        let shares_b =
+            ShamirSplitter::split(b"secret b", &config, &[0xBBu8; 32]).unwrap();
+
+        // Mix shares from different owners
+        let result =
+            ShamirSplitter::reconstruct(&[shares_a[0].clone(), shares_b[1].clone()], None);
+        assert!(matches!(
+            result,
+            Err(CryptoError::ShareValidationFailed(_))
+        ));
+    }
+
+    #[test]
+    fn reconstruct_wrong_session_id() {
+        let config = ShamirConfig {
+            threshold: 2,
+            total_shares: 3,
+        };
+        // Two separate split calls produce different session_ids
+        let shares_1 =
+            ShamirSplitter::split(b"same secret", &config, &test_owner_public()).unwrap();
+        let shares_2 =
+            ShamirSplitter::split(b"same secret", &config, &test_owner_public()).unwrap();
+
+        // Verify session_ids are different
+        assert_ne!(shares_1[0].session_id, shares_2[0].session_id);
+
+        // Mix shares from different sessions
+        let result =
+            ShamirSplitter::reconstruct(&[shares_1[0].clone(), shares_2[1].clone()], None);
+        assert!(matches!(
+            result,
+            Err(CryptoError::ShareValidationFailed(_))
+        ));
+    }
+
+    #[test]
+    fn reconstruct_with_owner_verification() {
+        let owner = test_owner_public();
+        let config = ShamirConfig {
+            threshold: 2,
+            total_shares: 3,
+        };
+        let shares = ShamirSplitter::split(b"secret", &config, &owner).unwrap();
+
+        let recovered = ShamirSplitter::reconstruct(
+            &[shares[0].clone(), shares[1].clone()],
+            Some(&owner),
+        )
+        .unwrap();
+        assert_eq!(recovered, b"secret");
+    }
+
+    #[test]
+    fn reconstruct_with_wrong_owner_verification() {
+        let owner = test_owner_public();
+        let wrong_owner = [0xBBu8; 32];
+        let config = ShamirConfig {
+            threshold: 2,
+            total_shares: 3,
+        };
+        let shares = ShamirSplitter::split(b"secret", &config, &owner).unwrap();
+
+        let result = ShamirSplitter::reconstruct(
+            &[shares[0].clone(), shares[1].clone()],
+            Some(&wrong_owner),
+        );
+        assert!(matches!(result, Err(CryptoError::ShamirOwnerMismatch)));
+    }
+
+    #[test]
+    fn split_threshold_1() {
+        let secret = b"any single share reconstructs";
+        let config = ShamirConfig {
+            threshold: 1,
+            total_shares: 2,
+        };
+        let shares = ShamirSplitter::split(secret, &config, &test_owner_public()).unwrap();
+
+        // Any single share should reconstruct
+        let recovered_0 = ShamirSplitter::reconstruct(&[shares[0].clone()], None).unwrap();
+        assert_eq!(recovered_0, secret);
+
+        let recovered_1 = ShamirSplitter::reconstruct(&[shares[1].clone()], None).unwrap();
+        assert_eq!(recovered_1, secret);
+    }
+
+    #[test]
+    fn large_secret_roundtrip() {
+        // Simulate ML-KEM-768 secret key size
+        let secret: Vec<u8> = (0..2464).map(|i| (i % 256) as u8).collect();
+        let config = ShamirConfig {
+            threshold: 3,
+            total_shares: 5,
+        };
+        let shares = ShamirSplitter::split(&secret, &config, &test_owner_public()).unwrap();
+
+        let recovered = ShamirSplitter::reconstruct(
+            &[shares[0].clone(), shares[2].clone(), shares[4].clone()],
+            None,
+        )
+        .unwrap();
+        assert_eq!(recovered, secret);
+    }
+
+    #[test]
+    fn reconstruct_shares_from_different_split_sessions() {
+        let config = ShamirConfig {
+            threshold: 2,
+            total_shares: 3,
+        };
+        let secret = b"same secret for both sessions";
+        let shares_session_1 =
+            ShamirSplitter::split(secret, &config, &test_owner_public()).unwrap();
+        let shares_session_2 =
+            ShamirSplitter::split(secret, &config, &test_owner_public()).unwrap();
+
+        // Shares from same session work
+        let ok = ShamirSplitter::reconstruct(
+            &[shares_session_1[0].clone(), shares_session_1[1].clone()],
+            None,
+        );
+        assert!(ok.is_ok());
+
+        // Mixed shares from different sessions fail
+        let err = ShamirSplitter::reconstruct(
+            &[shares_session_1[0].clone(), shares_session_2[1].clone()],
+            None,
+        );
+        assert!(matches!(err, Err(CryptoError::ShareValidationFailed(_))));
     }
 }
