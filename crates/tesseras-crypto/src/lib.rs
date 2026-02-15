@@ -22,4 +22,6 @@ pub mod erasure;
 #[cfg(feature = "shamir")]
 pub mod shamir;
 
+pub mod secret_blob;
+
 pub use error::CryptoError;
