@@ -12,6 +12,10 @@ The best way to reach the project is through the [mailing lists](/subscriptions/
 - [tesseras-announce](https://lists.sr.ht/~ijanc/tesseras-announce) — releases and milestones
 - [tesseras-security](https://lists.sr.ht/~ijanc/tesseras-security) — vulnerability reports
 
+### IRC
+
+Join us on [Libera.Chat](https://libera.chat/) in the **#tesseras** channel ([webchat](https://web.libera.chat/#tesseras)).
+
 ### Bug Reports
 
 File bug reports and feature requests on the [ticket tracker](https://todo.sr.ht/~ijanc/tesseras).

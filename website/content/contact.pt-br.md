@@ -12,6 +12,10 @@ A melhor forma de contatar o projeto é através das [listas de discussão](/pt-
 - [tesseras-announce](https://lists.sr.ht/~ijanc/tesseras-announce) — lançamentos e marcos
 - [tesseras-security](https://lists.sr.ht/~ijanc/tesseras-security) — relatos de vulnerabilidades
 
+### IRC
+
+Participe no [Libera.Chat](https://libera.chat/) no canal **#tesseras** ([webchat](https://web.libera.chat/#tesseras)).
+
 ### Relatórios de Bugs
 
 Registre bugs e pedidos de funcionalidades no [ticket tracker](https://todo.sr.ht/~ijanc/tesseras).
