@@ -26,6 +26,8 @@ pub fn run_migrations(conn: &rusqlite::Connection) -> Result<(), StorageError> {
         .map_err(|e| StorageError::Database(e.to_string()))?;
     conn.execute_batch(include_str!("../migrations/002_replication.sql"))
         .map_err(|e| StorageError::Database(e.to_string()))?;
+    conn.execute_batch(include_str!("../migrations/003_institutional.sql"))
+        .map_err(|e| StorageError::Database(e.to_string()))?;
     Ok(())
 }
 
@@ -68,6 +70,40 @@ mod tests {
                 .unwrap();
             assert!(exists, "table {table} should exist");
         }
+    }
+
+    #[test]
+    fn institutional_tables_exist() {
+        let conn = crate::database::open_in_memory(&crate::StorageConfig::default()).unwrap();
+        for table in ["search_index", "search_index_geo"] {
+            let exists: bool = conn
+                .prepare(&format!(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'"
+                ))
+                .unwrap()
+                .exists([])
+                .unwrap();
+            assert!(exists, "table {table} should exist");
+        }
+    }
+
+    #[test]
+    fn reciprocity_has_is_institutional_column() {
+        let conn = crate::database::open_in_memory(&crate::StorageConfig::default()).unwrap();
+        conn.execute(
+            "INSERT INTO reciprocity (peer_id, bytes_stored_for_them, bytes_they_store_for_us, is_institutional, last_updated)
+             VALUES ('peer1', 0, 0, 1, '2026-01-01T00:00:00Z')",
+            [],
+        )
+        .unwrap();
+        let is_inst: bool = conn
+            .query_row(
+                "SELECT is_institutional FROM reciprocity WHERE peer_id = 'peer1'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert!(is_inst);
     }
 
     #[test]
