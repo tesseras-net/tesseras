@@ -76,6 +76,7 @@ hickory-resolver = "0.25"
 
 # Encoding
 hex = "0.4"
+qr_code = { version = "2", features = ["bmp"] }
 
 # Misc
 dirs = "6"

@@ -79,6 +79,28 @@ fn load_share(path: &str) -> Result<tesseras_crypto::shamir::HeirShare> {
     }
 }
 
+fn generate_qr(share_msgpack: &[u8], output_path: &std::path::Path) -> Result<()> {
+    use qr_code::QrCode;
+
+    if share_msgpack.len() <= 2331 {
+        let qr = QrCode::new(share_msgpack).context("failed to generate QR code")?;
+        let bmp = qr.to_bmp().mul(8).context("failed to scale QR code")?;
+        let mut bmp_bytes = Vec::new();
+        bmp.write(&mut bmp_bytes)
+            .map_err(|e| anyhow::anyhow!("failed to serialize BMP: {e}"))?;
+        let img = image::load_from_memory_with_format(&bmp_bytes, image::ImageFormat::Bmp)
+            .context("failed to decode BMP")?;
+        img.save(output_path).context("failed to save QR PNG")?;
+    } else {
+        eprintln!(
+            "  Warning: share too large for single QR ({} bytes). \
+             Use .bin or .txt format instead.",
+            share_msgpack.len()
+        );
+    }
+    Ok(())
+}
+
 pub async fn run_create(
     threshold: u8,
     shares: u8,
@@ -178,6 +200,12 @@ pub async fn run_create(
         let txt_path = out_path.join(format!("heir_share_{idx}.txt"));
         let text = share_to_text(share, &today)?;
         std::fs::write(&txt_path, text)?;
+
+        // QR code
+        let qr_path = out_path.join(format!("heir_share_{idx}.qr.png"));
+        if let Err(e) = generate_qr(&msgpack, &qr_path) {
+            eprintln!("  Warning: QR generation failed for share {idx}: {e}");
+        }
     }
 
     // Write heir_meta.json
@@ -214,7 +242,7 @@ pub async fn run_create(
     println!();
     for share in &heir_shares {
         let idx = share.share_index;
-        println!("  Share {idx}: {}/heir_share_{idx}.{{bin,txt}}", output_dir);
+        println!("  Share {idx}: {}/heir_share_{idx}.{{bin,txt,qr.png}}", output_dir);
     }
     println!();
     println!("IMPORTANT: Distribute shares to different people/locations.");
