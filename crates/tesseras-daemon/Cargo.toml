@@ -27,6 +27,8 @@ serde = { workspace = true }
 toml = { workspace = true }
 chrono = { workspace = true }
 dirs = { workspace = true }
+hex = { workspace = true }
+hickory-resolver = { workspace = true }
 
 [features]
 default = []

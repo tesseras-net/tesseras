@@ -3,6 +3,7 @@
 #[allow(dead_code)]
 mod config;
 mod dht_adapter;
+mod institutional;
 
 use std::net::SocketAddr;
 use std::path::PathBuf;

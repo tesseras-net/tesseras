@@ -71,6 +71,12 @@ flutter_rust_bridge = "=2.11.1"
 # Observability
 prometheus = "0.13"
 
+# DNS
+hickory-resolver = "0.25"
+
+# Encoding
+hex = "0.4"
+
 # Misc
 dirs = "6"
 
