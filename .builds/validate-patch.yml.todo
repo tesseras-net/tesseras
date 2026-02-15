@@ -1,0 +1,70 @@
+# Tesseras patch validation for SourceHut builds.
+#
+# This manifest validates contributions by checking only the crates
+# affected by a patch, with fail-fast stages from cheapest to most
+# expensive.
+#
+# To activate: rename this file to validate-patch.yml
+# To deactivate: rename back to validate-patch.yml.todo
+#
+# SourceHut auto-submits any .builds/*.yml file on push.
+image: archlinux
+packages:
+  - rustup
+  - gcc
+  - pkgconf
+  - sqlite
+  - dprint
+sources:
+  - https://git.sr.ht/~ijanc/tesseras
+environment:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+tasks:
+  - setup: |
+      rustup default stable
+      rustup component add rustfmt clippy
+  - fmt: |
+      cd tesseras
+      cargo fmt --check
+      dprint check
+  - detect-changes: |
+      cd tesseras
+      # Determine changed crates from the latest commit.
+      # On SourceHut, patches are applied as the HEAD commit.
+      changed=$(git diff --name-only HEAD~1 -- crates/ \
+        | cut -d/ -f2 \
+        | sort -u \
+        | while read -r crate; do
+            # Only emit crates that actually exist in the workspace.
+            if [ -f "crates/$crate/Cargo.toml" ]; then
+              echo "$crate"
+            fi
+          done)
+      if [ -z "$changed" ]; then
+        echo "No crate changes detected — running workspace check."
+        echo "VALIDATE_SCOPE=--workspace" > ~/.buildenv-scope
+      else
+        scope=""
+        for crate in $changed; do
+          echo "  changed: $crate"
+          scope="$scope -p $crate"
+        done
+        echo "VALIDATE_SCOPE=$scope" > ~/.buildenv-scope
+      fi
+  - check: |
+      cd tesseras
+      . ~/.buildenv-scope
+      cargo check $VALIDATE_SCOPE
+  - clippy: |
+      cd tesseras
+      . ~/.buildenv-scope
+      cargo clippy $VALIDATE_SCOPE -- -D warnings
+  - test: |
+      cd tesseras
+      . ~/.buildenv-scope
+      cargo test $VALIDATE_SCOPE
+triggers:
+  - action: email
+    condition: failure
+    to: murilo@ijanc.org
