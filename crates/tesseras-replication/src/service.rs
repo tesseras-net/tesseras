@@ -186,8 +186,6 @@ impl ReplicationService {
         target_bytes.copy_from_slice(&tessera_hash.as_bytes()[..20]);
         let target_node = NodeId::new(target_bytes);
         let candidates = self.dht.find_closest_nodes(&target_node).await;
-        let peers = apply_subnet_diversity(&candidates, 2);
-
         let replication_factor = match &encoded.plan.tier {
             FragmentationTier::Small {
                 replication_factor, ..
@@ -199,6 +197,10 @@ impl ReplicationService {
                 replication_factor, ..
             } => *replication_factor as usize,
         };
+
+        let peers = apply_subnet_diversity(&candidates, 2);
+        let peers =
+            crate::distributor::apply_institutional_diversity(&peers, replication_factor);
 
         let target_peers = &peers[..peers.len().min(replication_factor)];
         let mut peers_contacted = 0;
