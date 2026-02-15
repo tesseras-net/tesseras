@@ -14,4 +14,5 @@
 - [Conceitos de Rede](./network-concepts.md)
 - [Replicação e Reparo](./replication.md)
 - [Criptografia e Tesseras Seladas](./encryption.md)
+- [Recuperação de Chaves por Herdeiros](./heir-recovery.md)
 - [Docker](./docker.md)

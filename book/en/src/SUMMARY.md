@@ -14,4 +14,5 @@
 - [Network Concepts](./network-concepts.md)
 - [Replication and Repair](./replication.md)
 - [Encryption and Sealed Tesseras](./encryption.md)
+- [Heir Key Recovery](./heir-recovery.md)
 - [Docker](./docker.md)
