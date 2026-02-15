@@ -201,6 +201,23 @@ async fn main() -> Result<()> {
         config.node.data_dir.join("cas"),
     ));
 
+    // 7c2. Run CAS dedup migration if needed (storage_version 1 -> 2)
+    let migration_stats = tesseras_storage::migrate_to_cas(
+        &config.node.data_dir,
+        &cas,
+        &conn,
+    )
+    .with_context(|| "failed to run CAS dedup migration")?;
+    if migration_stats.files_migrated > 0 {
+        tracing::info!(
+            files = migration_stats.files_migrated,
+            duplicates = migration_stats.duplicates_found,
+            bytes_saved = migration_stats.bytes_saved,
+            failed = migration_stats.files_failed,
+            "CAS dedup migration completed"
+        );
+    }
+
     // 7d. Create storage instances with LRU fragment cache
     let fs_fragments = FsFragmentStore::new(Arc::clone(&conn), Arc::clone(&cas));
     let fragment_store = tesseras_storage::CachedFragmentStore::new(

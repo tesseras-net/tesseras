@@ -3,7 +3,6 @@ use std::sync::{Arc, Mutex};
 
 use crate::cas::CasStore;
 use crate::error::StorageError;
-use tesseras_core::ContentHash;
 
 /// Statistics from the dedup migration.
 #[derive(Debug, Default)]
@@ -270,6 +269,7 @@ pub fn migrate_to_cas(
 mod tests {
     use super::*;
     use tempfile::TempDir;
+    use tesseras_core::ContentHash;
 
     fn setup() -> (Arc<Mutex<rusqlite::Connection>>, Arc<CasStore>, TempDir) {
         let dir = TempDir::new().unwrap();
