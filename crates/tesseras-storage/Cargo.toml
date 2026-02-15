@@ -26,3 +26,4 @@ bundled-sqlite = ["rusqlite/bundled"]
 [dev-dependencies]
 tempfile = { workspace = true }
 filetime = "0.2"
+proptest = { workspace = true }

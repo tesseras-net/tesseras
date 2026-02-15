@@ -381,4 +381,94 @@ mod tests {
         let read = store.get(&hash).unwrap();
         assert_eq!(read, data);
     }
+
+    mod proptests {
+        use super::*;
+        use proptest::collection::vec as prop_vec;
+        use proptest::prelude::*;
+
+        /// Represents a put or release action on a specific data blob.
+        #[derive(Debug, Clone)]
+        enum Action {
+            Put(Vec<u8>),
+            Release(usize), // index into previously put items
+        }
+
+        fn action_strategy() -> impl Strategy<Value = Vec<Action>> {
+            prop_vec(
+                prop_oneof![
+                    prop_vec(any::<u8>(), 1..64).prop_map(Action::Put),
+                    (0..10usize).prop_map(Action::Release),
+                ],
+                1..50,
+            )
+        }
+
+        proptest! {
+            #[test]
+            fn refcount_matches_actual_refs(actions in action_strategy()) {
+                let dir = TempDir::new().unwrap();
+                let conn = crate::database::open_in_memory(&crate::StorageConfig::default()).unwrap();
+                let store = CasStore::new(Arc::new(Mutex::new(conn)), dir.path().join("cas"));
+
+                let mut put_hashes: Vec<ContentHash> = Vec::new();
+                // Track expected refcount per hash
+                let mut expected_refs: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
+
+                for action in &actions {
+                    match action {
+                        Action::Put(data) => {
+                            let (hash, _) = store.put(data).unwrap();
+                            put_hashes.push(hash);
+                            *expected_refs.entry(hash.to_string()).or_insert(0) += 1;
+                        }
+                        Action::Release(idx) => {
+                            if !put_hashes.is_empty() {
+                                let idx = idx % put_hashes.len();
+                                let hash = put_hashes[idx];
+                                let hex = hash.to_string();
+                                if let Some(count) = expected_refs.get(&hex) {
+                                    if *count > 0 {
+                                        let _ = store.release(&hash);
+                                        *expected_refs.get_mut(&hex).unwrap() -= 1;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Verify all refcounts match
+                for (hex, expected) in &expected_refs {
+                    let actual = store.ref_count(
+                        &hex.parse::<ContentHash>().unwrap()
+                    ).unwrap();
+                    if *expected == 0 {
+                        prop_assert!(actual.is_none() || actual == Some(0),
+                            "hash {} expected refcount 0, got {:?}", hex, actual);
+                    } else {
+                        prop_assert_eq!(actual, Some(*expected),
+                            "hash {} refcount mismatch", hex);
+                    }
+                }
+            }
+
+            #[test]
+            fn cas_path_is_deterministic(data in prop_vec(any::<u8>(), 1..256)) {
+                let dir = TempDir::new().unwrap();
+                let conn = crate::database::open_in_memory(&crate::StorageConfig::default()).unwrap();
+                let store = CasStore::new(Arc::new(Mutex::new(conn)), dir.path().join("cas"));
+
+                let hash = ContentHash::new(blake3::hash(&data).into());
+                let path1 = store.cas_path(&hash);
+                let path2 = store.cas_path(&hash);
+                prop_assert_eq!(&path1, &path2);
+
+                // Verify prefix matches first 2 chars of hex
+                let hex = hash.to_string();
+                let prefix = path1.parent().unwrap().file_name().unwrap().to_str().unwrap();
+                prop_assert_eq!(prefix, &hex[..2]);
+            }
+        }
+    }
 }
