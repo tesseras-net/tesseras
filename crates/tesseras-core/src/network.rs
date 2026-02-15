@@ -17,6 +17,8 @@ impl Capabilities {
     pub const REPLICATE: u64 = 1 << 4;
     pub const ATTEST: u64 = 1 << 5;
     pub const RELAY: u64 = 1 << 6;
+    pub const INSTITUTIONAL: u64 = 1 << 7;
+    pub const SEARCH_INDEX: u64 = 1 << 8;
 
     /// Phase 1 default: PING | FIND_NODE | FIND_VALUE | STORE
     pub fn phase1_default() -> Self {
@@ -32,6 +34,21 @@ impl Capabilities {
                 | Self::STORE
                 | Self::REPLICATE
                 | Self::ATTEST,
+        )
+    }
+
+    /// Institutional default: Phase 2 + RELAY | INSTITUTIONAL | SEARCH_INDEX
+    pub fn institutional_default() -> Self {
+        Self(
+            Self::PING
+                | Self::FIND_NODE
+                | Self::FIND_VALUE
+                | Self::STORE
+                | Self::REPLICATE
+                | Self::ATTEST
+                | Self::RELAY
+                | Self::INSTITUTIONAL
+                | Self::SEARCH_INDEX,
         )
     }
 
@@ -151,6 +168,39 @@ mod tests {
         // Still has phase 1 caps
         assert!(caps.has(Capabilities::PING));
         assert!(caps.has(Capabilities::FIND_NODE));
+    }
+
+    #[test]
+    fn capabilities_institutional_has_all_expected() {
+        let caps = Capabilities::institutional_default();
+        // Phase 2 basics
+        assert!(caps.has(Capabilities::PING));
+        assert!(caps.has(Capabilities::FIND_NODE));
+        assert!(caps.has(Capabilities::FIND_VALUE));
+        assert!(caps.has(Capabilities::STORE));
+        assert!(caps.has(Capabilities::REPLICATE));
+        assert!(caps.has(Capabilities::ATTEST));
+        // Institutional extras
+        assert!(caps.has(Capabilities::RELAY));
+        assert!(caps.has(Capabilities::INSTITUTIONAL));
+        assert!(caps.has(Capabilities::SEARCH_INDEX));
+    }
+
+    #[test]
+    fn capabilities_phase2_default_lacks_institutional() {
+        let caps = Capabilities::phase2_default();
+        assert!(!caps.has(Capabilities::INSTITUTIONAL));
+        assert!(!caps.has(Capabilities::SEARCH_INDEX));
+    }
+
+    #[test]
+    fn capabilities_institutional_serde_roundtrip() {
+        let caps = Capabilities::institutional_default();
+        let bytes = rmp_serde::to_vec(&caps).unwrap();
+        let parsed: Capabilities = rmp_serde::from_slice(&bytes).unwrap();
+        assert_eq!(parsed, caps);
+        assert!(parsed.has(Capabilities::INSTITUTIONAL));
+        assert!(parsed.has(Capabilities::SEARCH_INDEX));
     }
 
     #[test]
