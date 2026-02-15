@@ -14,6 +14,8 @@ pub struct DaemonConfig {
     pub replication: ReplicationTomlConfig,
     #[serde(default)]
     pub nat: NatConfig,
+    #[serde(default)]
+    pub performance: PerformanceConfig,
 }
 
 #[derive(Debug, Deserialize)]
@@ -138,6 +140,33 @@ impl Default for NatConfig {
     }
 }
 
+/// Performance tuning for SQLite, fragment cache, and connection pool.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct PerformanceConfig {
+    pub sqlite_synchronous_full: bool,
+    pub sqlite_cache_size_kb: u32,
+    pub sqlite_busy_timeout_ms: u32,
+    pub fragment_cache_size_mb: u32,
+    pub pool_max_connections: usize,
+    pub pool_idle_timeout_secs: u64,
+    pub pool_reaper_interval_secs: u64,
+}
+
+impl Default for PerformanceConfig {
+    fn default() -> Self {
+        Self {
+            sqlite_synchronous_full: false,
+            sqlite_cache_size_kb: 64000,
+            sqlite_busy_timeout_ms: 5000,
+            fragment_cache_size_mb: 128,
+            pool_max_connections: 256,
+            pool_idle_timeout_secs: 300,
+            pool_reaper_interval_secs: 30,
+        }
+    }
+}
+
 impl Default for DaemonConfig {
     fn default() -> Self {
         Self {
@@ -171,6 +200,7 @@ impl Default for DaemonConfig {
             },
             replication: ReplicationTomlConfig::default(),
             nat: NatConfig::default(),
+            performance: PerformanceConfig::default(),
         }
     }
 }
@@ -189,6 +219,25 @@ impl DaemonConfig {
             max_stored_pointers: self.dht.max_stored_pointers,
             ping_failure_threshold: self.dht.ping_failure_threshold,
             stale_check_interval: std::time::Duration::from_secs(900),
+        }
+    }
+
+    pub fn to_storage_config(&self) -> tesseras_storage::StorageConfig {
+        tesseras_storage::StorageConfig {
+            sqlite_synchronous_full: self.performance.sqlite_synchronous_full,
+            sqlite_cache_size_kb: self.performance.sqlite_cache_size_kb,
+            sqlite_busy_timeout_ms: self.performance.sqlite_busy_timeout_ms,
+            fragment_cache_size_mb: self.performance.fragment_cache_size_mb,
+        }
+    }
+
+    pub fn to_pool_config(&self) -> tesseras_net::PoolConfig {
+        tesseras_net::PoolConfig {
+            max_connections: self.performance.pool_max_connections,
+            idle_timeout: std::time::Duration::from_secs(self.performance.pool_idle_timeout_secs),
+            reaper_interval: std::time::Duration::from_secs(
+                self.performance.pool_reaper_interval_secs,
+            ),
         }
     }
 

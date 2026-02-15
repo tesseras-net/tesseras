@@ -151,7 +151,8 @@ async fn main() -> Result<()> {
     tracing::info!(node_id = %identity.node_id, "node identity loaded");
 
     // 6. Create QUIC transport (multi-endpoint for dual-stack)
-    let transport = QuinnTransport::bind_multiple(&effective_addrs)
+    let pool_config = config.to_pool_config();
+    let transport = QuinnTransport::bind_multiple_with_config(&effective_addrs, pool_config)
         .await
         .context("failed to bind QUIC transport")?;
 
@@ -161,18 +162,22 @@ async fn main() -> Result<()> {
     let dht_config = config.to_dht_config();
     let engine = DhtEngine::new(identity.clone(), Box::new(transport), dht_config);
 
-    // 7b. Open SQLite database and run migrations
+    // 7b. Open SQLite database with WAL mode and pragmas
     let db_path = config.node.data_dir.join("db").join("tesseras.db");
     std::fs::create_dir_all(db_path.parent().unwrap())?;
-    let conn = rusqlite::Connection::open(&db_path)
+    let storage_config = config.to_storage_config();
+    let conn = tesseras_storage::open_database(&db_path, &storage_config)
         .with_context(|| format!("failed to open database: {}", db_path.display()))?;
-    tesseras_storage::run_migrations(&conn)
-        .map_err(|e| anyhow::anyhow!("migration failed: {e}"))?;
+    tracing::info!("database opened with WAL mode");
     let conn = Arc::new(Mutex::new(conn));
 
-    // 7c. Create storage instances
-    let fragment_store =
+    // 7c. Create storage instances with LRU fragment cache
+    let fs_fragments =
         FsFragmentStore::new(Arc::clone(&conn), config.node.data_dir.join("fragments"));
+    let fragment_store = tesseras_storage::CachedFragmentStore::new(
+        Box::new(fs_fragments),
+        (storage_config.fragment_cache_size_mb as usize) * 1024 * 1024,
+    );
     let reciprocity_ledger = SqliteReciprocityLedger::new(Arc::clone(&conn));
     let blob_store = FsBlobStore::new(config.node.data_dir.join("blobs"));
 
