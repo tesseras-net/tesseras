@@ -2375,6 +2375,7 @@ dependencies = [
  "tesseras-storage",
  "thiserror 2.0.18",
  "tokio",
+ "zeroize",
 ]
 
 [[package]]
@@ -2397,6 +2398,7 @@ dependencies = [
  "tesseras-core",
  "thiserror 2.0.18",
  "x25519-dalek",
+ "zeroize",
 ]
 
 [[package]]

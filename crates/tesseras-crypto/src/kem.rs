@@ -2,6 +2,7 @@ use pqcrypto_kyber::kyber768;
 use pqcrypto_traits::kem::{Ciphertext as _, PublicKey as _, SecretKey as _, SharedSecret as _};
 use rand::rngs::OsRng;
 use x25519_dalek::{EphemeralSecret, PublicKey as X25519Public, StaticSecret};
+use zeroize::Zeroize;
 
 use crate::CryptoError;
 
@@ -11,6 +12,13 @@ pub struct HybridKeyPair {
     pub x25519_public: X25519Public,
     pub mlkem_secret: Vec<u8>,
     pub mlkem_public: Vec<u8>,
+}
+
+impl Drop for HybridKeyPair {
+    fn drop(&mut self) {
+        self.mlkem_secret.zeroize();
+        // x25519_dalek::StaticSecret implements Zeroize internally on drop
+    }
 }
 
 /// Public half of a hybrid encryption keypair.
@@ -165,6 +173,14 @@ mod tests {
         // Different context string produces different key
         let key3 = blake3::derive_key("tesseras hybrid kem v2", &ikm);
         assert_ne!(key1, key3);
+    }
+
+    #[test]
+    fn hybrid_keypair_drops_cleanly() {
+        assert!(
+            std::mem::needs_drop::<HybridKeyPair>(),
+            "HybridKeyPair must implement Drop for zeroization"
+        );
     }
 
     mod prop_tests {

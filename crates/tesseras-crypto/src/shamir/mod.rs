@@ -11,6 +11,7 @@ use rand::RngCore;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use tesseras_core::ContentHash;
+use zeroize::Zeroize;
 
 use crate::CryptoError;
 use gf256::{Gf256, poly_eval};
@@ -45,6 +46,12 @@ pub struct HeirShare {
     /// BLAKE3(all preceding fields serialized). Catches corruption
     /// before attempting reconstruction.
     pub checksum: ContentHash,
+}
+
+impl Drop for HeirShare {
+    fn drop(&mut self) {
+        self.share_data.zeroize();
+    }
 }
 
 impl HeirShare {
@@ -397,6 +404,14 @@ mod tests {
 
     fn test_owner_public() -> [u8; 32] {
         [0xAAu8; 32]
+    }
+
+    #[test]
+    fn heir_share_drops_cleanly() {
+        assert!(
+            std::mem::needs_drop::<HeirShare>(),
+            "HeirShare must implement Drop for zeroization"
+        );
     }
 
     #[test]

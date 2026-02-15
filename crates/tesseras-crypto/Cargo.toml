@@ -8,6 +8,7 @@ rust-version.workspace = true
 [dependencies]
 tesseras-core = { workspace = true }
 thiserror = { workspace = true }
+zeroize = { workspace = true }
 
 # Classical crypto (default)
 blake3 = { workspace = true, optional = true }

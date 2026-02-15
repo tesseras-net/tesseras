@@ -1,6 +1,7 @@
 use crate::replication::{Attestation, FragmentEnvelope, FragmentId, ReplicateAck};
 use crate::types::NodeId;
 use crate::{ContentHash, CoreError, NodeInfo};
+use zeroize::Zeroize;
 
 /// Tessera metadata persistence.
 pub trait TesseraRepository: Send + Sync {
@@ -58,6 +59,12 @@ pub struct KeyMaterial {
     pub algorithm: KeyAlgorithm,
     pub secret: Vec<u8>,
     pub public: Vec<u8>,
+}
+
+impl Drop for KeyMaterial {
+    fn drop(&mut self) {
+        self.secret.zeroize();
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

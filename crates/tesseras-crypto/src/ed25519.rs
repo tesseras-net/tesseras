@@ -116,6 +116,15 @@ mod tests {
     }
 
     #[test]
+    fn ed25519_signing_key_needs_drop() {
+        // SigningKey implements ZeroizeOnDrop, so needs_drop must be true.
+        assert!(
+            std::mem::needs_drop::<ed25519_dalek::SigningKey>(),
+            "SigningKey must implement Drop for zeroization"
+        );
+    }
+
+    #[test]
     fn keypair_to_bytes_roundtrip() {
         let keypair = Ed25519KeyGenerator::generate();
         let secret_bytes = keypair.signing_key.to_bytes();
