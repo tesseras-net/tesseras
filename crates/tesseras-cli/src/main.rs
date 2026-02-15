@@ -71,7 +71,11 @@ enum ColorWhen {
 #[derive(Subcommand)]
 enum Commands {
     /// Initialize identity and local database
-    Init,
+    Init {
+        /// Add missing encryption keys to existing identity
+        #[arg(long)]
+        upgrade: bool,
+    },
 
     /// Create a tessera from a directory of files
     #[command(visible_alias = "c")]
@@ -159,7 +163,7 @@ async fn main() -> Result<()> {
     setup_logging(cli.verbose, cli.quiet);
 
     match cli.command {
-        Commands::Init => commands::init::run(&cli.data_dir).await,
+        Commands::Init { upgrade } => commands::init::run(&cli.data_dir, upgrade).await,
         Commands::Create(ref args) => commands::create::run(args, &cli.data_dir).await,
         Commands::Verify { ref hash } => commands::verify::run(hash, &cli.data_dir).await,
         Commands::Export { ref hash, ref dest } => {

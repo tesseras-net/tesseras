@@ -11,7 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 tesseras-core = { workspace = true, features = ["service"] }
-tesseras-crypto = { workspace = true, features = ["classical", "service", "shamir"] }
+tesseras-crypto = { workspace = true, features = ["classical", "service", "shamir", "encryption"] }
 tesseras-storage = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true }

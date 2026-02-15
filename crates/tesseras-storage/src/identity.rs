@@ -21,6 +21,18 @@ impl FsIdentityStore {
         };
         self.base_path.join("identity").join(name)
     }
+
+    /// Public key file path for a given algorithm.
+    pub fn key_path_public(&self, algorithm: KeyAlgorithm) -> PathBuf {
+        let base = self.key_path(algorithm);
+        PathBuf::from(format!("{}.pub", base.display()))
+    }
+
+    /// Secret key file path for a given algorithm.
+    pub fn key_path_secret(&self, algorithm: KeyAlgorithm) -> PathBuf {
+        let base = self.key_path(algorithm);
+        PathBuf::from(format!("{}.key", base.display()))
+    }
 }
 
 impl IdentityStore for FsIdentityStore {
@@ -70,6 +82,34 @@ mod tests {
         };
         store.save_keypair(&material).unwrap();
         let loaded = store.load_keypair(KeyAlgorithm::Ed25519).unwrap();
+        assert_eq!(loaded, material);
+    }
+
+    #[test]
+    fn save_load_x25519_roundtrip() {
+        let dir = TempDir::new().unwrap();
+        let store = FsIdentityStore::new(dir.path().to_path_buf());
+        let material = KeyMaterial {
+            algorithm: KeyAlgorithm::X25519,
+            secret: vec![0x42; 32],
+            public: vec![0x43; 32],
+        };
+        store.save_keypair(&material).unwrap();
+        let loaded = store.load_keypair(KeyAlgorithm::X25519).unwrap();
+        assert_eq!(loaded, material);
+    }
+
+    #[test]
+    fn save_load_mlkem768_roundtrip() {
+        let dir = TempDir::new().unwrap();
+        let store = FsIdentityStore::new(dir.path().to_path_buf());
+        let material = KeyMaterial {
+            algorithm: KeyAlgorithm::MlKem768,
+            secret: vec![0x42; 2400],
+            public: vec![0x43; 1184],
+        };
+        store.save_keypair(&material).unwrap();
+        let loaded = store.load_keypair(KeyAlgorithm::MlKem768).unwrap();
         assert_eq!(loaded, material);
     }
 
