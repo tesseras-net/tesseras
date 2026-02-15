@@ -135,6 +135,33 @@ pub trait ReciprocityLedger: Send + Sync {
     fn best_peers_for_replication(&self, count: usize) -> Result<Vec<NodeId>, CoreError>;
 }
 
+/// Search index for public tesseras (institutional nodes).
+pub trait SearchIndex: Send + Sync {
+    fn index_tessera(
+        &self,
+        hash: &ContentHash,
+        title: Option<&str>,
+        description: Option<&str>,
+        memory_type: Option<&str>,
+        language: Option<&str>,
+        tags: &[String],
+        visibility: &str,
+        created_at: &chrono::DateTime<chrono::Utc>,
+        lat: Option<f64>,
+        lon: Option<f64>,
+    ) -> Result<(), CoreError>;
+
+    fn remove_tessera(&self, hash: &ContentHash) -> Result<(), CoreError>;
+
+    fn search(
+        &self,
+        query: &str,
+        filters: &crate::search::SearchFilters,
+        page: u32,
+        page_size: u32,
+    ) -> Result<(Vec<crate::search::SearchHit>, u64), CoreError>;
+}
+
 /// Manifest verification port.
 pub trait ManifestVerifier: Send + Sync {
     /// Verify manifest bytes against signature and public key.
