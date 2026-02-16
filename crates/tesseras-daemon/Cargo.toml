@@ -49,7 +49,7 @@ bundled-sqlite = ["tesseras-storage/bundled-sqlite"]
 [package.metadata.deb]
 maintainer = "tesseras maintainers"
 copyright = "ISC"
-depends = ""
+depends = "libc6, libsqlite3-0"
 section = "net"
 priority = "optional"
 maintainer-scripts = "../../packaging/debian/scripts/"
