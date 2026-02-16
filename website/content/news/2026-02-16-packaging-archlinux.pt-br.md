@@ -1,6 +1,6 @@
 +++
 title = "Empacotando o Tesseras para Arch Linux"
-date = 2026-02-16
+date = 2026-02-16T09:00:00Z
 description = "Como compilar e instalar o pacote Tesseras no Arch Linux a partir do código-fonte usando makepkg."
 +++
 
