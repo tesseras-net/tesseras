@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Create system user if it doesn't exist
+        if ! getent passwd tesseras >/dev/null 2>&1; then
+            useradd --system --no-create-home --shell /usr/sbin/nologin tesseras
+        fi
+
+        # Create data directory with correct ownership
+        install -d -o tesseras -g tesseras -m 0750 /var/lib/tesseras
+        ;;
+esac

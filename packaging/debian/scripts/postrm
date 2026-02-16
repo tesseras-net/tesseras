@@ -1,0 +1,15 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    purge)
+        # Remove user, group, and data on purge (not on remove)
+        if getent passwd tesseras >/dev/null 2>&1; then
+            userdel tesseras
+        fi
+        if getent group tesseras >/dev/null 2>&1; then
+            groupdel tesseras
+        fi
+        rm -rf /var/lib/tesseras
+        ;;
+esac
