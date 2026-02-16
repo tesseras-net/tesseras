@@ -66,6 +66,7 @@ pub struct EmbeddedNode {
     data_dir: PathBuf,
     #[allow(dead_code)]
     conn: Arc<Mutex<rusqlite::Connection>>,
+    _storage_lock: tesseras_storage::StorageLock,
     identity: NodeIdentity,
     engine: Arc<DhtEngine>,
     tessera_service: TesseraService,
@@ -82,6 +83,9 @@ impl EmbeddedNode {
         let data_dir = PathBuf::from(&data_dir);
         std::fs::create_dir_all(&data_dir)?;
 
+        let storage_lock = tesseras_storage::StorageLock::acquire(&data_dir)
+            .map_err(|e| TesserasError::Storage(e.to_string()))?;
+
         // Create our own tokio runtime (Flutter has its own event loop)
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
@@ -89,13 +93,12 @@ impl EmbeddedNode {
             .build()
             .map_err(|e| TesserasError::Storage(format!("failed to create runtime: {e}")))?;
 
-        // Open SQLite and run migrations
+        // Open SQLite with proper pragmas (WAL mode, busy_timeout, etc.)
         let db_path = data_dir.join("db").join("tesseras.db");
         std::fs::create_dir_all(db_path.parent().unwrap())?;
-        let conn = rusqlite::Connection::open(&db_path)
+        let storage_config = tesseras_storage::StorageConfig::default();
+        let conn = tesseras_storage::open_database(&db_path, &storage_config)
             .map_err(|e| TesserasError::Storage(format!("failed to open database: {e}")))?;
-        tesseras_storage::run_migrations(&conn)
-            .map_err(|e| TesserasError::Storage(format!("migration failed: {e}")))?;
         let conn = Arc::new(Mutex::new(conn));
 
         // Load or generate node identity
@@ -194,6 +197,7 @@ impl EmbeddedNode {
             runtime,
             data_dir,
             conn,
+            _storage_lock: storage_lock,
             identity,
             engine,
             tessera_service,
