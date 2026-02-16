@@ -58,6 +58,7 @@ assets = [
     ["target/release/tes", "usr/bin/", "755"],
     ["../../packaging/debian/tesd.default.toml", "etc/tesseras/config.toml", "644"],
     ["../../packaging/debian/tesd.service", "lib/systemd/system/tesd.service", "644"],
+    ["../../packaging/common/tesd.user.service", "usr/lib/systemd/user/tesd.service", "644"],
     ["target/release/tes.bash", "usr/share/bash-completion/completions/tes", "644"],
     ["target/release/_tes", "usr/share/zsh/vendor-completions/_tes", "644"],
     ["target/release/tes.fish", "usr/share/fish/vendor_completions.d/tes.fish", "644"],
