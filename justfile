@@ -39,6 +39,41 @@ build-linux:
 build-android:
     cd apps/flutter && flutter build apk --debug
 
+# Build Flutter Windows installer (.exe) via QEMU VM
+build-windows host="localhost" port="2222" user="ijanc":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    SSH="ssh -p {{port}} {{user}}@{{host}}"
+    SCP="scp -P {{port}}"
+    ROOT="$(git rev-parse --show-toplevel)"
+    RELEASE_DIR='C:\tesseras\apps\flutter\build\windows\x64\runner\Release'
+    VERSION="0.1.0"
+
+    echo "==> Syncing source to Windows VM..."
+    TARBALL="/tmp/tesseras-win-src.tar.gz"
+    tar czf "$TARBALL" --exclude='target' --exclude='.dart_tool' --exclude='build' --exclude='.git' -C "$(dirname "$ROOT")" "$(basename "$ROOT")"
+    $SCP "$TARBALL" {{user}}@{{host}}:'C:\tesseras-win-src.tar.gz'
+    $SSH "rmdir /s /q C:\tesseras 2>nul & tar xzf C:\tesseras-win-src.tar.gz -C C:\ && del C:\tesseras-win-src.tar.gz"
+    rm -f "$TARBALL"
+
+    echo "==> Running flutter pub get..."
+    $SSH "set PATH=%PATH%;C:\flutter\bin;C:\Program Files\Git\cmd;%USERPROFILE%\.cargo\bin && cd C:\tesseras\apps\flutter && C:\flutter\bin\flutter pub get"
+
+    echo "==> Building Windows release..."
+    $SSH "set PATH=%PATH%;C:\flutter\bin;C:\Program Files\Git\cmd;%USERPROFILE%\.cargo\bin && cd C:\tesseras\apps\flutter && C:\flutter\bin\flutter build windows --release"
+
+    echo "==> Building installer..."
+    $SCP "$ROOT/packaging/windows/tesseras-installer.iss" {{user}}@{{host}}:'C:\tesseras-installer.iss'
+    $SSH "\"C:\Program Files (x86)\Inno Setup 6\ISCC.exe\" C:\tesseras-installer.iss"
+    $SSH "del C:\tesseras-installer.iss"
+
+    echo "==> Downloading installer..."
+    mkdir -p "$ROOT/target/packages"
+    $SCP {{user}}@{{host}}:"C:\\tesseras-installer\\tesseras-setup-${VERSION}-win64.exe" "$ROOT/target/packages/"
+
+    echo "Windows installer: target/packages/tesseras-setup-${VERSION}-win64.exe"
+    ls -lh "$ROOT/target/packages/tesseras-setup-${VERSION}-win64.exe"
+
 # Run Flutter widget tests
 test-flutter:
     cd apps/flutter && flutter test
