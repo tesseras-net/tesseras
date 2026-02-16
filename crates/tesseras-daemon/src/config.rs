@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct DaemonConfig {
     pub node: NodeConfig,
     pub dht: DhtTomlConfig,
@@ -59,11 +60,13 @@ pub struct BootstrapConfig {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct NetworkConfig {
     pub enable_mdns: bool,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct ObservabilityConfig {
     pub metrics_addr: SocketAddr,
     pub log_format: String,
