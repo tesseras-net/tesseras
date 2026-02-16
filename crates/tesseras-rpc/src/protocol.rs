@@ -1,11 +1,12 @@
 use serde::{Deserialize, Serialize};
-use tesseras_core::ContentHash;
+use tesseras_core::{ContentHash, NodeInfo};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Request {
     Publish { hash: ContentHash },
     Fetch { hash: ContentHash },
     Status { hash: ContentHash },
+    Peers,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -25,6 +26,9 @@ pub enum Response {
         fragments_total: u32,
         fragments_placed: u32,
         peers_holding: u32,
+    },
+    Peers {
+        peers: Vec<NodeInfo>,
     },
     Error {
         code: crate::error::ErrorCode,

@@ -1,5 +1,6 @@
 //! Integration test: RPC client ↔ daemon listener round-trip.
 
+use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -8,6 +9,10 @@ use tesseras_core::ports::{BlobStore, DhtPort};
 use tesseras_core::replication::*;
 use tesseras_core::types::NodeId;
 use tesseras_core::*;
+use tesseras_dht::config::DhtConfig;
+use tesseras_dht::engine::DhtEngine;
+use tesseras_dht::pow;
+use tesseras_net::SimNetwork;
 use tesseras_rpc::{DaemonClient, Request};
 use tokio::sync::watch;
 
@@ -56,8 +61,18 @@ mock! {
     }
 }
 
+async fn make_dht_engine() -> Arc<DhtEngine> {
+    let net = SimNetwork::new();
+    let addr: SocketAddr = "127.0.0.1:19999".parse().unwrap();
+    let transport = net.create_transport(addr, 256).await;
+    let pubkey = [0xFFu8; 32];
+    let identity = pow::generate_node_identity(&pubkey);
+    DhtEngine::new(identity, Box::new(transport), DhtConfig::default())
+}
+
 fn make_handler(
     dir: &std::path::Path,
+    dht_engine: Arc<DhtEngine>,
 ) -> Arc<tesseras_daemon::rpc::handler::RpcHandler> {
     let conn = rusqlite::Connection::open_in_memory().unwrap();
     tesseras_storage::run_migrations(&conn).unwrap();
@@ -107,6 +122,7 @@ fn make_handler(
         fragment_store,
         replication: Arc::new(replication),
         cas,
+        dht_engine,
     })
 }
 
@@ -115,7 +131,7 @@ async fn publish_unknown_hash_returns_error() {
     let tmp = tempfile::TempDir::new().unwrap();
     let socket_path = tmp.path().join("test.sock");
 
-    let handler = make_handler(tmp.path());
+    let handler = make_handler(tmp.path(), make_dht_engine().await);
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
 
     let sp = socket_path.clone();
@@ -150,7 +166,7 @@ async fn status_unknown_hash_returns_error() {
     let tmp = tempfile::TempDir::new().unwrap();
     let socket_path = tmp.path().join("test.sock");
 
-    let handler = make_handler(tmp.path());
+    let handler = make_handler(tmp.path(), make_dht_engine().await);
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
 
     let sp = socket_path.clone();

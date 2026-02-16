@@ -740,6 +740,11 @@ impl DhtEngine {
         Ok(())
     }
 
+    /// Get all known peers from the routing table.
+    pub async fn all_peers(&self) -> Vec<NodeInfo> {
+        self.routing.lock().await.all_peers()
+    }
+
     /// Get the number of known peers.
     pub async fn routing_table_size(&self) -> usize {
         self.routing.lock().await.len()

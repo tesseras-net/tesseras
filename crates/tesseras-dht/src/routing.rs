@@ -178,6 +178,11 @@ impl RoutingTable {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    /// Return all peers from every bucket.
+    pub fn all_peers(&self) -> Vec<NodeInfo> {
+        self.buckets.iter().flat_map(|b| b.entries.iter().cloned()).collect()
+    }
 }
 
 #[cfg(test)]

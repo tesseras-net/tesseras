@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use tesseras_core::ports::{BlobStore, FragmentStore, MemoryRepository, TesseraRepository};
+use tesseras_dht::engine::DhtEngine;
 use tesseras_rpc::error::ErrorCode;
 use tesseras_rpc::protocol::{Request, Response};
 use tesseras_replication::ReplicationService;
@@ -13,6 +14,7 @@ pub struct RpcHandler {
     pub fragment_store: Arc<dyn FragmentStore>,
     pub replication: Arc<ReplicationService>,
     pub cas: Arc<CasStore>,
+    pub dht_engine: Arc<DhtEngine>,
 }
 
 impl RpcHandler {
@@ -21,6 +23,13 @@ impl RpcHandler {
             Request::Publish { hash } => self.handle_publish(hash).await,
             Request::Fetch { hash } => self.handle_fetch(hash).await,
             Request::Status { hash } => self.handle_status(hash).await,
+            Request::Peers => self.handle_peers().await,
+        }
+    }
+
+    async fn handle_peers(&self) -> Response {
+        Response::Peers {
+            peers: self.dht_engine.all_peers().await,
         }
     }
 

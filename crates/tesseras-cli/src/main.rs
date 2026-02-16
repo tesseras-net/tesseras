@@ -154,6 +154,8 @@ enum NetCommands {
         /// Tessera hash or prefix
         hash: String,
     },
+    /// List connected peers in the routing table
+    Peers,
 }
 
 #[derive(Subcommand)]
@@ -250,6 +252,7 @@ async fn main() -> Result<()> {
             NetCommands::Status { ref hash } => {
                 commands::status::run(hash, &cli.data_dir, &cli.socket).await
             }
+            NetCommands::Peers => commands::peers::run(&cli.socket).await,
         },
         Commands::Identity { command } => match command {
             IdentityCommands::Init { upgrade } => {

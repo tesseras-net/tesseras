@@ -9,6 +9,7 @@ pub use client::DaemonClient;
 pub use error::{ErrorCode, RpcError};
 pub use frame::{read_frame, write_frame};
 pub use protocol::{PublishState, Request, Response};
+pub use tesseras_core::NodeInfo;
 
 /// Well-known socket path for system-level daemon (systemd RuntimeDirectory).
 const SYSTEM_SOCKET: &str = "/run/tesseras/daemon.sock";

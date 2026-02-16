@@ -256,6 +256,7 @@ async fn main() -> Result<()> {
         fragment_store: Arc::new(FsFragmentStore::new(conn.clone(), Arc::clone(&cas))),
         replication: Arc::clone(&replication),
         cas: Arc::clone(&cas),
+        dht_engine: Arc::clone(&engine),
     });
 
     // 8. Setup shutdown signal
