@@ -1,6 +1,7 @@
 //! tesseras-daemon: full node binary for desktop/server/RPi.
 
 #[allow(dead_code)]
+mod bootstrap;
 mod config;
 mod dht_adapter;
 mod institutional;
@@ -260,36 +261,25 @@ async fn main() -> Result<()> {
         replication_clone.run_repair_loop(repl_shutdown_rx).await;
     });
 
-    // 10. Bootstrap (resolve hostnames via DNS for Docker/LAN compatibility)
-    let bootstrap_addrs: Vec<SocketAddr> = {
-        let raw: Vec<String> = if let Some(ref addrs) = cli.bootstrap {
-            if addrs.is_empty() {
-                vec![]
-            } else {
-                addrs.split(',').map(|s| s.trim().to_string()).collect()
-            }
+    // 10. Bootstrap (SRV discovery with CLI override)
+    let bootstrap_addrs: Vec<SocketAddr> = if let Some(ref addrs) = cli.bootstrap {
+        // CLI override: resolve manually provided addresses
+        let raw: Vec<String> = if addrs.is_empty() {
+            vec![]
         } else {
-            config.bootstrap.hardcoded.clone()
+            addrs.split(',').map(|s| s.trim().to_string()).collect()
         };
-
         let mut resolved = Vec::new();
         for addr in &raw {
             match tokio::net::lookup_host(addr).await {
-                Ok(addrs) => {
-                    let all: Vec<_> = addrs.into_iter().collect();
-                    if all.is_empty() {
-                        tracing::warn!(addr = %addr, "DNS resolved but returned no addresses");
-                    } else {
-                        tracing::debug!(addr = %addr, results = ?all, "DNS resolved");
-                        resolved.extend(all);
-                    }
-                }
-                Err(e) => {
-                    tracing::warn!(addr = %addr, error = %e, "failed to resolve bootstrap address");
-                }
+                Ok(addrs) => resolved.extend(addrs),
+                Err(e) => tracing::warn!(addr = %addr, error = %e, "failed to resolve CLI bootstrap address"),
             }
         }
         resolved
+    } else {
+        // Default: SRV discovery with hardcoded fallback
+        bootstrap::resolve_bootstrap_peers(&config.bootstrap).await
     };
 
     if !bootstrap_addrs.is_empty() {
