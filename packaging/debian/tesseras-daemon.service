@@ -1,0 +1,29 @@
+[Unit]
+Description=Tesseras P2P Daemon
+Documentation=https://tesseras.net
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tesseras
+Group=tesseras
+ExecStart=/usr/bin/tesseras-daemon --config /etc/tesseras/config.toml
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/tesseras
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target
