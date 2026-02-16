@@ -1,7 +1,7 @@
 //! QUIC transport using quinn. Self-signed TLS, connection pooling,
 //! one bidirectional stream per RPC with length-prefix framing.
 
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -185,7 +185,7 @@ impl QuinnTransport {
                     continue;
                 }
             };
-            let remote = conn.remote_address();
+            let remote = canonicalize_addr(conn.remote_address());
             connections.insert(
                 remote,
                 PooledConnection {
@@ -227,11 +227,15 @@ impl QuinnTransport {
     /// Pick the endpoint whose address family matches the target.
     /// Falls back to the first endpoint if no match is found.
     fn endpoint_for(&self, addr: &SocketAddr) -> &Endpoint {
+        let is_v4 = match addr {
+            SocketAddr::V4(_) => true,
+            SocketAddr::V6(v6) => v6.ip().to_ipv4_mapped().is_some(),
+        };
         self.endpoints
             .iter()
             .find(|ep| {
                 ep.local_addr()
-                    .map(|a| a.is_ipv4() == addr.is_ipv4())
+                    .map(|a| a.is_ipv4() == is_v4)
                     .unwrap_or(false)
             })
             .unwrap_or(&self.endpoints[0])
@@ -239,6 +243,8 @@ impl QuinnTransport {
 
     /// Get or create a connection to a peer.
     async fn get_connection(&self, addr: SocketAddr) -> Result<quinn::Connection, NetError> {
+        let addr = canonicalize_addr(addr);
+
         if let Some(mut entry) = self.connections.get_mut(&addr) {
             if entry.conn.close_reason().is_none() {
                 entry.last_used = Instant::now();
@@ -337,6 +343,20 @@ impl Transport for QuinnTransport {
     fn local_addr(&self) -> SocketAddr {
         self.endpoints[0].local_addr().unwrap()
     }
+}
+
+/// Convert IPv4-mapped IPv6 addresses (e.g. `[::ffff:1.2.3.4]`) to native IPv4.
+///
+/// OpenBSD does not support sending to IPv4-mapped IPv6 addresses on IPv6
+/// sockets (unlike Linux dual-stack). This ensures addresses are always in
+/// their native form so `endpoint_for` picks the correct socket.
+fn canonicalize_addr(addr: SocketAddr) -> SocketAddr {
+    if let SocketAddr::V6(v6) = addr {
+        if let Some(v4) = v6.ip().to_ipv4_mapped() {
+            return SocketAddr::new(IpAddr::V4(v4), v6.port());
+        }
+    }
+    addr
 }
 
 /// Write a length-prefixed message to a QUIC send stream.

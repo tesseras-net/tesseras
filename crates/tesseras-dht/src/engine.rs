@@ -75,6 +75,7 @@ pub struct DhtEngine {
     pending: Mutex<HashMap<u64, oneshot::Sender<(WireMessage, PeerAddr)>>>,
     replication_handler: std::sync::Mutex<Option<Arc<dyn ReplicationHandler>>>,
     nat_handler: std::sync::Mutex<Option<Arc<dyn NatHandler>>>,
+    seeds: Mutex<Vec<SocketAddr>>,
 }
 
 impl DhtEngine {
@@ -97,6 +98,7 @@ impl DhtEngine {
             pending: Mutex::new(HashMap::new()),
             replication_handler: std::sync::Mutex::new(None),
             nat_handler: std::sync::Mutex::new(None),
+            seeds: Mutex::new(Vec::new()),
         })
     }
 
@@ -112,6 +114,11 @@ impl DhtEngine {
     /// Must be called after construction (breaks the circular dependency).
     pub fn set_replication_handler(&self, handler: Arc<dyn ReplicationHandler>) {
         *self.replication_handler.lock().unwrap() = Some(handler);
+    }
+
+    /// Store seed addresses for automatic re-bootstrap when the routing table becomes empty.
+    pub async fn set_seeds(&self, seeds: Vec<SocketAddr>) {
+        *self.seeds.lock().await = seeds;
     }
 
     /// Set the handler for NAT traversal messages (punch/relay).
@@ -721,6 +728,10 @@ impl DhtEngine {
     }
 
     /// Bootstrap by connecting to seed addresses and doing a self-lookup.
+    ///
+    /// Performs two discovery rounds: one immediately after pinging seeds,
+    /// and a second after a short delay to catch peers that joined around
+    /// the same time (common in small networks).
     pub async fn bootstrap(&self, seeds: &[SocketAddr]) -> Result<(), DhtError> {
         let mut any_success = false;
 
@@ -734,8 +745,16 @@ impl DhtEngine {
             return Err(DhtError::BootstrapFailed);
         }
 
-        // Do a lookup for our own ID to populate our routing table
+        // First self-lookup to populate our routing table
         self.find_closest_nodes(&self.node_id()).await;
+
+        let peer_count = self.routing.lock().await.len();
+        if peer_count < self.config.k {
+            // Second round after a short delay — by now other nodes may have
+            // registered with the same seeds, so we can discover them.
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            self.find_closest_nodes(&self.node_id()).await;
+        }
 
         Ok(())
     }
@@ -760,11 +779,14 @@ impl DhtEngine {
         let mut refresh_interval = tokio::time::interval(self.config.bucket_refresh_interval);
         let mut republish_interval = tokio::time::interval(self.config.republish_interval);
         let mut stale_interval = tokio::time::interval(self.config.stale_check_interval);
+        let mut re_bootstrap_interval =
+            tokio::time::interval(self.config.re_bootstrap_interval);
 
         // Skip the first immediate tick
         refresh_interval.tick().await;
         republish_interval.tick().await;
         stale_interval.tick().await;
+        re_bootstrap_interval.tick().await;
 
         loop {
             tokio::select! {
@@ -783,12 +805,55 @@ impl DhtEngine {
                 _ = stale_interval.tick() => {
                     self.check_stale_contacts().await;
                 }
+                _ = re_bootstrap_interval.tick() => {
+                    self.maybe_re_bootstrap().await;
+                }
                 _ = shutdown.changed() => {
                     if *shutdown.borrow() {
                         tracing::info!("DHT engine shutting down");
                         break;
                     }
                 }
+            }
+        }
+    }
+
+    /// Re-bootstrap or do a discovery round when the routing table is thin.
+    ///
+    /// Triggers when the routing table has fewer than `k` peers, not just when
+    /// it is empty. This is critical for small networks where nodes bootstrap
+    /// against the same seed but don't immediately discover each other.
+    async fn maybe_re_bootstrap(&self) {
+        let peer_count = self.routing.lock().await.len();
+        if peer_count >= self.config.k {
+            return;
+        }
+        let seeds = self.seeds.lock().await.clone();
+        if seeds.is_empty() {
+            return;
+        }
+
+        if peer_count == 0 {
+            tracing::info!("routing table empty, attempting re-bootstrap");
+            match self.bootstrap(&seeds).await {
+                Ok(()) => {
+                    let peers = self.routing.lock().await.len();
+                    tracing::info!(peers, "re-bootstrap successful");
+                }
+                Err(e) => tracing::warn!(error = %e, "re-bootstrap failed"),
+            }
+        } else {
+            // Routing table is thin — ping seeds to refresh their knowledge of us,
+            // then do a self-lookup to discover peers they've learned about since
+            // our last bootstrap.
+            tracing::debug!(peer_count, k = self.config.k, "routing table thin, discovering peers");
+            for &addr in &seeds {
+                self.ping(addr).await;
+            }
+            self.find_closest_nodes(&self.node_id()).await;
+            let new_count = self.routing.lock().await.len();
+            if new_count > peer_count {
+                tracing::info!(peers = new_count, "discovered new peers");
             }
         }
     }
