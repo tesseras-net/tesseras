@@ -16,6 +16,7 @@ rusqlite = { workspace = true }
 blake3 = { workspace = true }
 toml = { workspace = true }
 lru = { workspace = true }
+fs2 = { workspace = true }
 prometheus = { workspace = true }
 tracing = { workspace = true }
 
