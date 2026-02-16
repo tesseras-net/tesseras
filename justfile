@@ -90,9 +90,17 @@ changelog:
 changelog-preview:
     git cliff --unreleased
 
-# Build .deb package for tesd (static MUSL binary)
+# Build .deb package for tesd + tes (static MUSL binary)
 deb:
-    cargo deb -p tesseras-daemon --target x86_64-unknown-linux-musl -- --features bundled-sqlite
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release --target x86_64-unknown-linux-musl -p tesseras-daemon -p tesseras-cli --features tesseras-daemon/bundled-sqlite
+    tes=target/x86_64-unknown-linux-musl/release/tes
+    mkdir -p target/completions
+    "$tes" completions bash > target/completions/tes.bash
+    "$tes" completions zsh  > target/completions/_tes
+    "$tes" completions fish > target/completions/tes.fish
+    cargo deb -p tesseras-daemon --target x86_64-unknown-linux-musl --no-build
 
 # Build Arch Linux package (.pkg.tar.zst), then install with: sudo pacman -U packaging/archlinux/tesseras-*.pkg.tar.zst
 arch:
