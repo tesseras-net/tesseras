@@ -1,9 +1,11 @@
+pub mod client;
 pub mod error;
 pub mod frame;
 pub mod protocol;
 
 use std::path::PathBuf;
 
+pub use client::DaemonClient;
 pub use error::{ErrorCode, RpcError};
 pub use frame::{read_frame, write_frame};
 pub use protocol::{PublishState, Request, Response};
