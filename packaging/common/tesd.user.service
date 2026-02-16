@@ -1,0 +1,13 @@
+[Unit]
+Description=Tesseras P2P Daemon
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/tesd
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=default.target
