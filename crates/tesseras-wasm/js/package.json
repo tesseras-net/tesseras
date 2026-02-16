@@ -1,0 +1,20 @@
+{
+  "name": "@tesseras/verify",
+  "version": "0.1.0",
+  "description": "Verify tessera integrity and authenticity in the browser",
+  "license": "ISC",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist/", "pkg/"],
+  "scripts": {
+    "build": "tsc",
+    "prebuild": "just wasm-build"
+  },
+  "dependencies": {
+    "fflate": "^0.8"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}
