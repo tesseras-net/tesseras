@@ -9,6 +9,11 @@ book/pt-br/book/
 # Build artifacts
 target/
 
+# makepkg (Arch Linux packaging)
+packaging/archlinux/src/
+packaging/archlinux/pkg/
+packaging/archlinux/*.pkg.tar.zst
+
 # Cargo-mutants output
 mutants.out/
 mutants.out.old/
