@@ -1,0 +1,49 @@
+# Maintainer: tesseras maintainers
+pkgname=tesseras
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="P2P network for preserving human memories across millennia"
+arch=('x86_64' 'aarch64')
+url="https://tesseras.net"
+license=('ISC')
+depends=('sqlite')
+makedepends=('cargo')
+backup=('etc/tesseras/config.toml')
+# No source array — builds from local workspace via TESSERAS_ROOT
+source=()
+
+_root="${TESSERAS_ROOT:?Set TESSERAS_ROOT or use just arch}"
+
+prepare() {
+    export RUSTUP_TOOLCHAIN=stable
+    cd "$_root"
+    cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+    export RUSTUP_TOOLCHAIN=stable
+    export CARGO_TARGET_DIR="$srcdir/target"
+    cd "$_root"
+    cargo build --frozen --release -p tesseras-daemon -p tesseras-cli
+}
+
+package() {
+    # Binaries
+    install -Dm755 "$srcdir/target/release/tesseras-daemon" "$pkgdir/usr/bin/tesseras-daemon"
+    install -Dm755 "$srcdir/target/release/tes" "$pkgdir/usr/bin/tes"
+
+    # Config (reuse Debian default)
+    install -Dm644 "$_root/packaging/debian/tesseras-daemon.default.toml" "$pkgdir/etc/tesseras/config.toml"
+
+    # Systemd service (reuse Debian unit)
+    install -Dm644 "$_root/packaging/debian/tesseras-daemon.service" "$pkgdir/usr/lib/systemd/system/tesseras-daemon.service"
+
+    # sysusers.d and tmpfiles.d
+    install -Dm644 "$_root/packaging/archlinux/tesseras.sysusers" "$pkgdir/usr/lib/sysusers.d/tesseras.conf"
+    install -Dm644 "$_root/packaging/archlinux/tesseras.tmpfiles" "$pkgdir/usr/lib/tmpfiles.d/tesseras.conf"
+
+    # Shell completions
+    "$srcdir/target/release/tes" completions bash | install -Dm644 /dev/stdin "$pkgdir/usr/share/bash-completion/completions/tes"
+    "$srcdir/target/release/tes" completions zsh  | install -Dm644 /dev/stdin "$pkgdir/usr/share/zsh/site-functions/_tes"
+    "$srcdir/target/release/tes" completions fish | install -Dm644 /dev/stdin "$pkgdir/usr/share/fish/vendor_completions.d/tes.fish"
+}
