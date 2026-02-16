@@ -1,52 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'providers/node_provider.dart';
-import 'screens/onboarding/welcome_screen.dart';
-import 'screens/home_screen.dart';
-import 'providers/identity_provider.dart';
+import 'providers/theme_provider.dart';
+import 'providers/mock_identity_provider.dart';
+import 'theme/light_theme.dart';
+import 'theme/dark_theme.dart';
+import 'screens/onboarding/onboarding_flow.dart';
+import 'screens/desktop_shell.dart';
 
 class TesserasApp extends ConsumerWidget {
   const TesserasApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final themeMode = ref.watch(themeProvider);
+    final identity = ref.watch(mockIdentityProvider);
+
     return MaterialApp(
       title: 'Tesseras',
-      theme: ThemeData(
-        colorSchemeSeed: const Color(0xFF2D5016),
-        useMaterial3: true,
-      ),
-      home: ref.watch(nodeProvider).when(
-            loading: () => const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            ),
-            error: (e, _) => Scaffold(
-              body: Center(child: Text('Failed to start node: $e')),
-            ),
-            data: (_) => const _HomeOrOnboarding(),
-          ),
+      debugShowCheckedModeBanner: false,
+      themeMode: themeMode,
+      theme: lightTheme(),
+      darkTheme: darkTheme(),
+      home: identity != null ? const DesktopShell() : const OnboardingFlow(),
     );
-  }
-}
-
-class _HomeOrOnboarding extends ConsumerWidget {
-  const _HomeOrOnboarding();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return ref.watch(identityProvider).when(
-          loading: () => const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          ),
-          error: (e, _) => Scaffold(
-            body: Center(child: Text('Error: $e')),
-          ),
-          data: (identity) {
-            if (identity == null) {
-              return const WelcomeScreen();
-            }
-            return const HomeScreen();
-          },
-        );
   }
 }
