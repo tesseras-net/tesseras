@@ -55,7 +55,7 @@ struct Cli {
     color: ColorWhen,
 
     /// Base directory for data storage
-    #[arg(long, default_value = "~/.tesseras", global = true)]
+    #[arg(long, default_value_t = default_data_dir(), global = true)]
     data_dir: String,
 
     /// Path to daemon Unix socket
@@ -157,6 +157,14 @@ enum InstitutionalCommands {
         #[arg(long)]
         check: bool,
     },
+}
+
+fn default_data_dir() -> String {
+    dirs::data_dir()
+        .map(|p| p.join("tesseras"))
+        .unwrap_or_else(|| std::path::PathBuf::from("~/.tesseras"))
+        .to_string_lossy()
+        .into_owned()
 }
 
 fn setup_logging(verbose: u8, quiet: bool) {

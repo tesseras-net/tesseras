@@ -2911,6 +2911,7 @@ dependencies = [
  "clap_complete",
  "comfy-table",
  "dialoguer",
+ "dirs",
  "ed25519-dalek",
  "hex",
  "hickory-resolver",

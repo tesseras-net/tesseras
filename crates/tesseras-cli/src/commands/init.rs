@@ -13,6 +13,18 @@ const DEFAULT_CONFIG: &str = r#"# Tesseras configuration
 pub async fn run(data_dir: &str, upgrade: bool) -> Result<()> {
     let base = expand_tilde(data_dir);
 
+    // Check for legacy data location
+    let legacy_path = dirs::home_dir().map(|h| h.join(".tesseras"));
+    if let Some(ref legacy) = legacy_path {
+        if legacy.join("db/tesseras.db").exists() && base != *legacy {
+            eprintln!(
+                "Note: found existing data at {}. Consider moving it to {}",
+                legacy.display(),
+                base.display()
+            );
+        }
+    }
+
     // 1. Create directory structure
     tokio::fs::create_dir_all(base.join("identity")).await?;
     tokio::fs::create_dir_all(base.join("db")).await?;
