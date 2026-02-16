@@ -22,3 +22,6 @@ enable_mdns = false
 [observability]
 metrics_addr = "127.0.0.1:9190"
 log_format = "json"
+
+[rpc]
+socket_path = "/run/tesseras/daemon.sock"

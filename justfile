@@ -102,7 +102,7 @@ deploy host="bootstrap1.tesseras.net":
     DEB=$(ls -t target/debian/tesseras-daemon_*.deb | head -1)
     echo "Deploying $DEB to {{host}}..."
     scp "$DEB" root@{{host}}:/tmp/
-    ssh root@{{host}} "dpkg -i /tmp/$(basename $DEB) && systemctl restart tesseras-daemon && rm /tmp/$(basename $DEB)"
+    ssh root@{{host}} "dpkg -i /tmp/$(basename $DEB) && systemctl daemon-reload && systemctl restart tesseras-daemon && rm /tmp/$(basename $DEB)"
     echo "Deployed and restarted tesseras-daemon on {{host}}"
 
 [private]
