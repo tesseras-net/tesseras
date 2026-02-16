@@ -26,7 +26,7 @@ tesd [OPTIONS]
 |--------|-------------|---------|
 | `-c, --config <PATH>` | Path to a TOML config file | None (uses built-in defaults) |
 | `-l, --listen <ADDR>` | Address and port to listen on | `0.0.0.0:4433` |
-| `-b, --bootstrap <ADDRS>` | Comma-separated bootstrap addresses | `boot1.tesseras.net:4433,boot2.tesseras.net:4433` |
+| `-b, --bootstrap <ADDRS>` | Comma-separated bootstrap addresses | `bootstrap1.tesseras.net:4433,bootstrap2.tesseras.net:4433` |
 | `-d, --data-dir <PATH>` | Data directory | Platform-specific (see above) |
 
 CLI options override values from the config file.

@@ -213,8 +213,8 @@ impl Default for DaemonConfig {
             bootstrap: BootstrapConfig {
                 dns_domain: "_tesseras._udp.tesseras.net".into(),
                 hardcoded: vec![
-                    "boot1.tesseras.net:4433".into(),
-                    "boot2.tesseras.net:4433".into(),
+                    "bootstrap1.tesseras.net:4433".into(),
+                    "bootstrap2.tesseras.net:4433".into(),
                 ],
             },
             network: NetworkConfig { enable_mdns: true },

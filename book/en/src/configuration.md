@@ -27,8 +27,8 @@ ping_failure_threshold = 3
 [bootstrap]
 dns_domain = "_tesseras._udp.tesseras.net"
 hardcoded = [
-    "boot1.tesseras.net:4433",
-    "boot2.tesseras.net:4433",
+    "bootstrap1.tesseras.net:4433",
+    "bootstrap2.tesseras.net:4433",
 ]
 
 [network]
@@ -73,7 +73,7 @@ How the node discovers its first peers when joining the network.
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `dns_domain` | string | `_tesseras._udp.tesseras.net` | DNS domain for TXT-record-based peer discovery |
-| `hardcoded` | list of strings | `["boot1.tesseras.net:4433", "boot2.tesseras.net:4433"]` | Fallback bootstrap addresses |
+| `hardcoded` | list of strings | `["bootstrap1.tesseras.net:4433", "bootstrap2.tesseras.net:4433"]` | Fallback bootstrap addresses |
 
 ### `[network]`
 
@@ -126,7 +126,7 @@ Bootstrap addresses can be IPv6:
 ```toml
 [bootstrap]
 hardcoded = [
-    "boot1.tesseras.net:4433",
+    "bootstrap1.tesseras.net:4433",
     "[2001:db8::1]:4433",
 ]
 ```

@@ -27,8 +27,8 @@ ping_failure_threshold = 3
 [bootstrap]
 dns_domain = "_tesseras._udp.tesseras.net"
 hardcoded = [
-    "boot1.tesseras.net:4433",
-    "boot2.tesseras.net:4433",
+    "bootstrap1.tesseras.net:4433",
+    "bootstrap2.tesseras.net:4433",
 ]
 
 [network]
@@ -73,7 +73,7 @@ Como o no descobre seus primeiros pares ao entrar na rede.
 | Chave | Tipo | Padrao | Descricao |
 |-------|------|--------|-----------|
 | `dns_domain` | string | `_tesseras._udp.tesseras.net` | Dominio DNS para descoberta de pares via registros TXT |
-| `hardcoded` | lista de strings | `["boot1.tesseras.net:4433", "boot2.tesseras.net:4433"]` | Enderecos de bootstrap de fallback |
+| `hardcoded` | lista de strings | `["bootstrap1.tesseras.net:4433", "bootstrap2.tesseras.net:4433"]` | Enderecos de bootstrap de fallback |
 
 ### `[network]`
 
@@ -126,7 +126,7 @@ Enderecos de bootstrap podem ser IPv6:
 ```toml
 [bootstrap]
 hardcoded = [
-    "boot1.tesseras.net:4433",
+    "bootstrap1.tesseras.net:4433",
     "[2001:db8::1]:4433",
 ]
 ```

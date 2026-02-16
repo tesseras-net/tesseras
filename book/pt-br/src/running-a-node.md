@@ -26,7 +26,7 @@ tesd [OPTIONS]
 |-------|-----------|--------|
 | `-c, --config <PATH>` | Caminho para um arquivo de configuracao TOML | Nenhum (usa padroes internos) |
 | `-l, --listen <ADDR>` | Endereco e porta para escutar | `0.0.0.0:4433` |
-| `-b, --bootstrap <ADDRS>` | Enderecos de bootstrap separados por virgula | `boot1.tesseras.net:4433,boot2.tesseras.net:4433` |
+| `-b, --bootstrap <ADDRS>` | Enderecos de bootstrap separados por virgula | `bootstrap1.tesseras.net:4433,bootstrap2.tesseras.net:4433` |
 | `-d, --data-dir <PATH>` | Diretorio de dados | Especifico da plataforma (veja acima) |
 
 Opcoes CLI sobrescrevem valores do arquivo de configuracao.
