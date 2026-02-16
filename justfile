@@ -90,6 +90,21 @@ changelog:
 changelog-preview:
     git cliff --unreleased
 
+# Build .deb package for tesseras-daemon (static MUSL binary)
+deb:
+    cargo deb -p tesseras-daemon --target x86_64-unknown-linux-musl -- --features bundled-sqlite
+
+# Deploy .deb to a bootstrap node via scp + dpkg
+deploy host="bootstrap1.tesseras.net":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just deb
+    DEB=$(ls -t target/debian/tesseras-daemon_*.deb | head -1)
+    echo "Deploying $DEB to {{host}}..."
+    scp "$DEB" root@{{host}}:/tmp/
+    ssh root@{{host}} "dpkg -i /tmp/$(basename $DEB) && systemctl restart tesseras-daemon && rm /tmp/$(basename $DEB)"
+    echo "Deployed and restarted tesseras-daemon on {{host}}"
+
 [private]
 _install-completions:
     #!/usr/bin/env sh
