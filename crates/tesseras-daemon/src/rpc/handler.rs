@@ -24,11 +24,39 @@ impl RpcHandler {
         }
     }
 
-    async fn handle_publish(&self, _hash: tesseras_core::ContentHash) -> Response {
-        // TODO: implement in Task 7
-        Response::Error {
-            code: ErrorCode::Internal,
-            message: "publish not yet implemented".into(),
+    async fn handle_publish(&self, hash: tesseras_core::ContentHash) -> Response {
+        // 1. Pack tessera from storage
+        let packed = match crate::rpc::pack::pack_tessera(
+            &hash,
+            self.tessera_repo.as_ref(),
+            self.memory_repo.as_ref(),
+            self.blob_store.as_ref(),
+        ) {
+            Ok(data) => data,
+            Err(e) => {
+                let msg = e.to_string();
+                let code = if msg.contains("not found") {
+                    ErrorCode::NotFound
+                } else {
+                    ErrorCode::Internal
+                };
+                return Response::Error {
+                    code,
+                    message: msg,
+                };
+            }
+        };
+
+        // 2. Replicate to network
+        match self.replication.replicate_tessera(&hash, &packed).await {
+            Ok(report) => Response::Published {
+                hash,
+                fragments_created: report.fragments_distributed as u32,
+            },
+            Err(e) => Response::Error {
+                code: ErrorCode::Internal,
+                message: format!("replication failed: {e}"),
+            },
         }
     }
 
