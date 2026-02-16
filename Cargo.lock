@@ -2921,6 +2921,7 @@ dependencies = [
  "serde_json",
  "tesseras-core",
  "tesseras-crypto",
+ "tesseras-rpc",
  "tesseras-storage",
  "tokio",
  "tracing",

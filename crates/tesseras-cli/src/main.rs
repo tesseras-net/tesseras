@@ -1,6 +1,7 @@
 mod commands;
 
 use std::io;
+use std::path::PathBuf;
 
 use anyhow::Result;
 use clap::builder::styling::{AnsiColor, Effects, Styles};
@@ -57,6 +58,10 @@ struct Cli {
     #[arg(long, default_value = "~/.tesseras", global = true)]
     data_dir: String,
 
+    /// Path to daemon Unix socket
+    #[arg(long, global = true)]
+    socket: Option<PathBuf>,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -100,6 +105,25 @@ enum Commands {
     /// List local tesseras
     #[command(visible_alias = "ls")]
     List,
+
+    /// Publish a tessera to the network
+    #[command(visible_alias = "pub")]
+    Publish {
+        /// Tessera hash or prefix
+        hash: String,
+    },
+
+    /// Fetch a tessera from the network
+    Fetch {
+        /// Full tessera hash (64 hex chars)
+        hash: String,
+    },
+
+    /// Show replication status of a tessera
+    Status {
+        /// Tessera hash or prefix
+        hash: String,
+    },
 
     /// Manage institutional node setup
     Institutional {
@@ -170,6 +194,15 @@ async fn main() -> Result<()> {
             commands::export::run(hash, dest, &cli.data_dir).await
         }
         Commands::List => commands::list::run(&cli.data_dir).await,
+        Commands::Publish { ref hash } => {
+            commands::publish::run(hash, &cli.data_dir, &cli.socket).await
+        }
+        Commands::Fetch { ref hash } => {
+            commands::fetch::run(hash, &cli.data_dir, &cli.socket).await
+        }
+        Commands::Status { ref hash } => {
+            commands::status::run(hash, &cli.data_dir, &cli.socket).await
+        }
         Commands::Institutional { command } => match command {
             InstitutionalCommands::Setup { ref domain, check } => {
                 commands::institutional::run_setup(domain, check, &cli.data_dir).await

@@ -1,7 +1,10 @@
 pub mod create;
 pub mod export;
+pub mod fetch;
 pub mod heir;
 pub mod init;
 pub mod institutional;
 pub mod list;
+pub mod publish;
+pub mod status;
 pub mod verify;
