@@ -126,6 +126,10 @@ async fn main() -> Result<()> {
         )
     })?;
 
+    // 4b. Acquire exclusive process lock
+    let _storage_lock = tesseras_storage::StorageLock::acquire(&config.node.data_dir)
+        .context("cannot start daemon")?;
+
     // 5. Load or generate node identity
     let identity_path = config.node.data_dir.join("identity.key");
     let identity = if identity_path.exists() {
