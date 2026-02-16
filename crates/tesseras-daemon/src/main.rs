@@ -86,14 +86,34 @@ async fn main() -> Result<()> {
     // 1. Parse CLI args
     let cli = Cli::parse();
 
-    // 2. Load config
+    // 2. Load config (precedence: --config > XDG_CONFIG_HOME > /etc > defaults)
     let mut config = if let Some(ref path) = cli.config {
         let content = std::fs::read_to_string(path)
             .with_context(|| format!("failed to read config: {}", path.display()))?;
         toml::from_str::<DaemonConfig>(&content)
             .with_context(|| format!("failed to parse config: {}", path.display()))?
     } else {
-        DaemonConfig::default()
+        let xdg_config = dirs::config_dir()
+            .map(|d| d.join("tesseras").join("config.toml"))
+            .filter(|p| p.exists());
+        let etc_config = std::path::Path::new("/etc/tesseras/config.toml");
+
+        if let Some(ref path) = xdg_config {
+            tracing::info!(path = %path.display(), "loading user config");
+            let content = std::fs::read_to_string(path)
+                .with_context(|| format!("failed to read config: {}", path.display()))?;
+            toml::from_str::<DaemonConfig>(&content)
+                .with_context(|| format!("failed to parse config: {}", path.display()))?
+        } else if etc_config.exists() {
+            tracing::info!(path = %etc_config.display(), "loading system config");
+            let content = std::fs::read_to_string(etc_config)
+                .with_context(|| format!("failed to read config: {}", etc_config.display()))?;
+            toml::from_str::<DaemonConfig>(&content)
+                .with_context(|| format!("failed to parse config: {}", etc_config.display()))?
+        } else {
+            tracing::info!("no config file found, using defaults");
+            DaemonConfig::default()
+        }
     };
 
     // Apply CLI overrides
