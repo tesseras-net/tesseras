@@ -119,6 +119,51 @@ deploy host="bootstrap1.tesseras.net":
     ssh root@{{host}} "dpkg -i /tmp/$(basename $DEB) && systemctl daemon-reload && systemctl restart tesd && rm /tmp/$(basename $DEB)"
     echo "Deployed and restarted tesd on {{host}}"
 
+# Deploy .deb to all bootstrap nodes
+deploy-all:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just deb
+    DEB=$(ls -t target/debian/tesseras-daemon_*.deb | head -1)
+    HOSTS=("bootstrap1.tesseras.net" "bootstrap2.tesseras.net")
+    for host in "${HOSTS[@]}"; do
+        echo "Deploying $DEB to $host..."
+        scp "$DEB" root@"$host":/tmp/
+        ssh root@"$host" "dpkg -i /tmp/$(basename $DEB) && systemctl daemon-reload && systemctl restart tesd && rm /tmp/$(basename $DEB)"
+        echo "Deployed and restarted tesd on $host"
+    done
+    echo "All bootstrap nodes updated"
+
+# Build OpenBSD package (.tgz) via QEMU VM
+openbsd:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ROOT="$(git rev-parse --show-toplevel)"
+    TARBALL="/tmp/tesseras-src.tar.gz"
+    # Include tracked files + untracked packaging/openbsd files
+    (cd "$ROOT" && { git ls-files; git ls-files --others --exclude-standard -- packaging/openbsd/; } | sort -u | tar czf "$TARBALL" --transform='s,^,tesseras/,' -T -)
+    echo "Uploading source to obsd-build..."
+    scp "$TARBALL" obsd-build:/tmp/
+    ssh obsd-build 'rm -rf ~/tesseras && cd /tmp && tar xzf tesseras-src.tar.gz && mv tesseras ~/'
+    echo "Building package inside OpenBSD VM..."
+    ssh obsd-build 'cd ~/tesseras && sh packaging/openbsd/create-package.sh'
+    mkdir -p "$ROOT/target/packages"
+    scp 'obsd-build:~/tesseras/target/packages/tesseras-*.tgz' "$ROOT/target/packages/"
+    echo "Package downloaded to target/packages/"
+    ls -lh "$ROOT"/target/packages/tesseras-*.tgz
+
+# Deploy OpenBSD package to a VPS
+deploy-openbsd host:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    PKG=$(ls -t target/packages/tesseras-*.tgz | head -1)
+    echo "Deploying $PKG to {{host}}..."
+    scp "$PKG" root@{{host}}:/tmp/
+    ssh root@{{host}} "rcctl stop tesd 2>/dev/null || true; pkg_add -D unsigned -aD snap /tmp/$(basename $PKG); rcctl enable tesd; rcctl start tesd; rm /tmp/$(basename $PKG)"
+    echo "Verifying..."
+    ssh root@{{host}} "rcctl check tesd"
+    echo "Deployed and started tesd on {{host}}"
+
 [private]
 _install-completions:
     #!/usr/bin/env sh

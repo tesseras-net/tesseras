@@ -1,0 +1,17 @@
+#!/bin/sh
+set -e
+
+case $2 in
+PRE-DEINSTALL)
+    rcctl stop tesd 2>/dev/null || true
+    rcctl disable tesd 2>/dev/null || true
+    ;;
+POST-DEINSTALL)
+    echo ""
+    echo "Data preserved in /var/lib/tesseras"
+    echo "To remove: doas rm -rf /var/lib/tesseras"
+    echo ""
+    ;;
+esac
+
+exit 0
