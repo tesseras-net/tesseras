@@ -18,6 +18,7 @@ class _CreateMemoryDialogState extends ConsumerState<CreateMemoryDialog> {
   bool _fileSelected = false;
   String _selectedFileName = '';
   String _selectedMediaType = 'jpeg';
+  int _selectedFileCount = 1;
   bool _creating = false;
 
   final _contextController = TextEditingController();
@@ -49,6 +50,16 @@ class _CreateMemoryDialogState extends ConsumerState<CreateMemoryDialog> {
       _fileSelected = true;
       _selectedFileName = 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg';
       _selectedMediaType = 'jpeg';
+      _selectedFileCount = 1;
+    });
+  }
+
+  void _mockSelectFolder() {
+    setState(() {
+      _fileSelected = true;
+      _selectedFileName = 'vacation_2026/';
+      _selectedMediaType = 'jpeg';
+      _selectedFileCount = 7;
     });
   }
 
@@ -160,15 +171,28 @@ class _CreateMemoryDialogState extends ConsumerState<CreateMemoryDialog> {
                                     size: 36,
                                     color: colorScheme.onSurfaceVariant),
                                 const SizedBox(height: 8),
-                                const Text('Drop file here or click to browse'),
+                                const Text(
+                                    'Drop file or folder here, or click to browse'),
                                 const SizedBox(height: 8),
-                                FilledButton.tonal(
-                                  onPressed: _mockSelectFile,
-                                  child: const Text('Browse files'),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    FilledButton.tonal(
+                                      onPressed: _mockSelectFile,
+                                      child: const Text('Browse files'),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    OutlinedButton.icon(
+                                      onPressed: _mockSelectFolder,
+                                      icon: const Icon(Icons.folder_open,
+                                          size: 18),
+                                      label: const Text('Open folder'),
+                                    ),
+                                  ],
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Supported: JPEG, PNG, WAV, WebM, TXT',
+                                  'Supported: JPEG, PNG, WAV, WebM, TXT, ZIP, TAR.GZ',
                                   style: Theme.of(context)
                                       .textTheme
                                       .bodySmall
@@ -189,10 +213,32 @@ class _CreateMemoryDialogState extends ConsumerState<CreateMemoryDialog> {
                           ),
                           child: Row(
                             children: [
-                              Icon(Icons.insert_drive_file,
-                                  color: colorScheme.primary),
+                              Icon(
+                                _selectedFileCount > 1
+                                    ? Icons.folder
+                                    : Icons.insert_drive_file,
+                                color: colorScheme.primary,
+                              ),
                               const SizedBox(width: 8),
-                              Expanded(child: Text(_selectedFileName)),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(_selectedFileName),
+                                    if (_selectedFileCount > 1)
+                                      Text(
+                                        '$_selectedFileCount supported files found',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                                color: colorScheme
+                                                    .onSurfaceVariant),
+                                      ),
+                                  ],
+                                ),
+                              ),
                               IconButton(
                                 icon: const Icon(Icons.close, size: 18),
                                 onPressed: _removeFile,

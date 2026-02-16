@@ -4,6 +4,7 @@ import '../../providers/mock_data.dart';
 import '../../providers/mock_identity_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../widgets/copy_button.dart';
+import '../../widgets/node_qr_code.dart';
 import '../../widgets/storage_bar.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -90,6 +91,27 @@ class SettingsScreen extends ConsumerWidget {
                             Text(
                               'Created: ${_formatDate(identity.createdAt)}',
                               style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                            const SizedBox(height: 8),
+                            const SizedBox(height: 12),
+                            // QR-like pattern for easy peer connection
+                            Center(
+                              child: Column(
+                                children: [
+                                  NodeQrCode(
+                                      hexData: identity.nodeIdHex),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Scan to connect',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                            color: colorScheme
+                                                .onSurfaceVariant),
+                                  ),
+                                ],
+                              ),
                             ),
                             const SizedBox(height: 8),
                             Row(

@@ -28,7 +28,10 @@ class Sidebar extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
-                Icon(Icons.memory, color: colorScheme.primary, size: 28),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: Image.asset('assets/logo.png', width: 32, height: 32),
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'Tesseras',

@@ -21,6 +21,20 @@ class TesserasApp extends ConsumerWidget {
       themeMode: themeMode,
       theme: lightTheme(),
       darkTheme: darkTheme(),
+      builder: (context, child) {
+        // Scale up text slightly for better readability on high-DPI desktops.
+        // MediaQuery.textScaleFactorOf defaults to 1.0 on Linux even with
+        // HiDPI screens, making text feel too small.
+        final mq = MediaQuery.of(context);
+        final scale = mq.textScaler.scale(1.0);
+        final adjustedScaler =
+            scale < 1.1 ? TextScaler.linear(1.1) : mq.textScaler;
+
+        return MediaQuery(
+          data: mq.copyWith(textScaler: adjustedScaler),
+          child: child!,
+        );
+      },
       home: identity != null ? const DesktopShell() : const OnboardingFlow(),
     );
   }
