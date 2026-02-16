@@ -39,6 +39,9 @@ package() {
     # Systemd service (reuse Debian unit)
     install -Dm644 "$_root/packaging/debian/tesd.service" "$pkgdir/usr/lib/systemd/system/tesd.service"
 
+    # Systemd user service (desktop mode)
+    install -Dm644 "$_root/packaging/common/tesd.user.service" "$pkgdir/usr/lib/systemd/user/tesd.service"
+
     # sysusers.d and tmpfiles.d
     install -Dm644 "$_root/packaging/archlinux/tesseras.sysusers" "$pkgdir/usr/lib/sysusers.d/tesseras.conf"
     install -Dm644 "$_root/packaging/archlinux/tesseras.tmpfiles" "$pkgdir/usr/lib/tmpfiles.d/tesseras.conf"
