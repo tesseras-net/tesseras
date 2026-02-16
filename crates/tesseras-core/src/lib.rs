@@ -7,6 +7,7 @@ pub mod manifest;
 pub mod memory;
 pub mod metadata;
 pub mod network;
+pub mod pack;
 #[cfg(feature = "service")]
 pub mod ports;
 pub mod replication;
