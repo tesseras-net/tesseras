@@ -3089,6 +3089,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tesseras-rpc"
+version = "0.1.0"
+dependencies = [
+ "dirs",
+ "rmp-serde",
+ "serde",
+ "tesseras-core",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "tesseras-storage"
 version = "0.1.0"
 dependencies = [

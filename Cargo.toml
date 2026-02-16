@@ -10,6 +10,7 @@ members = [
     "crates/tesseras-daemon",
     "crates/tesseras-replication",
     "crates/tesseras-embedded",
+    "crates/tesseras-rpc",
 ]
 
 [workspace.package]
@@ -93,4 +94,5 @@ tesseras-crypto = { path = "crates/tesseras-crypto" }
 tesseras-dht = { path = "crates/tesseras-dht" }
 tesseras-net = { path = "crates/tesseras-net" }
 tesseras-replication = { path = "crates/tesseras-replication" }
+tesseras-rpc = { path = "crates/tesseras-rpc" }
 tesseras-storage = { path = "crates/tesseras-storage" }
