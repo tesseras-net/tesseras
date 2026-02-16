@@ -177,6 +177,46 @@ impl ReplicationService {
         })
     }
 
+    /// Fetch a tessera from local fragments. For small tier, the single fragment
+    /// IS the tessera data. For medium/large, erasure-decode from available shards.
+    pub async fn fetch_tessera(
+        &self,
+        tessera_hash: &ContentHash,
+    ) -> Result<Vec<u8>, ReplicationError> {
+        let local_fragments = self.fragments.list_fragments(tessera_hash)?;
+
+        if local_fragments.is_empty() {
+            // TODO: query DHT for remote fragments in a future iteration
+            return Err(ReplicationError::NoFragmentsAvailable {
+                tessera_hash: *tessera_hash,
+            });
+        }
+
+        // For small tier: single fragment (index=0, not parity) IS the tessera data
+        let first = &local_fragments[0];
+        if local_fragments.len() == 1 && first.index == 0 && !first.is_parity {
+            let data = self.fragments.read_fragment(first)?;
+            return Ok(data);
+        }
+
+        // For medium/large tier: collect all fragments and erasure-decode
+        let data_count = local_fragments.iter().filter(|f| !f.is_parity).count();
+        let parity_count = local_fragments.iter().filter(|f| f.is_parity).count();
+        let total = data_count + parity_count;
+
+        let mut shards: Vec<Option<tesseras_crypto::erasure::Fragment>> = vec![None; total];
+        for frag_id in &local_fragments {
+            let data = self.fragments.read_fragment(frag_id)?;
+            shards[frag_id.index as usize] = Some(tesseras_crypto::erasure::Fragment {
+                index: frag_id.index as usize,
+                data,
+            });
+        }
+
+        tesseras_crypto::erasure::ReedSolomonCoder::decode(&shards, data_count, parity_count)
+            .map_err(|e| ReplicationError::ErasureCoding(e.to_string()))
+    }
+
     /// Replicate a tessera to the network.
     ///
     /// Small tier: push whole file to r peers.
@@ -774,5 +814,64 @@ mod tests {
         assert_eq!(attestation.entries[0].checksum, checksum_a);
         assert_eq!(attestation.entries[1].fragment_index, 1);
         assert_eq!(attestation.entries[1].checksum, checksum_b);
+    }
+
+    #[tokio::test]
+    async fn fetch_tessera_from_local_small_fragment() {
+        let tessera_hash = hash(0x10);
+        let data = vec![0xcc; 500];
+        let checksum = ContentHash::new(blake3::hash(&data).into());
+        let frag_id = FragmentId::new(tessera_hash, 0, 1, checksum);
+
+        let mut fragments = MockFragments::new();
+        let frag_id_clone = frag_id.clone();
+        fragments.expect_list_fragments().returning(move |_| {
+            Ok(vec![frag_id_clone.clone()])
+        });
+        let data_clone = data.clone();
+        fragments.expect_read_fragment().returning(move |_| {
+            Ok(data_clone.clone())
+        });
+
+        let service = ReplicationService::new(
+            NodeIdentity {
+                node_id: node(0xff),
+                public_key: [0; 32],
+                nonce: 0,
+            },
+            Box::new(MockDht::new()),
+            Box::new(fragments),
+            Box::new(MockLedger::new()),
+            Box::new(MockBlobs::new()),
+            ReplicationConfig::default(),
+        );
+
+        let fetched = service.fetch_tessera(&tessera_hash).await.unwrap();
+        assert_eq!(fetched, data);
+    }
+
+    #[tokio::test]
+    async fn fetch_tessera_returns_error_when_no_fragments() {
+        let mut fragments = MockFragments::new();
+        fragments.expect_list_fragments().returning(|_| Ok(vec![]));
+
+        let service = ReplicationService::new(
+            NodeIdentity {
+                node_id: node(0xff),
+                public_key: [0; 32],
+                nonce: 0,
+            },
+            Box::new(MockDht::new()),
+            Box::new(fragments),
+            Box::new(MockLedger::new()),
+            Box::new(MockBlobs::new()),
+            ReplicationConfig::default(),
+        );
+
+        let result = service.fetch_tessera(&hash(0x20)).await;
+        assert!(matches!(
+            result,
+            Err(ReplicationError::NoFragmentsAvailable { .. })
+        ));
     }
 }

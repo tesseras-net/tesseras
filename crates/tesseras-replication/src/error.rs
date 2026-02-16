@@ -24,6 +24,12 @@ pub enum ReplicationError {
     #[error("peer storage limit exceeded for {peer}")]
     PeerLimitExceeded { peer: NodeId },
 
+    #[error("no fragments available for tessera {tessera_hash}")]
+    NoFragmentsAvailable { tessera_hash: ContentHash },
+
+    #[error("erasure coding error: {0}")]
+    ErasureCoding(String),
+
     #[error(transparent)]
     Core(#[from] CoreError),
 
