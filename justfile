@@ -95,10 +95,9 @@ deb:
     #!/usr/bin/env bash
     set -euo pipefail
     cargo build --release -p tesseras-daemon -p tesseras-cli
-    mkdir -p target/completions
-    target/release/tes completions bash > target/completions/tes.bash
-    target/release/tes completions zsh  > target/completions/_tes
-    target/release/tes completions fish > target/completions/tes.fish
+    target/release/tes completions bash > target/release/tes.bash
+    target/release/tes completions zsh  > target/release/_tes
+    target/release/tes completions fish > target/release/tes.fish
     cargo deb -p tesseras-daemon --no-build
 
 # Build Arch Linux package (.pkg.tar.zst), then install with: sudo pacman -U packaging/archlinux/tesseras-*.pkg.tar.zst

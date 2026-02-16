@@ -58,9 +58,9 @@ assets = [
     ["target/release/tes", "usr/bin/", "755"],
     ["../../packaging/debian/tesd.default.toml", "etc/tesseras/config.toml", "644"],
     ["../../packaging/debian/tesd.service", "lib/systemd/system/tesd.service", "644"],
-    ["../../target/completions/tes.bash", "usr/share/bash-completion/completions/tes", "644"],
-    ["../../target/completions/_tes", "usr/share/zsh/vendor-completions/_tes", "644"],
-    ["../../target/completions/tes.fish", "usr/share/fish/vendor_completions.d/tes.fish", "644"],
+    ["target/release/tes.bash", "usr/share/bash-completion/completions/tes", "644"],
+    ["target/release/_tes", "usr/share/zsh/vendor-completions/_tes", "644"],
+    ["target/release/tes.fish", "usr/share/fish/vendor_completions.d/tes.fish", "644"],
 ]
 conf-files = ["/etc/tesseras/config.toml"]
-systemd-units = { unit-name = "tesd", enable = true, start = false }
+systemd-units = { unit-name = "tesd", unit-scripts = "../../packaging/debian", enable = true, start = false }
