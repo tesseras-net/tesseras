@@ -152,16 +152,16 @@ openbsd:
     echo "Package downloaded to target/packages/"
     ls -lh "$ROOT"/target/packages/tesseras-*.tgz
 
-# Deploy OpenBSD package to a VPS
+# Deploy OpenBSD package to a VPS (uses SSH config user + doas)
 deploy-openbsd host:
     #!/usr/bin/env bash
     set -euo pipefail
     PKG=$(ls -t target/packages/tesseras-*.tgz | head -1)
     echo "Deploying $PKG to {{host}}..."
-    scp "$PKG" root@{{host}}:/tmp/
-    ssh root@{{host}} "rcctl stop tesd 2>/dev/null || true; pkg_add -D unsigned -aD snap /tmp/$(basename $PKG); rcctl enable tesd; rcctl start tesd; rm /tmp/$(basename $PKG)"
+    scp "$PKG" {{host}}:/tmp/
+    ssh {{host}} "doas rcctl stop tesd 2>/dev/null || true; doas pkg_add -D unsigned -aD snap /tmp/$(basename $PKG); doas rcctl enable tesd; doas rcctl start tesd; rm /tmp/$(basename $PKG)"
     echo "Verifying..."
-    ssh root@{{host}} "rcctl check tesd"
+    ssh {{host}} "doas rcctl check tesd"
     echo "Deployed and started tesd on {{host}}"
 
 [private]
