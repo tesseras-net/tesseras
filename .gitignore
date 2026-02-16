@@ -12,3 +12,9 @@ target/
 # Cargo-mutants output
 mutants.out/
 mutants.out.old/
+
+# OpenTofu / Terraform
+infra/.terraform/
+infra/terraform.tfvars
+infra/*.tfstate
+infra/*.tfstate.backup
