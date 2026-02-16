@@ -34,3 +34,18 @@ prometheus = { workspace = true }
 [features]
 default = []
 bundled-sqlite = ["tesseras-storage/bundled-sqlite"]
+
+[package.metadata.deb]
+maintainer = "tesseras maintainers"
+copyright = "ISC"
+depends = ""
+section = "net"
+priority = "optional"
+maintainer-scripts = "../../packaging/debian/scripts/"
+assets = [
+    ["target/release/tesseras-daemon", "usr/bin/", "755"],
+    ["../../packaging/debian/tesseras-daemon.default.toml", "etc/tesseras/config.toml", "644"],
+    ["../../packaging/debian/tesseras-daemon.service", "lib/systemd/system/tesseras-daemon.service", "644"],
+]
+conf-files = ["/etc/tesseras/config.toml"]
+systemd-units = { unit-name = "tesseras-daemon", enable = true, start = false }

@@ -12,3 +12,5 @@ case "$1" in
         install -d -o tesseras -g tesseras -m 0750 /var/lib/tesseras
         ;;
 esac
+
+#DEBHELPER#
