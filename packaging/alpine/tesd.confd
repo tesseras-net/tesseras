@@ -1,0 +1,4 @@
+# Configuration for /etc/init.d/tesd
+
+# Additional options to pass to tesd
+TESD_OPTS="--config /etc/tesseras/config.toml"

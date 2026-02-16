@@ -104,6 +104,10 @@ deb:
 arch:
     cd packaging/archlinux && TESSERAS_ROOT="$(git rev-parse --show-toplevel)" makepkg -sf
 
+# Build Alpine Linux package (.apk)
+alpine:
+    cd packaging/alpine && TESSERAS_ROOT="$(git rev-parse --show-toplevel)" abuild -r
+
 # Deploy .deb to a bootstrap node via scp + dpkg
 deploy host="bootstrap1.tesseras.net":
     #!/usr/bin/env bash

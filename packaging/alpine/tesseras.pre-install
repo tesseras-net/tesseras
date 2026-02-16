@@ -1,0 +1,6 @@
+#!/bin/sh
+
+addgroup -S tesseras 2>/dev/null
+adduser -S -D -H -h /var/lib/tesseras -s /sbin/nologin -G tesseras tesseras 2>/dev/null
+
+exit 0
