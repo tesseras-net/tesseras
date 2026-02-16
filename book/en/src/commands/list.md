@@ -2,6 +2,8 @@
 
 List all local tesseras.
 
+Alias: `tes ls`
+
 ## Usage
 
 ```bash
@@ -12,36 +14,28 @@ tes list
 
 | Option | Description |
 |--------|-------------|
-| `--data-dir <PATH>` | Base directory for data storage (default: `~/.tesseras`) |
+| `--data-dir <PATH>` | Base directory for data storage (default: `~/.local/share/tesseras`) |
 
-## Output
+## Examples
 
-Displays a table with the following columns:
-
-| Column | Description |
-|--------|-------------|
-| **Hash** | First 16 characters of the content hash |
-| **Created** | Creation date (YYYY-MM-DD) |
-| **Memories** | Number of memories in the tessera |
-| **Size** | Total size (B, KB, MB, or GB) |
-| **Visibility** | Visibility level (public, private, or circle) |
-
-## Example
+### List tesseras
 
 ```bash
 tes list
 ```
 
 ```
-Hash             Created     Memories  Size    Visibility
-9f2c4a1b3e7d8f0c 2026-02-14         3  284 KB  public
-a3b7c2d9e4f01823 2026-02-10         1   12 KB  private
-f8e7d6c5b4a39201 2026-01-28        12    4 MB  public
+┌────────────┬────────────┬──────────┬────────┬────────────┐
+│ Hash       │ Created    │ Memories │ Size   │ Visibility │
+├────────────┼────────────┼──────────┼────────┼────────────┤
+│ 9y2m4a1b3e │ 2026-02-14 │        3 │ 284 KB │ public     │
+│ f7g8h9j0kl │ 2026-02-15 │        1 │  12 KB │ private    │
+└────────────┴────────────┴──────────┴────────┴────────────┘
 ```
 
-## Empty database
+The hash column shows the first 10 characters of the base32-encoded content hash. Use this prefix with other commands (e.g., `tes verify 9y2m4a1b3e`).
 
-If no tesseras have been created yet:
+### Empty database
 
 ```bash
 tes list
@@ -50,3 +44,13 @@ tes list
 ```
 No tesseras found.
 ```
+
+## Column reference
+
+| Column | Description |
+|--------|-------------|
+| Hash | First 10 chars of the base32 content hash |
+| Created | Date the tessera was created (YYYY-MM-DD) |
+| Memories | Number of memories in the tessera |
+| Size | Total size of all files (B, KB, MB, GB) |
+| Visibility | Visibility level: public, private, circle, or sealed |

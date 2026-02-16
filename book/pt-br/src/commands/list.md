@@ -2,6 +2,8 @@
 
 Listar todas as tesseras locais.
 
+Alias: `tes ls`
+
 ## Uso
 
 ```bash
@@ -12,36 +14,28 @@ tes list
 
 | Opção | Descrição |
 |-------|-----------|
-| `--data-dir <CAMINHO>` | Diretório base para armazenamento de dados (padrão: `~/.tesseras`) |
+| `--data-dir <CAMINHO>` | Diretório base para armazenamento de dados (padrão: `~/.local/share/tesseras`) |
 
-## Saída
+## Exemplos
 
-Exibe uma tabela com as seguintes colunas:
-
-| Coluna | Descrição |
-|--------|-----------|
-| **Hash** | Primeiros 16 caracteres do hash de conteúdo |
-| **Created** | Data de criação (AAAA-MM-DD) |
-| **Memories** | Número de memórias na tessera |
-| **Size** | Tamanho total (B, KB, MB ou GB) |
-| **Visibility** | Nível de visibilidade (public, private ou circle) |
-
-## Exemplo
+### Listar tesseras
 
 ```bash
 tes list
 ```
 
 ```
-Hash             Created     Memories  Size    Visibility
-9f2c4a1b3e7d8f0c 2026-02-14         3  284 KB  public
-a3b7c2d9e4f01823 2026-02-10         1   12 KB  private
-f8e7d6c5b4a39201 2026-01-28        12    4 MB  public
+┌────────────┬────────────┬──────────┬────────┬────────────┐
+│ Hash       │ Created    │ Memories │ Size   │ Visibility │
+├────────────┼────────────┼──────────┼────────┼────────────┤
+│ 9y2m4a1b3e │ 2026-02-14 │        3 │ 284 KB │ public     │
+│ f7g8h9j0kl │ 2026-02-15 │        1 │  12 KB │ private    │
+└────────────┴────────────┴──────────┴────────┴────────────┘
 ```
 
-## Banco de dados vazio
+A coluna hash mostra os primeiros 10 caracteres do hash de conteúdo codificado em base32. Use esse prefixo com outros comandos (ex.: `tes verify 9y2m4a1b3e`).
 
-Se nenhuma tessera foi criada ainda:
+### Banco de dados vazio
 
 ```bash
 tes list
@@ -50,3 +44,13 @@ tes list
 ```
 No tesseras found.
 ```
+
+## Referência de colunas
+
+| Coluna | Descrição |
+|--------|-----------|
+| Hash | Primeiros 10 caracteres do hash de conteúdo base32 |
+| Created | Data de criação da tessera (AAAA-MM-DD) |
+| Memories | Número de memórias na tessera |
+| Size | Tamanho total de todos os arquivos (B, KB, MB, GB) |
+| Visibility | Nível de visibilidade: public, private, circle ou sealed |

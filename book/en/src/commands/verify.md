@@ -2,6 +2,8 @@
 
 Verify integrity of a stored tessera.
 
+Alias: `tes v`
+
 ## Usage
 
 ```bash
@@ -12,13 +14,15 @@ tes verify <HASH>
 
 | Argument | Description |
 |----------|-------------|
-| `<HASH>` | Tessera content hash (64 hex characters) |
+| `<HASH>` | Tessera hash or prefix (base32 or hex) |
+
+You can use the full hash or a short prefix. Both base32 and hex formats are accepted.
 
 ## Options
 
 | Option | Description |
 |--------|-------------|
-| `--data-dir <PATH>` | Base directory for data storage (default: `~/.tesseras`) |
+| `--data-dir <PATH>` | Base directory for data storage (default: `~/.local/share/tesseras`) |
 
 ## What it checks
 
@@ -37,11 +41,11 @@ tes verify <HASH>
 ### Successful verification
 
 ```bash
-tes verify 9f2c4a1b3e7d8f0cabc123def456789012345678abcdef0123456789abcdef01
+tes verify 9y2m4a
 ```
 
 ```
-Tessera: 9f2c4a1b3e7d8f0cabc123def456789012345678abcdef0123456789abcdef01
+Tessera: 9y2m4a1b3e7d8f0cabc123def456789012345678abcdef
 Signature: VALID
   [OK] memories/a1b2c3d4/media.jpg
   [OK] memories/e5f6a7b8/media.txt
@@ -54,7 +58,7 @@ Verification: PASSED
 If a file has been modified or corrupted:
 
 ```
-Tessera: 9f2c4a1b3e7d8f0cabc123def456789012345678abcdef0123456789abcdef01
+Tessera: 9y2m4a1b3e7d8f0cabc123def456789012345678abcdef
 Signature: VALID
   [OK] memories/a1b2c3d4/media.jpg
   [FAILED] memories/e5f6a7b8/media.txt

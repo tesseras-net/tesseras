@@ -1,6 +1,8 @@
 # tes export
 
-Export a tessera as a self-contained directory.
+Export a tessera to a self-contained directory.
+
+Alias: `tes e`
 
 ## Usage
 
@@ -12,30 +14,50 @@ tes export <HASH> <DEST>
 
 | Argument | Description |
 |----------|-------------|
-| `<HASH>` | Tessera content hash (64 hex characters) |
+| `<HASH>` | Tessera hash or prefix (base32 or hex) |
 | `<DEST>` | Destination directory |
+
+You can use the full hash or a short prefix. Both base32 and hex formats are accepted.
 
 ## Options
 
 | Option | Description |
 |--------|-------------|
-| `--data-dir <PATH>` | Base directory for data storage (default: `~/.tesseras`) |
+| `--data-dir <PATH>` | Base directory for data storage (default: `~/.local/share/tesseras`) |
 
-## Output structure
+## Examples
 
-The export creates a directory named `tessera-<hash>` inside the destination:
+### Export to a backup directory
+
+```bash
+tes export 9y2m4a ./backup
+```
 
 ```
-tessera-9f2c4a1b.../
+Exported to ./backup/tessera-9y2m4a1b3e7d8f0cabc123def456789012345678abcdef
+```
+
+### Export to USB drive
+
+```bash
+tes export 9y2m4a /mnt/usb/tesseras
+```
+
+## Exported directory structure
+
+The exported directory is fully self-contained — readable without Tesseras software:
+
+```
+tessera-9y2m4a1b.../
 ├── MANIFEST                    # Plain text index with checksums
-├── README.decode               # Human-readable decoding instructions
+├── README.decode               # How to read this tessera without software
 ├── identity/
 │   ├── creator.pub.ed25519     # Creator's public key
 │   └── signature.ed25519.sig   # Signature of the MANIFEST
 ├── memories/
-│   ├── <content-hash>/
-│   │   ├── media.jpg           # Primary media file
-│   │   ├── context.txt         # Human context in plain UTF-8
+│   ├── <hash>/
+│   │   ├── media.jpg           # The photo/audio/video/text
+│   │   ├── context.txt         # Description in plain text
 │   │   └── meta.json           # Structured metadata
 │   └── .../
 ├── schema/
@@ -43,19 +65,10 @@ tessera-9f2c4a1b.../
 └── decode/
     ├── formats.txt             # Explanation of all formats used
     ├── jpeg.txt                # How to decode JPEG
-    ├── wav.txt                 # How to decode WAV
     └── json.txt                # How to decode JSON
 ```
 
-## Example
-
-```bash
-tes export 9f2c4a1b3e7d8f0cabc123def4567890... ./backup
-```
-
-```
-Exported to ./backup/tessera-9f2c4a1b3e7d8f0cabc123def4567890...
-```
+Everything a future reader needs to understand the contents is included — no Tesseras software required.
 
 ## Key feature: self-contained
 
@@ -69,7 +82,7 @@ This means someone thousands of years from now, with no knowledge of Tesseras, c
 
 ## Use cases
 
-- **Backup** — export to an external drive, USB stick, or cloud storage
-- **Sharing** — give someone a complete copy of a tessera
-- **Archival** — store on write-once media (DVD, Blu-ray, tape)
-- **Migration** — move tesseras between machines without needing the database
+- **Offline backup** — copy to USB drives, external hard disks, or NAS
+- **Archival media** — burn to M-DISC, write to tape, or print QR codes
+- **Sharing** — send a self-contained copy to someone without Tesseras
+- **Migration** — move tesseras between systems without using the network
