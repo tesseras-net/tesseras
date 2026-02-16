@@ -1,11 +1,11 @@
 # Running a Node
 
-The `tesseras-daemon` binary runs a full Tesseras node that participates in the peer-to-peer network. It listens for connections over QUIC, joins the distributed hash table (DHT), and enables other nodes to discover and find tessera pointers.
+The `tesd` binary runs a full Tesseras node that participates in the peer-to-peer network. It listens for connections over QUIC, joins the distributed hash table (DHT), and enables other nodes to discover and find tessera pointers.
 
 ## Starting the daemon
 
 ```bash
-tesseras-daemon
+tesd
 ```
 
 On first run, the daemon:
@@ -19,7 +19,7 @@ On first run, the daemon:
 ## Command-line options
 
 ```
-tesseras-daemon [OPTIONS]
+tesd [OPTIONS]
 ```
 
 | Option | Description | Default |
@@ -36,31 +36,31 @@ CLI options override values from the config file.
 Run with defaults (join the public network):
 
 ```bash
-tesseras-daemon
+tesd
 ```
 
 Run as a seed node (no bootstrap, other nodes connect to you):
 
 ```bash
-tesseras-daemon --bootstrap ""
+tesd --bootstrap ""
 ```
 
 Run on a custom port with a specific data directory:
 
 ```bash
-tesseras-daemon --listen 0.0.0.0:5000 --data-dir /var/lib/tesseras
+tesd --listen 0.0.0.0:5000 --data-dir /var/lib/tesseras
 ```
 
 Bootstrap from a specific node:
 
 ```bash
-tesseras-daemon --bootstrap "192.168.1.50:4433"
+tesd --bootstrap "192.168.1.50:4433"
 ```
 
 Join a local network of multiple nodes:
 
 ```bash
-tesseras-daemon --bootstrap "192.168.1.10:4433,192.168.1.11:4433"
+tesd --bootstrap "192.168.1.10:4433,192.168.1.11:4433"
 ```
 
 ## Node identity
@@ -77,16 +77,16 @@ The daemon uses structured logging via `tracing`. Control the log level with the
 
 ```bash
 # Default (info level)
-tesseras-daemon
+tesd
 
 # Debug logging
-RUST_LOG=debug tesseras-daemon
+RUST_LOG=debug tesd
 
 # Only show warnings and errors
-RUST_LOG=warn tesseras-daemon
+RUST_LOG=warn tesd
 
 # Debug for DHT, info for everything else
-RUST_LOG=info,tesseras_dht=debug tesseras-daemon
+RUST_LOG=info,tesseras_dht=debug tesd
 ```
 
 ## Shutting down

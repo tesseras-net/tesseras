@@ -36,7 +36,7 @@ New migration (`002_replication.sql`) adds tables for fragments, fragment plans,
 
 - *Configuration* (`config.rs`): `ReplicationConfig` with defaults for repair interval (24h), jitter (2h), concurrent transfers (4), minimum free space (1 GB), deficit allowance (256 MB), and per-peer storage limit (1 GB).
 
-**tesseras-daemon** (updated) — The daemon now opens a SQLite database (`db/tesseras.db`), runs migrations, creates `FsFragmentStore`, `SqliteReciprocityLedger`, and `FsBlobStore` instances, wraps the DHT engine in a `DhtPortAdapter`, builds a `ReplicationService`, and spawns the repair loop as a background task with graceful shutdown.
+**tesd** (updated) — The daemon now opens a SQLite database (`db/tesseras.db`), runs migrations, creates `FsFragmentStore`, `SqliteReciprocityLedger`, and `FsBlobStore` instances, wraps the DHT engine in a `DhtPortAdapter`, builds a `ReplicationService`, and spawns the repair loop as a background task with graceful shutdown.
 
 **Testing** — 193 tests across the workspace:
 

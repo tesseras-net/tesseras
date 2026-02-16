@@ -4,7 +4,7 @@ date = 2026-02-15
 description = "O CLI do tesseras agora pode publicar tesseras na rede, buscá-las de peers e monitorar o estado de replicação — tudo através de uma nova ponte RPC via socket Unix para o daemon."
 +++
 
-Até agora o CLI operava isoladamente: criar uma tessera, verificar, exportar, listar o que você tem. Tudo ficava na sua máquina. Com esta atualização, o `tes` ganha três comandos que fazem a ponte entre o armazenamento local e a rede P2P — `publish`, `fetch` e `status` — comunicando-se com um `tesseras-daemon` em execução através de um socket Unix.
+Até agora o CLI operava isoladamente: criar uma tessera, verificar, exportar, listar o que você tem. Tudo ficava na sua máquina. Com esta atualização, o `tes` ganha três comandos que fazem a ponte entre o armazenamento local e a rede P2P — `publish`, `fetch` e `status` — comunicando-se com um `tesd` em execução através de um socket Unix.
 
 ## O que foi construído
 

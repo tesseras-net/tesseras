@@ -20,9 +20,9 @@ The design follows a principle of trust but verify: institutions identify themse
 
 All types derive `Serialize`/`Deserialize` for wire transport and `Clone`/`Debug` for diagnostics.
 
-**Institutional daemon config** (`tesseras-daemon/src/config.rs`) — A new `[institutional]` TOML section with `domain` (the DNS domain to verify), `pledge_bytes` (storage commitment in bytes), and `search_enabled` (toggle for the FTS5 index). The `to_dht_config()` method now sets `Capabilities::institutional_default()` when institutional config is present, so institutional nodes advertise the right capability bits in Pong responses.
+**Institutional daemon config** (`tesd/src/config.rs`) — A new `[institutional]` TOML section with `domain` (the DNS domain to verify), `pledge_bytes` (storage commitment in bytes), and `search_enabled` (toggle for the FTS5 index). The `to_dht_config()` method now sets `Capabilities::institutional_default()` when institutional config is present, so institutional nodes advertise the right capability bits in Pong responses.
 
-**DNS TXT verification** (`tesseras-daemon/src/institutional.rs`) — Async DNS resolution using `hickory-resolver` to verify institutional identity. The daemon looks up `_tesseras.<domain>` TXT records and parses key-value fields: `v` (version), `node` (hex-encoded node ID), and `pledge` (storage pledge in bytes). Verification checks:
+**DNS TXT verification** (`tesd/src/institutional.rs`) — Async DNS resolution using `hickory-resolver` to verify institutional identity. The daemon looks up `_tesseras.<domain>` TXT records and parses key-value fields: `v` (version), `node` (hex-encoded node ID), and `pledge` (storage pledge in bytes). Verification checks:
 
 1. A TXT record exists at `_tesseras.<domain>`
 2. The `node` field matches the daemon's own node ID
@@ -61,7 +61,7 @@ The migration also adds an `is_institutional` column to the `reciprocity` table,
 
 The `encode()` function was switched from positional to named MessagePack serialization (`rmp_serde::to_vec_named`) to handle `SearchFilters`' optional fields correctly — positional encoding breaks when `skip_serializing_if` omits fields.
 
-**Prometheus metrics** (`tesseras-daemon/src/metrics.rs`) — Eight institutional-specific metrics:
+**Prometheus metrics** (`tesd/src/metrics.rs`) — Eight institutional-specific metrics:
 
 - `tesseras_institutional_pledge_bytes` — configured storage pledge
 - `tesseras_institutional_stored_bytes` — actual bytes stored

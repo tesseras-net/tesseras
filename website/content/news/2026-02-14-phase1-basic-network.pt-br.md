@@ -26,7 +26,7 @@ O protocolo de fio usa MessagePack com prefixo de comprimento: um cabeçalho de 
 - *Armazenamento de ponteiros*: armazenamento em memória limitado com TTL configurável (24 horas padrão) e máximo de entradas (10.000 padrão). Quando cheio, remove ponteiros mais distantes do ID do nó local, seguindo o modelo de responsabilidade baseado em distância do Kademlia.
 - *DhtEngine*: o orquestrador principal. Trata RPCs recebidos, executa buscas iterativas (paralelismo alpha=3), bootstrap, publicação e busca. O método `run()` dirige um loop `tokio::select!` com timers de manutenção: refresh da tabela de roteamento a cada 60 segundos, expiração de ponteiros a cada 5 minutos.
 
-**tesseras-daemon** — Um binário de nó completo. Analisa argumentos de CLI (endereço de bind, pares de bootstrap, diretório de dados), gera uma identidade de nó válida por PoW, abre um endpoint QUIC, faz bootstrap na rede e roda o motor DHT. Desligamento gracioso com Ctrl+C via tratamento de sinais do tokio.
+**tesd** — Um binário de nó completo. Analisa argumentos de CLI (endereço de bind, pares de bootstrap, diretório de dados), gera uma identidade de nó válida por PoW, abre um endpoint QUIC, faz bootstrap na rede e roda o motor DHT. Desligamento gracioso com Ctrl+C via tratamento de sinais do tokio.
 
 **Infraestrutura** — Configuração OpenTofu para dois nós bootstrap no Hetzner Cloud (instâncias cx22 em Falkenstein, Alemanha e Helsinki, Finlândia). Script de provisionamento cloud-init cria um usuário dedicado `tesseras`, escreve um arquivo de configuração e configura um serviço systemd. Regras de firewall abrem UDP 4433 (QUIC) e restringem métricas a acesso interno.
 

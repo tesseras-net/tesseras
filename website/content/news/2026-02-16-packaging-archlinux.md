@@ -28,7 +28,7 @@ just arch
 This runs `makepkg -sf` inside `packaging/archlinux/`, which:
 
 1. **prepare** — fetches Cargo dependencies with `cargo fetch --locked`
-2. **build** — compiles `tesseras-daemon` and `tes` (the CLI) in release mode
+2. **build** — compiles `tesd` and `tes` (the CLI) in release mode
 3. **package** — installs binaries, systemd service, sysusers/tmpfiles configs, shell completions (bash, zsh, fish), and a default config file
 
 The result is a `.pkg.tar.zst` file in `packaging/archlinux/`.
@@ -50,17 +50,17 @@ sudo usermod -aG tesseras $USER
 Log out and back in, then start the daemon:
 
 ```sh
-sudo systemctl enable --now tesseras-daemon
+sudo systemctl enable --now tesd
 ```
 
 ## What the package includes
 
 | Path | Description |
 |------|-------------|
-| `/usr/bin/tesseras-daemon` | Full node daemon |
+| `/usr/bin/tesd` | Full node daemon |
 | `/usr/bin/tes` | CLI client |
 | `/etc/tesseras/config.toml` | Default configuration (marked as backup) |
-| `/usr/lib/systemd/system/tesseras-daemon.service` | Systemd unit with security hardening |
+| `/usr/lib/systemd/system/tesd.service` | Systemd unit with security hardening |
 | `/usr/lib/sysusers.d/tesseras.conf` | System user definition |
 | `/usr/lib/tmpfiles.d/tesseras.conf` | Data directory `/var/lib/tesseras` |
 | Shell completions | bash, zsh, and fish |

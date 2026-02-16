@@ -28,7 +28,7 @@ Unlike `publish` and `status`, `fetch` requires the full 64-character hex hash b
 The tesseras daemon must be running and connected to the network:
 
 ```bash
-tesseras-daemon
+tesd
 ```
 
 ## Examples

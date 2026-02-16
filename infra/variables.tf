@@ -10,7 +10,7 @@ variable "ssh_public_key" {
 }
 
 variable "daemon_version" {
-  description = "tesseras-daemon version/tag to deploy"
+  description = "tesd version/tag to deploy"
   type        = string
   default     = "latest"
 }

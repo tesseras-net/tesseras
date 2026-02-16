@@ -28,7 +28,7 @@ Prefixos de hash são suportados, assim como no `tes publish`.
 O daemon tesseras deve estar em execução:
 
 ```bash
-tesseras-daemon
+tesd
 ```
 
 A tessera deve existir localmente.

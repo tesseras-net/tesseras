@@ -30,14 +30,14 @@ build() {
 
 package() {
     # Binaries
-    install -Dm755 "$srcdir/target/release/tesseras-daemon" "$pkgdir/usr/bin/tesseras-daemon"
+    install -Dm755 "$srcdir/target/release/tesd" "$pkgdir/usr/bin/tesd"
     install -Dm755 "$srcdir/target/release/tes" "$pkgdir/usr/bin/tes"
 
     # Config (reuse Debian default)
-    install -Dm644 "$_root/packaging/debian/tesseras-daemon.default.toml" "$pkgdir/etc/tesseras/config.toml"
+    install -Dm644 "$_root/packaging/debian/tesd.default.toml" "$pkgdir/etc/tesseras/config.toml"
 
     # Systemd service (reuse Debian unit)
-    install -Dm644 "$_root/packaging/debian/tesseras-daemon.service" "$pkgdir/usr/lib/systemd/system/tesseras-daemon.service"
+    install -Dm644 "$_root/packaging/debian/tesd.service" "$pkgdir/usr/lib/systemd/system/tesd.service"
 
     # sysusers.d and tmpfiles.d
     install -Dm644 "$_root/packaging/archlinux/tesseras.sysusers" "$pkgdir/usr/lib/sysusers.d/tesseras.conf"

@@ -56,7 +56,7 @@ A mensagem `Pong` foi estendida com metadados NAT: `nat_type`, `relay_slots_avai
 
 Peers sao reconectados em ordem de prioridade: nos bootstrap primeiro, depois nos que guardam nossos fragmentos, depois nos cujos fragmentos guardamos, depois vizinhos DHT gerais. Uma nova variante de evento `NetworkChanged` foi adicionada ao stream de eventos FFI para que o app Flutter possa mostrar progresso de reconexao.
 
-**Configuracao NAT do daemon** (`tesseras-daemon/src/config.rs`) — Uma nova secao `[nat]` na configuracao TOML com lista de servidores STUN, toggle de relay, maximo de sessoes relay, limites de largura de banda (reciproco vs bootstrap) e timeout de inatividade. Todos os campos tem defaults sensiveis; relay e desabilitado por padrao.
+**Configuracao NAT do daemon** (`tesd/src/config.rs`) — Uma nova secao `[nat]` na configuracao TOML com lista de servidores STUN, toggle de relay, maximo de sessoes relay, limites de largura de banda (reciproco vs bootstrap) e timeout de inatividade. Todos os campos tem defaults sensiveis; relay e desabilitado por padrao.
 
 **Metricas Prometheus** (`tesseras-net/src/metrics.rs`) — 16 metricas em quatro subsistemas:
 

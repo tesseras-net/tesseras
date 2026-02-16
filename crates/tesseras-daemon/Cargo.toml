@@ -11,7 +11,7 @@ name = "tesseras_daemon"
 path = "src/lib.rs"
 
 [[bin]]
-name = "tesseras-daemon"
+name = "tesd"
 path = "src/main.rs"
 
 [dependencies]
@@ -54,9 +54,9 @@ section = "net"
 priority = "optional"
 maintainer-scripts = "../../packaging/debian/scripts/"
 assets = [
-    ["target/release/tesseras-daemon", "usr/bin/", "755"],
-    ["../../packaging/debian/tesseras-daemon.default.toml", "etc/tesseras/config.toml", "644"],
-    ["../../packaging/debian/tesseras-daemon.service", "lib/systemd/system/tesseras-daemon.service", "644"],
+    ["target/release/tesd", "usr/bin/", "755"],
+    ["../../packaging/debian/tesd.default.toml", "etc/tesseras/config.toml", "644"],
+    ["../../packaging/debian/tesd.service", "lib/systemd/system/tesd.service", "644"],
 ]
 conf-files = ["/etc/tesseras/config.toml"]
-systemd-units = { unit-name = "tesseras-daemon", enable = true, start = false }
+systemd-units = { unit-name = "tesd", enable = true, start = false }

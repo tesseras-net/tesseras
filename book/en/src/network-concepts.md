@@ -54,7 +54,7 @@ Not every device participates in the network the same way:
 
 | Type | Description | Always on? |
 |------|-------------|-----------|
-| **Full node** | Desktop, server, or Raspberry Pi running `tesseras-daemon`. Participates fully in the DHT and stores data for other nodes. | Yes |
+| **Full node** | Desktop, server, or Raspberry Pi running `tesd`. Participates fully in the DHT and stores data for other nodes. | Yes |
 | **Mobile node** | Phone or tablet running the Tesseras app. Participates in the DHT when the app is active. | No |
 | **Browser node** | Web browser running the WASM client. Connects via a relay node. Read-only. | No |
 | **IoT node** | ESP32 or similar device on the local network. Stores fragments passively, does not participate in the DHT. | Yes |

@@ -4,7 +4,7 @@ post_install() {
     echo "   Then log out and back in for the change to take effect."
     echo ""
     echo ":: To start the daemon:"
-    echo "     sudo systemctl enable --now tesseras-daemon"
+    echo "     sudo systemctl enable --now tesd"
 }
 
 post_upgrade() {

@@ -13,7 +13,7 @@ pub async fn run(socket: &Option<PathBuf>) -> Result<()> {
 
     let mut client = DaemonClient::connect(&socket_path).with_context(|| {
         format!(
-            "Cannot connect to daemon at {}\nIs tesseras-daemon running? Start it with: tesseras-daemon",
+            "Cannot connect to daemon at {}\nIs tesd running? Start it with: tesd",
             socket_path.display()
         )
     })?;

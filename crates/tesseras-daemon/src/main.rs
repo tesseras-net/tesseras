@@ -1,4 +1,4 @@
-//! tesseras-daemon: full node binary for desktop/server/RPi.
+//! tesd: full node binary for desktop/server/RPi.
 
 #[allow(dead_code)]
 mod bootstrap;
@@ -33,7 +33,7 @@ use config::DaemonConfig;
 use dht_adapter::DhtPortAdapter;
 
 #[derive(Parser, Debug)]
-#[command(name = "tesseras-daemon", about = "Tesseras P2P daemon")]
+#[command(name = "tesd", about = "Tesseras P2P daemon")]
 struct Cli {
     /// Path to config file
     #[arg(short, long)]
@@ -115,7 +115,7 @@ async fn main() -> Result<()> {
     tracing::info!(
         listen = ?effective_addrs,
         data_dir = %config.node.data_dir.display(),
-        "starting tesseras-daemon"
+        "starting tesd"
     );
 
     // 4. Ensure data directory exists

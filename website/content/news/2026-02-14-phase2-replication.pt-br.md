@@ -36,7 +36,7 @@ Nova migração (`002_replication.sql`) adiciona tabelas para fragmentos, planos
 
 - *Configuração* (`config.rs`): `ReplicationConfig` com padrões para intervalo de reparo (24h), jitter (2h), transferências simultâneas (4), espaço livre mínimo (1 GB), tolerância de déficit (256 MB) e limite de armazenamento por par (1 GB).
 
-**tesseras-daemon** (atualizado) — O daemon agora abre um banco de dados SQLite (`db/tesseras.db`), executa migrações, cria instâncias de `FsFragmentStore`, `SqliteReciprocityLedger` e `FsBlobStore`, envolve o engine DHT em um `DhtPortAdapter`, constrói um `ReplicationService` e lança o loop de reparo como tarefa em segundo plano com desligamento gracioso.
+**tesd** (atualizado) — O daemon agora abre um banco de dados SQLite (`db/tesseras.db`), executa migrações, cria instâncias de `FsFragmentStore`, `SqliteReciprocityLedger` e `FsBlobStore`, envolve o engine DHT em um `DhtPortAdapter`, constrói um `ReplicationService` e lança o loop de reparo como tarefa em segundo plano com desligamento gracioso.
 
 **Testes** — 193 testes em todo o workspace:
 

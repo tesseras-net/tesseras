@@ -28,7 +28,7 @@ Prefixos de hash são suportados — se o hash da sua tessera começa com `a1b2c
 O daemon tesseras deve estar em execução:
 
 ```bash
-tesseras-daemon
+tesd
 ```
 
 A tessera deve existir localmente (criada com `tes create`).

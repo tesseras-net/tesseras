@@ -10,7 +10,7 @@ mod book
 # Install the CLI, daemon, and shell completions
 install:
     cargo install --path crates/tesseras-cli
-    cargo install --path crates/tesseras-daemon
+    cargo install --path crates/tesseras-daemon --bin tesd
     @just _install-completions
 
 # Run NAT traversal tests
@@ -90,7 +90,7 @@ changelog:
 changelog-preview:
     git cliff --unreleased
 
-# Build .deb package for tesseras-daemon (static MUSL binary)
+# Build .deb package for tesd (static MUSL binary)
 deb:
     cargo deb -p tesseras-daemon --target x86_64-unknown-linux-musl -- --features bundled-sqlite
 
@@ -106,8 +106,8 @@ deploy host="bootstrap1.tesseras.net":
     DEB=$(ls -t target/debian/tesseras-daemon_*.deb | head -1)
     echo "Deploying $DEB to {{host}}..."
     scp "$DEB" root@{{host}}:/tmp/
-    ssh root@{{host}} "dpkg -i /tmp/$(basename $DEB) && systemctl daemon-reload && systemctl restart tesseras-daemon && rm /tmp/$(basename $DEB)"
-    echo "Deployed and restarted tesseras-daemon on {{host}}"
+    ssh root@{{host}} "dpkg -i /tmp/$(basename $DEB) && systemctl daemon-reload && systemctl restart tesd && rm /tmp/$(basename $DEB)"
+    echo "Deployed and restarted tesd on {{host}}"
 
 [private]
 _install-completions:

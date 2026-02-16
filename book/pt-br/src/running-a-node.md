@@ -1,11 +1,11 @@
 # Executando um No
 
-O binario `tesseras-daemon` executa um no completo do Tesseras que participa da rede peer-to-peer. Ele escuta conexoes sobre QUIC, entra na tabela hash distribuida (DHT) e permite que outros nos descubram e encontrem ponteiros de tesseras.
+O binario `tesd` executa um no completo do Tesseras que participa da rede peer-to-peer. Ele escuta conexoes sobre QUIC, entra na tabela hash distribuida (DHT) e permite que outros nos descubram e encontrem ponteiros de tesseras.
 
 ## Iniciando o daemon
 
 ```bash
-tesseras-daemon
+tesd
 ```
 
 Na primeira execucao, o daemon:
@@ -19,7 +19,7 @@ Na primeira execucao, o daemon:
 ## Opcoes de linha de comando
 
 ```
-tesseras-daemon [OPTIONS]
+tesd [OPTIONS]
 ```
 
 | Opcao | Descricao | Padrao |
@@ -36,31 +36,31 @@ Opcoes CLI sobrescrevem valores do arquivo de configuracao.
 Executar com padroes (entrar na rede publica):
 
 ```bash
-tesseras-daemon
+tesd
 ```
 
 Executar como no semente (sem bootstrap, outros nos conectam a voce):
 
 ```bash
-tesseras-daemon --bootstrap ""
+tesd --bootstrap ""
 ```
 
 Executar em uma porta personalizada com um diretorio de dados especifico:
 
 ```bash
-tesseras-daemon --listen 0.0.0.0:5000 --data-dir /var/lib/tesseras
+tesd --listen 0.0.0.0:5000 --data-dir /var/lib/tesseras
 ```
 
 Fazer bootstrap a partir de um no especifico:
 
 ```bash
-tesseras-daemon --bootstrap "192.168.1.50:4433"
+tesd --bootstrap "192.168.1.50:4433"
 ```
 
 Entrar em uma rede local com multiplos nos:
 
 ```bash
-tesseras-daemon --bootstrap "192.168.1.10:4433,192.168.1.11:4433"
+tesd --bootstrap "192.168.1.10:4433,192.168.1.11:4433"
 ```
 
 ## Identidade do no
@@ -77,16 +77,16 @@ O daemon usa logging estruturado via `tracing`. Controle o nivel de log com a va
 
 ```bash
 # Padrao (nivel info)
-tesseras-daemon
+tesd
 
 # Logging de debug
-RUST_LOG=debug tesseras-daemon
+RUST_LOG=debug tesd
 
 # Mostrar apenas avisos e erros
-RUST_LOG=warn tesseras-daemon
+RUST_LOG=warn tesd
 
 # Debug para DHT, info para o resto
-RUST_LOG=info,tesseras_dht=debug tesseras-daemon
+RUST_LOG=info,tesseras_dht=debug tesd
 ```
 
 ## Desligamento

@@ -54,7 +54,7 @@ Nem todo dispositivo participa da rede da mesma forma:
 
 | Tipo | Descricao | Sempre ligado? |
 |------|-----------|---------------|
-| **No completo** | Desktop, servidor ou Raspberry Pi executando `tesseras-daemon`. Participa plenamente da DHT e armazena dados de outros nos. | Sim |
+| **No completo** | Desktop, servidor ou Raspberry Pi executando `tesd`. Participa plenamente da DHT e armazena dados de outros nos. | Sim |
 | **No movel** | Celular ou tablet executando o app Tesseras. Participa da DHT quando o app esta ativo. | Nao |
 | **No navegador** | Navegador web executando o cliente WASM. Conecta via um no relay. Somente leitura. | Nao |
 | **No IoT** | ESP32 ou dispositivo similar na rede local. Armazena fragmentos passivamente, nao participa da DHT. | Sim |

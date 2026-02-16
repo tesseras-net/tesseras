@@ -28,7 +28,7 @@ tofu apply
 
 ## Deploy the Daemon
 
-After provisioning, deploy the tesseras-daemon .deb package:
+After provisioning, deploy the tesd .deb package:
 
 ```bash
 # From the project root:

@@ -7,7 +7,7 @@ Tesseras fornece uma imagem Docker para executar o daemon em conteineres. Isso e
 A partir da raiz do repositorio:
 
 ```bash
-docker build -t tesseras-daemon .
+docker build -t tesd .
 ```
 
 O Dockerfile multi-estagio usa `rust:1.85` para compilar e `debian:bookworm-slim` como base de execucao. A imagem resultante e pequena e contem apenas o binario do daemon e certificados CA.
@@ -18,7 +18,7 @@ O Dockerfile multi-estagio usa `rust:1.85` para compilar e `debian:bookworm-slim
 docker run -d \
   --name tesseras \
   -p 4433:4433/udp \
-  tesseras-daemon
+  tesd
 ```
 
 Isso inicia um no que:
@@ -33,7 +33,7 @@ docker run -d \
   --name tesseras \
   -p 4433:4433/udp \
   -v tesseras-data:/root/.local/share/tesseras \
-  tesseras-daemon
+  tesd
 ```
 
 ## Executando como no semente
@@ -44,7 +44,7 @@ Para executar um no semente que nao faz bootstrap de ninguem:
 docker run -d \
   --name tesseras-seed \
   -p 4433:4433/udp \
-  tesseras-daemon --listen 0.0.0.0:4433 --bootstrap ""
+  tesd --listen 0.0.0.0:4433 --bootstrap ""
 ```
 
 ## Rede multi-no com Docker Compose
@@ -100,7 +100,7 @@ docker run -d \
   -p 4433:4433/udp \
   -v ./config.toml:/etc/tesseras/config.toml:ro \
   -v tesseras-data:/root/.local/share/tesseras \
-  tesseras-daemon --config /etc/tesseras/config.toml
+  tesd --config /etc/tesseras/config.toml
 ```
 
 Veja o capitulo [Configuracao](./configuration.md) para todas as opcoes disponiveis.

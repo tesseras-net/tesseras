@@ -26,7 +26,7 @@ The wire protocol uses length-prefixed MessagePack: a 4-byte big-endian length h
 - *Pointer store*: bounded in-memory store with configurable TTL (24 hours default) and max entries (10,000 default). When full, evicts pointers furthest from the local node ID, following Kademlia's distance-based responsibility model.
 - *DhtEngine*: the main orchestrator. Handles incoming RPCs, runs iterative lookups (alpha=3 parallelism), bootstrap, publish, and find. The `run()` method drives a `tokio::select!` loop with maintenance timers: routing table refresh every 60 seconds, pointer expiry every 5 minutes.
 
-**tesseras-daemon** — A full-node binary. Parses CLI args (bind address, bootstrap peers, data directory), generates a PoW-valid node identity, binds a QUIC endpoint, bootstraps into the network, and runs the DHT engine. Graceful shutdown on Ctrl+C via tokio signal handling.
+**tesd** — A full-node binary. Parses CLI args (bind address, bootstrap peers, data directory), generates a PoW-valid node identity, binds a QUIC endpoint, bootstraps into the network, and runs the DHT engine. Graceful shutdown on Ctrl+C via tokio signal handling.
 
 **Infrastructure** — OpenTofu configuration for two Hetzner Cloud bootstrap nodes (cx22 instances in Falkenstein, Germany and Helsinki, Finland). Cloud-init provisioning script creates a dedicated `tesseras` user, writes a config file, and sets up a systemd service. Firewall rules open UDP 4433 (QUIC) and restrict metrics to internal access.
 

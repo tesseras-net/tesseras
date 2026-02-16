@@ -28,7 +28,7 @@ Hash prefixes are supported, just like `tes publish`.
 The tesseras daemon must be running:
 
 ```bash
-tesseras-daemon
+tesd
 ```
 
 The tessera must exist locally.

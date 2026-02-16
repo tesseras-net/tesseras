@@ -135,4 +135,4 @@ EOF
 sysctl --system > /dev/null 2>&1
 
 echo "Provisioning complete for $NODE_NAME (daemon $DAEMON_VERSION)"
-echo "Deploy the .deb package: scp tesseras-daemon_*.deb root@<host>:/tmp/ && dpkg -i /tmp/tesseras-daemon_*.deb"
+echo "Deploy the .deb package: scp tesseras-daemon_*.deb root@<host>:/tmp/ && dpkg -i /tmp/tesseras-daemon*.deb"

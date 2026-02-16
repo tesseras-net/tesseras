@@ -23,13 +23,13 @@ Tasks:
 
 **Goal**: functional DHT where nodes discover each other and publish/find tessera pointers.
 
-**Crates**: `tesseras-net`, `tesseras-dht`, update `tesseras-daemon`
+**Crates**: `tesseras-net`, `tesseras-dht`, update `tesd`
 
 Tasks:
 
 1. **tesseras-net**: QUIC transport (quinn), connection manager, TLS 1.3 with self-signed certs, pooling, NAT detection, mDNS local discovery.
 2. **tesseras-dht**: Kademlia routing table (k=20, 160 buckets), XOR distance, iterative lookup (alpha=3), PING/FIND_NODE/FIND_VALUE/STORE RPCs, bucket refresh, eviction policy, bootstrap process.
-3. **tesseras-daemon**: main binary with QUIC listener, DHT init, local storage. Publish pointers on startup, respond to queries, background tasks, graceful shutdown.
+3. **tesd**: main binary with QUIC listener, DHT init, local storage. Publish pointers on startup, respond to queries, background tasks, graceful shutdown.
 4. **Wire protocol**: MessagePack serialization, request/response correlation over QUIC streams, timeouts.
 5. **Bootstrap infra**: 3-5 nodes (2x Hetzner EU, 1x DO São Paulo, 1x RPi). DNS TXT records.
 6. **Tests**: routing table correctness, 10+ node integration, lookup convergence, NAT traversal.

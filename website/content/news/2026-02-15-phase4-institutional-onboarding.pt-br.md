@@ -20,9 +20,9 @@ O design segue um principio de confiar mas verificar: instituicoes se identifica
 
 Todos os tipos derivam `Serialize`/`Deserialize` para transporte e `Clone`/`Debug` para diagnostico.
 
-**Configuracao institucional do daemon** (`tesseras-daemon/src/config.rs`) — Uma nova secao `[institutional]` no TOML com `domain` (o dominio DNS a verificar), `pledge_bytes` (compromisso de armazenamento em bytes) e `search_enabled` (toggle para o indice FTS5). O metodo `to_dht_config()` agora define `Capabilities::institutional_default()` quando a configuracao institucional esta presente, para que nos institucionais anunciem os bits de capacidade corretos em respostas Pong.
+**Configuracao institucional do daemon** (`tesd/src/config.rs`) — Uma nova secao `[institutional]` no TOML com `domain` (o dominio DNS a verificar), `pledge_bytes` (compromisso de armazenamento em bytes) e `search_enabled` (toggle para o indice FTS5). O metodo `to_dht_config()` agora define `Capabilities::institutional_default()` quando a configuracao institucional esta presente, para que nos institucionais anunciem os bits de capacidade corretos em respostas Pong.
 
-**Verificacao DNS TXT** (`tesseras-daemon/src/institutional.rs`) — Resolucao DNS assincrona usando `hickory-resolver` para verificar identidade institucional. O daemon consulta registros TXT em `_tesseras.<dominio>` e analisa campos chave-valor: `v` (versao), `node` (node ID em hexadecimal) e `pledge` (compromisso de armazenamento em bytes). A verificacao checa:
+**Verificacao DNS TXT** (`tesd/src/institutional.rs`) — Resolucao DNS assincrona usando `hickory-resolver` para verificar identidade institucional. O daemon consulta registros TXT em `_tesseras.<dominio>` e analisa campos chave-valor: `v` (versao), `node` (node ID em hexadecimal) e `pledge` (compromisso de armazenamento em bytes). A verificacao checa:
 
 1. Um registro TXT existe em `_tesseras.<dominio>`
 2. O campo `node` corresponde ao node ID do proprio daemon
@@ -61,7 +61,7 @@ A migracao tambem adiciona uma coluna `is_institutional` a tabela `reciprocity`,
 
 A funcao `encode()` foi trocada de serializacao MessagePack posicional para nomeada (`rmp_serde::to_vec_named`) para lidar corretamente com campos opcionais de `SearchFilters` — a codificacao posicional quebra quando `skip_serializing_if` omite campos.
 
-**Metricas Prometheus** (`tesseras-daemon/src/metrics.rs`) — Oito metricas especificas institucionais:
+**Metricas Prometheus** (`tesd/src/metrics.rs`) — Oito metricas especificas institucionais:
 
 - `tesseras_institutional_pledge_bytes` — compromisso de armazenamento configurado
 - `tesseras_institutional_stored_bytes` — bytes realmente armazenados

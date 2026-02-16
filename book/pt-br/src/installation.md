@@ -49,7 +49,7 @@ Se preferir não instalar o SQLite no sistema, use a feature flag `bundled-sqlit
 
 ```bash
 cargo install --path crates/tesseras-cli --features bundled-sqlite
-cargo install --path crates/tesseras-daemon --features bundled-sqlite
+cargo install --path crates/tesd --features bundled-sqlite
 ```
 
 ### Ferramentas opcionais
@@ -69,7 +69,7 @@ Clone o repositório e instale os binários:
 git clone https://git.sr.ht/~ijanc/tesseras
 cd tesseras
 cargo install --path crates/tesseras-cli
-cargo install --path crates/tesseras-daemon
+cargo install --path crates/tesd
 ```
 
 Ou, se você tiver o `just` instalado:
@@ -81,7 +81,7 @@ just install
 Isso instala dois binários em `~/.cargo/bin/` e configura auto-completions para o seu shell:
 
 - `tes` — ferramenta CLI para criar, verificar e exportar tesseras
-- `tesseras-daemon` — daemon de nó completo que participa da rede P2P
+- `tesd` — daemon de nó completo que participa da rede P2P
 
 ## Verificar a instalação
 

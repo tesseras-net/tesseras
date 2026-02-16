@@ -4,7 +4,7 @@ date = 2026-02-15
 description = "The tesseras CLI can now publish tesseras to the network, fetch them from peers, and monitor replication status — all through a new Unix socket RPC bridge to the daemon."
 +++
 
-Until now the CLI operated in isolation: create a tessera, verify it, export it, list what you have. Everything stayed on your machine. With this release, `tes` gains three commands that bridge the gap between local storage and the P2P network — `publish`, `fetch`, and `status` — by talking to a running `tesseras-daemon` over a Unix socket.
+Until now the CLI operated in isolation: create a tessera, verify it, export it, list what you have. Everything stayed on your machine. With this release, `tes` gains three commands that bridge the gap between local storage and the P2P network — `publish`, `fetch`, and `status` — by talking to a running `tesd` over a Unix socket.
 
 ## What was built
 

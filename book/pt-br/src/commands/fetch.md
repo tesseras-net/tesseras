@@ -28,7 +28,7 @@ Diferente de `publish` e `status`, o `fetch` requer o hash completo de 64 caract
 O daemon tesseras deve estar em execução e conectado à rede:
 
 ```bash
-tesseras-daemon
+tesd
 ```
 
 ## Exemplos

@@ -3,7 +3,7 @@
 The daemon can be configured via a TOML file. Pass the path with `--config`:
 
 ```bash
-tesseras-daemon --config /etc/tesseras/config.toml
+tesd --config /etc/tesseras/config.toml
 ```
 
 If no config file is given, the daemon uses sensible defaults. CLI options (`--listen`, `--bootstrap`, `--data-dir`) override the corresponding config values.

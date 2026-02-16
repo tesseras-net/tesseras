@@ -102,7 +102,7 @@ The workspace is split into focused crates:
 | `tesseras-storage` | SQLite index, blob filesystem, import/export |
 | `tesseras-replication` | Active replication, repair loop, reciprocity ledger |
 | `tesseras-api` | GraphQL API (axum + async-graphql) |
-| `tesseras-daemon` | Full node binary |
+| `tesd` | Full node binary |
 | `tesseras-embedded` | Mobile/desktop FFI (flutter_rust_bridge) |
 | `tesseras-wasm` | Browser build (wasm-bindgen) |
 | `tesseras-iot` | ESP32 passive storage node (no_std) |
