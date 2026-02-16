@@ -1,6 +1,7 @@
 [package]
 name = "tesseras-daemon"
 version = "0.1.0"
+description = "Tesseras P2P daemon — full node for desktop, server, and Raspberry Pi"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
