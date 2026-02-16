@@ -1,132 +1,163 @@
-import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../providers/timeline_provider.dart';
-import '../../src/rust/types.dart';
-import '../create_memory/create_memory_screen.dart';
+import '../../models/memory.dart';
+import '../../providers/mock_timeline_provider.dart';
+import 'empty_timeline.dart';
+import 'memory_tile.dart';
+import 'memory_detail_dialog.dart';
 
-class TimelineScreen extends ConsumerWidget {
-  const TimelineScreen({super.key});
+enum _SortMode { newestFirst, oldestFirst, byType }
+
+class TimelineScreen extends ConsumerStatefulWidget {
+  final FocusNode? searchFocusNode;
+
+  const TimelineScreen({super.key, this.searchFocusNode});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final timeline = ref.watch(timelineProvider);
+  ConsumerState<TimelineScreen> createState() => _TimelineScreenState();
+}
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Timeline')),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          await Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const CreateMemoryScreen()),
-          );
-          ref.read(timelineProvider.notifier).refresh();
-        },
-        child: const Icon(Icons.add_a_photo),
-      ),
-      body: timeline.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
-        data: (memories) {
-          if (memories.isEmpty) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.photo_library_outlined,
-                      size: 64, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text('No memories yet'),
-                  SizedBox(height: 8),
-                  Text('Tap + to create your first memory'),
-                ],
-              ),
-            );
-          }
-          return RefreshIndicator(
-            onRefresh: () => ref.read(timelineProvider.notifier).refresh(),
-            child: ListView.builder(
-              itemCount: memories.length,
-              itemBuilder: (context, index) =>
-                  _MemoryCard(memory: memories[index]),
-            ),
-          );
-        },
+class _TimelineScreenState extends ConsumerState<TimelineScreen> {
+  final _searchController = TextEditingController();
+  _SortMode _sortMode = _SortMode.newestFirst;
+  String _searchQuery = '';
+  Timer? _debounce;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String value) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      setState(() => _searchQuery = value.toLowerCase());
+    });
+  }
+
+  List<Memory> _filterAndSort(List<Memory> memories) {
+    var filtered = memories;
+    if (_searchQuery.isNotEmpty) {
+      filtered = memories.where((m) {
+        final context = m.context?.toLowerCase() ?? '';
+        final tags = m.tags.join(' ').toLowerCase();
+        return context.contains(_searchQuery) || tags.contains(_searchQuery);
+      }).toList();
+    }
+
+    switch (_sortMode) {
+      case _SortMode.newestFirst:
+        filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      case _SortMode.oldestFirst:
+        filtered.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      case _SortMode.byType:
+        filtered.sort((a, b) => a.type.label.compareTo(b.type.label));
+    }
+    return filtered;
+  }
+
+  void _showMemoryDetail(List<Memory> memories, int index) {
+    showDialog(
+      context: context,
+      builder: (context) => MemoryDetailDialog(
+        memories: memories,
+        initialIndex: index,
       ),
     );
   }
-}
-
-class _MemoryCard extends StatelessWidget {
-  final MemoryInfo memory;
-
-  const _MemoryCard({required this.memory});
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      clipBehavior: Clip.antiAlias,
+    final allMemories = ref.watch(mockTimelineProvider);
+    final memories = _filterAndSort(List.of(allMemories));
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (File(memory.mediaPath).existsSync())
-            Image.file(
-              File(memory.mediaPath),
-              height: 200,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => const SizedBox(
-                height: 200,
-                child: Center(child: Icon(Icons.broken_image, size: 48)),
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (memory.context != null)
-                  Text(
-                    memory.context!,
-                    style: Theme.of(context).textTheme.bodyLarge,
-                  ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Chip(label: Text(memory.memoryType)),
-                    const SizedBox(width: 8),
-                    Chip(label: Text(memory.visibility)),
-                    const Spacer(),
-                    Text(
-                      _formatDate(memory.createdAt),
-                      style: Theme.of(context).textTheme.bodySmall,
+          // Toolbar
+          Row(
+            children: [
+              Text('Timeline',
+                  style: Theme.of(context).textTheme.headlineSmall),
+              const Spacer(),
+              SizedBox(
+                width: 240,
+                child: TextField(
+                  controller: _searchController,
+                  focusNode: widget.searchFocusNode,
+                  onChanged: _onSearchChanged,
+                  decoration: InputDecoration(
+                    hintText: 'Search memories...',
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 18),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() => _searchQuery = '');
+                            },
+                          )
+                        : null,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
                     ),
-                  ],
-                ),
-                if (memory.tags.isNotEmpty)
-                  Wrap(
-                    spacing: 4,
-                    children: memory.tags
-                        .map((t) => Chip(
-                              label: Text(t),
-                              visualDensity: VisualDensity.compact,
-                            ))
-                        .toList(),
                   ),
-              ],
-            ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              PopupMenuButton<_SortMode>(
+                icon: const Icon(Icons.sort),
+                tooltip: 'Sort',
+                onSelected: (mode) => setState(() => _sortMode = mode),
+                itemBuilder: (_) => [
+                  CheckedPopupMenuItem(
+                    value: _SortMode.newestFirst,
+                    checked: _sortMode == _SortMode.newestFirst,
+                    child: const Text('Newest first'),
+                  ),
+                  CheckedPopupMenuItem(
+                    value: _SortMode.oldestFirst,
+                    checked: _sortMode == _SortMode.oldestFirst,
+                    child: const Text('Oldest first'),
+                  ),
+                  CheckedPopupMenuItem(
+                    value: _SortMode.byType,
+                    checked: _sortMode == _SortMode.byType,
+                    child: const Text('By type'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Grid or empty state
+          Expanded(
+            child: memories.isEmpty
+                ? const EmptyTimeline()
+                : GridView.builder(
+                    gridDelegate:
+                        const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 280,
+                      childAspectRatio: 0.75,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                    ),
+                    itemCount: memories.length,
+                    itemBuilder: (context, index) => MemoryTile(
+                      memory: memories[index],
+                      onTap: () => _showMemoryDetail(memories, index),
+                    ),
+                  ),
           ),
         ],
       ),
     );
-  }
-
-  String _formatDate(String isoDate) {
-    try {
-      final dt = DateTime.parse(isoDate);
-      return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
-    } catch (_) {
-      return isoDate;
-    }
   }
 }
