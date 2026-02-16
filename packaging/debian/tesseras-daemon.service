@@ -12,6 +12,7 @@ ExecStart=/usr/bin/tesseras-daemon --config /etc/tesseras/config.toml
 Restart=on-failure
 RestartSec=5
 RuntimeDirectory=tesseras
+RuntimeDirectoryMode=0750
 LimitNOFILE=65536
 
 # Hardening

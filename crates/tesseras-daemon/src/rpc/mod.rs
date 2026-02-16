@@ -16,7 +16,7 @@ pub async fn run_listener(
     handler: Arc<RpcHandler>,
     mut shutdown: watch::Receiver<bool>,
 ) {
-    // Create parent directory with 0700 permissions
+    // Create parent directory with 0750 permissions (group-readable for CLI access)
     if let Some(parent) = socket_path.parent() {
         if let Err(e) = tokio::fs::create_dir_all(parent).await {
             error!(path = %parent.display(), error = %e, "failed to create socket directory");
@@ -25,7 +25,7 @@ pub async fn run_listener(
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let perms = std::fs::Permissions::from_mode(0o700);
+            let perms = std::fs::Permissions::from_mode(0o750);
             if let Err(e) = std::fs::set_permissions(parent, perms) {
                 warn!(path = %parent.display(), error = %e, "failed to set socket dir permissions");
             }
@@ -56,6 +56,16 @@ pub async fn run_listener(
             return;
         }
     };
+
+    // Allow group members to connect (unix sockets require write permission)
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(0o660);
+        if let Err(e) = std::fs::set_permissions(&socket_path, perms) {
+            warn!(path = %socket_path.display(), error = %e, "failed to set socket permissions");
+        }
+    }
 
     info!(path = %socket_path.display(), "RPC listener started");
 
