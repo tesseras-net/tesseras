@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/memory.dart';
 import '../../providers/mock_timeline_provider.dart';
 import 'empty_timeline.dart';
@@ -54,7 +55,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
       case _SortMode.oldestFirst:
         filtered.sort((a, b) => a.createdAt.compareTo(b.createdAt));
       case _SortMode.byType:
-        filtered.sort((a, b) => a.type.label.compareTo(b.type.label));
+        filtered.sort((a, b) => a.type.index.compareTo(b.type.index));
     }
     return filtered;
   }
@@ -73,6 +74,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
   Widget build(BuildContext context) {
     final allMemories = ref.watch(mockTimelineProvider);
     final memories = _filterAndSort(List.of(allMemories));
+    final l = AppLocalizations.of(context);
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -81,7 +83,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
           // Toolbar
           Row(
             children: [
-              Text('Timeline',
+              Text(l.timelineTitle,
                   style: Theme.of(context).textTheme.headlineSmall),
               const Spacer(),
               SizedBox(
@@ -91,7 +93,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
                   focusNode: widget.searchFocusNode,
                   onChanged: _onSearchChanged,
                   decoration: InputDecoration(
-                    hintText: 'Search memories...',
+                    hintText: l.timelineSearchHint,
                     prefixIcon: const Icon(Icons.search, size: 20),
                     suffixIcon: _searchQuery.isNotEmpty
                         ? IconButton(
@@ -114,23 +116,23 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
               const SizedBox(width: 8),
               PopupMenuButton<_SortMode>(
                 icon: const Icon(Icons.sort),
-                tooltip: 'Sort',
+                tooltip: l.timelineSortTooltip,
                 onSelected: (mode) => setState(() => _sortMode = mode),
                 itemBuilder: (_) => [
                   CheckedPopupMenuItem(
                     value: _SortMode.newestFirst,
                     checked: _sortMode == _SortMode.newestFirst,
-                    child: const Text('Newest first'),
+                    child: Text(l.timelineSortNewest),
                   ),
                   CheckedPopupMenuItem(
                     value: _SortMode.oldestFirst,
                     checked: _sortMode == _SortMode.oldestFirst,
-                    child: const Text('Oldest first'),
+                    child: Text(l.timelineSortOldest),
                   ),
                   CheckedPopupMenuItem(
                     value: _SortMode.byType,
                     checked: _sortMode == _SortMode.byType,
-                    child: const Text('By type'),
+                    child: Text(l.timelineSortByType),
                   ),
                 ],
               ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/network_event.dart';
 
 class NetworkEventTile extends StatelessWidget {
@@ -9,6 +10,7 @@ class NetworkEventTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final l = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -27,7 +29,7 @@ class NetworkEventTile extends StatelessWidget {
           Icon(event.type.icon, size: 16, color: event.type.color(colorScheme)),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(event.type.label,
+            child: Text(event.type.label(l),
                 style: Theme.of(context).textTheme.bodyMedium),
           ),
           Text(

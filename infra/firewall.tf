@@ -30,3 +30,8 @@ resource "hcloud_firewall_attachment" "boot1" {
   firewall_id = hcloud_firewall.tesseras.id
   server_ids  = [hcloud_server.boot1.id]
 }
+
+resource "hcloud_firewall_attachment" "boot2" {
+  firewall_id = hcloud_firewall.tesseras.id
+  server_ids  = [hcloud_server.boot2.id]
+}

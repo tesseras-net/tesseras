@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/memory.dart';
 import '../../models/memory_type.dart';
 import '../../models/visibility.dart' as v;
@@ -123,6 +124,7 @@ class _CreateMemoryDialogState extends ConsumerState<CreateMemoryDialog> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final l = AppLocalizations.of(context);
 
     return Dialog(
       child: ConstrainedBox(
@@ -136,7 +138,7 @@ class _CreateMemoryDialogState extends ConsumerState<CreateMemoryDialog> {
               // Header
               Row(
                 children: [
-                  Text('New Memory',
+                  Text(l.createMemoryTitle,
                       style: Theme.of(context).textTheme.titleLarge),
                   const Spacer(),
                   IconButton(
@@ -171,28 +173,27 @@ class _CreateMemoryDialogState extends ConsumerState<CreateMemoryDialog> {
                                     size: 36,
                                     color: colorScheme.onSurfaceVariant),
                                 const SizedBox(height: 8),
-                                const Text(
-                                    'Drop file or folder here, or click to browse'),
+                                Text(l.createMemoryDropZone),
                                 const SizedBox(height: 8),
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     FilledButton.tonal(
                                       onPressed: _mockSelectFile,
-                                      child: const Text('Browse files'),
+                                      child: Text(l.createMemoryBrowseFiles),
                                     ),
                                     const SizedBox(width: 8),
                                     OutlinedButton.icon(
                                       onPressed: _mockSelectFolder,
                                       icon: const Icon(Icons.folder_open,
                                           size: 18),
-                                      label: const Text('Open folder'),
+                                      label: Text(l.createMemoryOpenFolder),
                                     ),
                                   ],
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Supported: JPEG, PNG, WAV, WebM, TXT, ZIP, TAR.GZ',
+                                  l.createMemorySupportedFormats,
                                   style: Theme.of(context)
                                       .textTheme
                                       .bodySmall
@@ -228,7 +229,8 @@ class _CreateMemoryDialogState extends ConsumerState<CreateMemoryDialog> {
                                     Text(_selectedFileName),
                                     if (_selectedFileCount > 1)
                                       Text(
-                                        '$_selectedFileCount supported files found',
+                                        l.createMemoryFilesFound(
+                                            _selectedFileCount),
                                         style: Theme.of(context)
                                             .textTheme
                                             .bodySmall
@@ -251,10 +253,10 @@ class _CreateMemoryDialogState extends ConsumerState<CreateMemoryDialog> {
                       TextField(
                         controller: _contextController,
                         maxLines: 3,
-                        decoration: const InputDecoration(
-                          labelText: 'Context (optional)',
-                          hintText: 'What is this memory about?',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: l.createMemoryContextLabel,
+                          hintText: l.createMemoryContextHint,
+                          border: const OutlineInputBorder(),
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -264,13 +266,13 @@ class _CreateMemoryDialogState extends ConsumerState<CreateMemoryDialog> {
                           Expanded(
                             child: DropdownButtonFormField<MemoryType>(
                               initialValue: _memoryType,
-                              decoration: const InputDecoration(
-                                labelText: 'Type',
-                                border: OutlineInputBorder(),
+                              decoration: InputDecoration(
+                                labelText: l.createMemoryTypeLabel,
+                                border: const OutlineInputBorder(),
                               ),
                               items: MemoryType.values
                                   .map((t) => DropdownMenuItem(
-                                      value: t, child: Text(t.label)))
+                                      value: t, child: Text(t.label(l))))
                                   .toList(),
                               onChanged: (val) {
                                 if (val != null) {
@@ -283,13 +285,13 @@ class _CreateMemoryDialogState extends ConsumerState<CreateMemoryDialog> {
                           Expanded(
                             child: DropdownButtonFormField<v.Visibility>(
                               initialValue: _visibility,
-                              decoration: const InputDecoration(
-                                labelText: 'Visibility',
-                                border: OutlineInputBorder(),
+                              decoration: InputDecoration(
+                                labelText: l.createMemoryVisibilityLabel,
+                                border: const OutlineInputBorder(),
                               ),
                               items: v.Visibility.values
                                   .map((vis) => DropdownMenuItem(
-                                      value: vis, child: Text(vis.label)))
+                                      value: vis, child: Text(vis.label(l))))
                                   .toList(),
                               onChanged: (val) {
                                 if (val != null) {
@@ -308,7 +310,7 @@ class _CreateMemoryDialogState extends ConsumerState<CreateMemoryDialog> {
                           lastDate: DateTime(2100),
                           initialDate:
                               _sealedOpenAfter ?? DateTime(2030, 1, 1),
-                          fieldLabelText: 'Open after date',
+                          fieldLabelText: l.createMemoryOpenAfterDate,
                           onDateSaved: (date) => _sealedOpenAfter = date,
                           onDateSubmitted: (date) =>
                               _sealedOpenAfter = date,
@@ -319,16 +321,16 @@ class _CreateMemoryDialogState extends ConsumerState<CreateMemoryDialog> {
                         TextField(
                           controller: _inactiveYearsController,
                           keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Years of inactivity',
-                            border: OutlineInputBorder(),
+                          decoration: InputDecoration(
+                            labelText: l.createMemoryInactiveYears,
+                            border: const OutlineInputBorder(),
                           ),
                         ),
                       ],
                       if (_visibility == v.Visibility.circle) ...[
                         const SizedBox(height: 12),
                         Text(
-                          'Circle members will be configurable in a future update.',
+                          l.createMemoryCircleNote,
                           style: Theme.of(context)
                               .textTheme
                               .bodySmall
@@ -340,19 +342,29 @@ class _CreateMemoryDialogState extends ConsumerState<CreateMemoryDialog> {
                       // Language
                       DropdownButtonFormField<String>(
                         initialValue: _language,
-                        decoration: const InputDecoration(
-                          labelText: 'Language',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: l.createMemoryLanguageLabel,
+                          border: const OutlineInputBorder(),
                         ),
-                        items: const [
-                          DropdownMenuItem(value: 'en', child: Text('English')),
+                        items: [
                           DropdownMenuItem(
-                              value: 'pt', child: Text('Portuguese')),
-                          DropdownMenuItem(value: 'es', child: Text('Spanish')),
-                          DropdownMenuItem(value: 'fr', child: Text('French')),
-                          DropdownMenuItem(value: 'de', child: Text('German')),
+                              value: 'en',
+                              child: Text(l.createMemoryLangEnglish)),
                           DropdownMenuItem(
-                              value: 'ja', child: Text('Japanese')),
+                              value: 'pt',
+                              child: Text(l.createMemoryLangPortuguese)),
+                          DropdownMenuItem(
+                              value: 'es',
+                              child: Text(l.createMemoryLangSpanish)),
+                          DropdownMenuItem(
+                              value: 'fr',
+                              child: Text(l.createMemoryLangFrench)),
+                          DropdownMenuItem(
+                              value: 'de',
+                              child: Text(l.createMemoryLangGerman)),
+                          DropdownMenuItem(
+                              value: 'ja',
+                              child: Text(l.createMemoryLangJapanese)),
                         ],
                         onChanged: (val) {
                           if (val != null) setState(() => _language = val);
@@ -362,20 +374,20 @@ class _CreateMemoryDialogState extends ConsumerState<CreateMemoryDialog> {
                       // Tags
                       TextField(
                         controller: _tagsController,
-                        decoration: const InputDecoration(
-                          labelText: 'Tags (comma separated)',
-                          hintText: 'family, vacation, 2026',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: l.createMemoryTagsLabel,
+                          hintText: l.createMemoryTagsHint,
+                          border: const OutlineInputBorder(),
                         ),
                       ),
                       const SizedBox(height: 16),
                       // Location
                       TextField(
                         controller: _locationController,
-                        decoration: const InputDecoration(
-                          labelText: 'Location (optional)',
-                          hintText: 'Paraty, RJ',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: l.createMemoryLocationLabel,
+                          hintText: l.createMemoryLocationHint,
+                          border: const OutlineInputBorder(),
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -383,10 +395,10 @@ class _CreateMemoryDialogState extends ConsumerState<CreateMemoryDialog> {
                       TextField(
                         controller: _peopleController,
                         maxLines: 3,
-                        decoration: const InputDecoration(
-                          labelText: 'People (optional, one per line)',
-                          hintText: 'Maria - spouse\nLucas - son',
-                          border: OutlineInputBorder(),
+                        decoration: InputDecoration(
+                          labelText: l.createMemoryPeopleLabel,
+                          hintText: l.createMemoryPeopleHint,
+                          border: const OutlineInputBorder(),
                         ),
                       ),
                     ],
@@ -400,7 +412,7 @@ class _CreateMemoryDialogState extends ConsumerState<CreateMemoryDialog> {
                 children: [
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    child: const Text('Cancel'),
+                    child: Text(l.createMemoryCancel),
                   ),
                   const SizedBox(width: 8),
                   FilledButton(
@@ -413,7 +425,7 @@ class _CreateMemoryDialogState extends ConsumerState<CreateMemoryDialog> {
                             height: 20,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Text('Create Memory'),
+                        : Text(l.createMemoryCreate),
                   ),
                 ],
               ),

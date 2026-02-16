@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_localizations.dart';
 
 /// Navigation sidebar widget — 220px wide, permanent.
 class Sidebar extends StatelessWidget {
@@ -16,6 +17,7 @@ class Sidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final l = AppLocalizations.of(context);
 
     return Container(
       width: 220,
@@ -34,7 +36,7 @@ class Sidebar extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Tesseras',
+                  l.appTitle,
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         color: colorScheme.primary,
                         fontWeight: FontWeight.bold,
@@ -47,24 +49,24 @@ class Sidebar extends StatelessWidget {
           // Navigation items
           _SidebarItem(
             icon: Icons.photo_library,
-            label: 'Timeline',
+            label: l.sidebarTimeline,
             selected: selectedIndex == 0,
             onTap: () => onItemSelected(0),
-            tooltip: 'Timeline (Ctrl+1)',
+            tooltip: l.sidebarTimelineTooltip,
           ),
           _SidebarItem(
             icon: Icons.hub,
-            label: 'Network',
+            label: l.sidebarNetwork,
             selected: selectedIndex == 1,
             onTap: () => onItemSelected(1),
-            tooltip: 'Network (Ctrl+2)',
+            tooltip: l.sidebarNetworkTooltip,
           ),
           _SidebarItem(
             icon: Icons.settings,
-            label: 'Settings',
+            label: l.sidebarSettings,
             selected: selectedIndex == 2,
             onTap: () => onItemSelected(2),
-            tooltip: 'Settings (Ctrl+3)',
+            tooltip: l.sidebarSettingsTooltip,
           ),
           const Spacer(),
           // Create memory button
@@ -73,11 +75,11 @@ class Sidebar extends StatelessWidget {
             child: SizedBox(
               width: double.infinity,
               child: Tooltip(
-                message: 'New Memory (Ctrl+N)',
+                message: l.sidebarNewMemoryTooltip,
                 child: FilledButton.icon(
                   onPressed: onCreateMemory,
                   icon: const Icon(Icons.add),
-                  label: const Text('New Memory'),
+                  label: Text(l.sidebarNewMemory),
                 ),
               ),
             ),

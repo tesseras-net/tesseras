@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/memory.dart';
 import '../../models/visibility.dart' as v;
 import '../../widgets/placeholder_image.dart';
@@ -49,6 +50,7 @@ class _MemoryDetailDialogState extends State<MemoryDetailDialog> {
     final memory = _memory;
     final isText = memory.mediaType == 'txt';
     final isAudio = memory.mediaType == 'wav' || memory.mediaType == 'webm';
+    final l = AppLocalizations.of(context);
 
     return Shortcuts(
       shortcuts: {
@@ -81,7 +83,7 @@ class _MemoryDetailDialogState extends State<MemoryDetailDialog> {
                     // Header
                     Row(
                       children: [
-                        Text('Memory Detail',
+                        Text(l.memoryDetailTitle,
                             style: Theme.of(context).textTheme.titleLarge),
                         const Spacer(),
                         Text(
@@ -137,9 +139,9 @@ class _MemoryDetailDialogState extends State<MemoryDetailDialog> {
                                       onPressed: () {
                                         ScaffoldMessenger.of(context)
                                             .showSnackBar(
-                                          const SnackBar(
+                                          SnackBar(
                                               content: Text(
-                                                  'Audio playback not available in mockup')),
+                                                  l.memoryDetailAudioUnavailable)),
                                         );
                                       },
                                     ),
@@ -172,7 +174,7 @@ class _MemoryDetailDialogState extends State<MemoryDetailDialog> {
                             const SizedBox(height: 16),
                             // Context (for non-text media)
                             if (!isText && memory.context != null) ...[
-                              Text('Context',
+                              Text(l.memoryDetailContextLabel,
                                   style:
                                       Theme.of(context).textTheme.titleSmall),
                               const SizedBox(height: 4),
@@ -187,16 +189,17 @@ class _MemoryDetailDialogState extends State<MemoryDetailDialog> {
                               runSpacing: 8,
                               children: [
                                 _MetadataChip(
-                                    label: 'Type', value: memory.type.label),
-                                StatusBadge.visibility(memory.visibility),
+                                    label: l.memoryDetailTypeLabel,
+                                    value: memory.type.label(l)),
+                                StatusBadge.visibility(memory.visibility, l),
                                 _MetadataChip(
-                                    label: 'Created',
+                                    label: l.memoryDetailCreatedLabel,
                                     value: _formatDate(memory.createdAt)),
                                 _MetadataChip(
-                                    label: 'Language',
+                                    label: l.memoryDetailLanguageLabel,
                                     value: memory.language.toUpperCase()),
                                 _MetadataChip(
-                                    label: 'Media',
+                                    label: l.memoryDetailMediaLabel,
                                     value: memory.mediaType.toUpperCase()),
                               ],
                             ),
@@ -205,7 +208,8 @@ class _MemoryDetailDialogState extends State<MemoryDetailDialog> {
                                 memory.sealedOpenAfter != null) ...[
                               const SizedBox(height: 8),
                               Text(
-                                'Opens after: ${_formatDateTime(memory.sealedOpenAfter!)}',
+                                l.memoryDetailOpensAfter(
+                                    _formatDateTime(memory.sealedOpenAfter!)),
                                 style: Theme.of(context)
                                     .textTheme
                                     .bodySmall
@@ -217,7 +221,8 @@ class _MemoryDetailDialogState extends State<MemoryDetailDialog> {
                                 memory.publicAfterDeathYears != null) ...[
                               const SizedBox(height: 8),
                               Text(
-                                'Public after ${memory.publicAfterDeathYears} years of inactivity',
+                                l.memoryDetailPublicAfterDeath(
+                                    memory.publicAfterDeathYears!),
                                 style: Theme.of(context)
                                     .textTheme
                                     .bodySmall
@@ -271,7 +276,7 @@ class _MemoryDetailDialogState extends State<MemoryDetailDialog> {
                             const SizedBox(height: 12),
                             Row(
                               children: [
-                                Text('Tessera: ',
+                                Text(l.memoryDetailTesseraLabel,
                                     style:
                                         Theme.of(context).textTheme.bodySmall),
                                 Expanded(
@@ -298,30 +303,29 @@ class _MemoryDetailDialogState extends State<MemoryDetailDialog> {
                         OutlinedButton.icon(
                           onPressed: () {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
+                              SnackBar(
                                   content:
-                                      Text('Exported to ~/Downloads')),
+                                      Text(l.memoryDetailExported)),
                             );
                           },
                           icon: const Icon(Icons.download, size: 18),
-                          label: const Text('Export'),
+                          label: Text(l.memoryDetailExport),
                         ),
                         const SizedBox(width: 8),
                         OutlinedButton.icon(
                           onPressed: () {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content: Text(
-                                      'Tessera verified successfully')),
+                              SnackBar(
+                                  content: Text(l.memoryDetailVerified)),
                             );
                           },
                           icon: const Icon(Icons.verified, size: 18),
-                          label: const Text('Verify'),
+                          label: Text(l.memoryDetailVerify),
                         ),
                         const SizedBox(width: 8),
                         FilledButton(
                           onPressed: () => Navigator.of(context).pop(),
-                          child: const Text('Close'),
+                          child: Text(l.memoryDetailClose),
                         ),
                       ],
                     ),

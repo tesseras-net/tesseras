@@ -1,4 +1,5 @@
-import 'package:flutter/material.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart';
+import '../../l10n/app_localizations.dart';
 
 class WelcomeScreen extends StatelessWidget {
   final VoidCallback onNext;
@@ -7,7 +8,7 @@ class WelcomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final l = AppLocalizations.of(context);
 
     return Center(
       child: ConstrainedBox(
@@ -23,34 +24,16 @@ class WelcomeScreen extends StatelessWidget {
                 child: Image.asset('assets/logo.png', width: 120, height: 120),
               ),
               const SizedBox(height: 24),
-              Text(
-                'Tesseras',
-                style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: colorScheme.primary,
-                    ),
-              ),
+              Text(l.welcomeTitle).h2.semiBold,
               const SizedBox(height: 12),
-              Text(
-                'Preserve your memories across millennia.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+              Text(l.welcomeTagline, textAlign: TextAlign.center).large.muted,
               const SizedBox(height: 16),
-              Text(
-                'A peer-to-peer network where your photos, audio, and stories '
-                'are preserved forever \u2014 no company, no cloud, no single '
-                'point of failure.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-              ),
+              Text(l.welcomeBody, textAlign: TextAlign.center).base.muted,
               const SizedBox(height: 48),
-              FilledButton.icon(
+              PrimaryButton(
                 onPressed: onNext,
-                icon: const Icon(Icons.arrow_forward),
-                label: const Text('Get Started'),
+                trailing: const Icon(Icons.arrow_forward, size: 16),
+                child: Text(l.welcomeGetStarted),
               ),
             ],
           ),

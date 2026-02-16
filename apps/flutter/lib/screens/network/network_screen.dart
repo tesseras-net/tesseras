@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../l10n/app_localizations.dart';
 import '../../providers/mock_data.dart';
 import '../../providers/mock_network_provider.dart';
 import 'network_event_tile.dart';
@@ -12,6 +13,7 @@ class NetworkScreen extends ConsumerWidget {
     final events = ref.watch(mockNetworkEventsProvider);
     final peers = ref.watch(mockConnectedPeersProvider);
     final stats = mockNetworkStats;
+    final l = AppLocalizations.of(context);
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -21,18 +23,18 @@ class NetworkScreen extends ConsumerWidget {
           // Toolbar
           Row(
             children: [
-              Text('Network',
+              Text(l.networkTitle,
                   style: Theme.of(context).textTheme.headlineSmall),
               const Spacer(),
               Tooltip(
-                message: 'Refresh',
+                message: l.networkRefreshTooltip,
                 child: IconButton(
                   icon: const Icon(Icons.refresh),
                   onPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text('Network data refreshed'),
-                          duration: Duration(seconds: 1)),
+                      SnackBar(
+                          content: Text(l.networkRefreshed),
+                          duration: const Duration(seconds: 1)),
                     );
                   },
                 ),
@@ -55,17 +57,22 @@ class NetworkScreen extends ConsumerWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Node Status',
+                              Text(l.networkNodeStatus,
                                   style: Theme.of(context)
                                       .textTheme
                                       .titleMedium),
                               const SizedBox(height: 12),
-                              _StatRow('Peers', '${stats.connectedPeers}'),
-                              _StatRow('DHT Entries', '${stats.dhtEntries}'),
-                              _StatRow('Bootstrapped',
-                                  stats.bootstrapped ? 'Yes' : 'No'),
-                              _StatRow('Uptime', stats.uptime),
-                              _StatRow('NAT', stats.natStatus),
+                              _StatRow(l.networkStatPeers,
+                                  '${stats.connectedPeers}'),
+                              _StatRow(l.networkStatDhtEntries,
+                                  '${stats.dhtEntries}'),
+                              _StatRow(
+                                  l.networkStatBootstrapped,
+                                  stats.bootstrapped
+                                      ? l.networkStatYes
+                                      : l.networkStatNo),
+                              _StatRow(l.networkStatUptime, stats.uptime),
+                              _StatRow(l.networkStatNat, stats.natStatus),
                             ],
                           ),
                         ),
@@ -79,21 +86,21 @@ class NetworkScreen extends ConsumerWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Replication',
+                              Text(l.networkReplication,
                                   style: Theme.of(context)
                                       .textTheme
                                       .titleMedium),
                               const SizedBox(height: 12),
-                              _StatRow(
-                                  'Fragments', '${stats.totalFragments}'),
-                              _StatRow(
-                                  'Healthy', '${stats.healthyFragments}'),
-                              _StatRow(
-                                  'Repairing', '${stats.repairingFragments}'),
-                              _StatRow(
-                                  'Factor', '${stats.replicationFactor}x'),
-                              _StatRow(
-                                  'Storage', '${stats.storageUsedMB} MB'),
+                              _StatRow(l.networkStatFragments,
+                                  '${stats.totalFragments}'),
+                              _StatRow(l.networkStatHealthy,
+                                  '${stats.healthyFragments}'),
+                              _StatRow(l.networkStatRepairing,
+                                  '${stats.repairingFragments}'),
+                              _StatRow(l.networkStatFactor,
+                                  '${stats.replicationFactor}x'),
+                              _StatRow(l.networkStatStorage,
+                                  '${stats.storageUsedMB} MB'),
                             ],
                           ),
                         ),
@@ -109,7 +116,7 @@ class NetworkScreen extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Connected Peers',
+                        Text(l.networkConnectedPeers,
                             style: Theme.of(context).textTheme.titleMedium),
                         const SizedBox(height: 12),
                         Table(
@@ -127,9 +134,9 @@ class NetworkScreen extends ConsumerWidget {
                                 ),
                               ),
                               children: [
-                                _tableHeader(context, 'Node ID'),
-                                _tableHeader(context, 'Address'),
-                                _tableHeader(context, 'Last Seen'),
+                                _tableHeader(context, l.networkColNodeId),
+                                _tableHeader(context, l.networkColAddress),
+                                _tableHeader(context, l.networkColLastSeen),
                               ],
                             ),
                             ...peers.map((peer) => TableRow(
@@ -153,7 +160,7 @@ class NetworkScreen extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Recent Events',
+                        Text(l.networkRecentEvents,
                             style: Theme.of(context).textTheme.titleMedium),
                         const SizedBox(height: 12),
                         ...events.map((e) => NetworkEventTile(event: e)),

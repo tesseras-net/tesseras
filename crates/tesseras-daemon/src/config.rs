@@ -53,6 +53,13 @@ pub struct DhtTomlConfig {
     pub pointer_ttl_secs: u64,
     pub max_stored_pointers: usize,
     pub ping_failure_threshold: u32,
+    /// How often to check if re-bootstrap is needed (seconds). Default: 30.
+    #[serde(default = "default_re_bootstrap_interval_secs")]
+    pub re_bootstrap_interval_secs: u64,
+}
+
+fn default_re_bootstrap_interval_secs() -> u64 {
+    30
 }
 
 #[derive(Debug, Deserialize)]
@@ -209,9 +216,10 @@ impl Default for DaemonConfig {
                 pointer_ttl_secs: 86400,
                 max_stored_pointers: 100_000,
                 ping_failure_threshold: 3,
+                re_bootstrap_interval_secs: default_re_bootstrap_interval_secs(),
             },
             bootstrap: BootstrapConfig {
-                dns_domain: "_tesseras._udp.tesseras.net".into(),
+                dns_domain: "tesseras.net".into(),
                 hardcoded: vec![
                     "bootstrap1.tesseras.net:4433".into(),
                     "bootstrap2.tesseras.net:4433".into(),
@@ -245,6 +253,9 @@ impl DaemonConfig {
             max_stored_pointers: self.dht.max_stored_pointers,
             ping_failure_threshold: self.dht.ping_failure_threshold,
             stale_check_interval: std::time::Duration::from_secs(900),
+            re_bootstrap_interval: std::time::Duration::from_secs(
+                self.dht.re_bootstrap_interval_secs,
+            ),
             capabilities: if self.institutional.is_some() {
                 tesseras_core::Capabilities::institutional_default()
             } else {

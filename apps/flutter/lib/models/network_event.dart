@@ -1,17 +1,26 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_localizations.dart';
 
 /// Display model for network events.
 enum NetworkEventType {
-  peerConnected('Peer connected', Icons.person_add),
-  peerDisconnected('Peer disconnected', Icons.person_remove),
-  attestationReceived('Attestation received', Icons.verified),
-  replicationComplete('Replication complete', Icons.check_circle),
-  repairTriggered('Repair triggered', Icons.build),
-  bootstrapComplete('Bootstrap complete', Icons.rocket_launch);
+  peerConnected(Icons.person_add),
+  peerDisconnected(Icons.person_remove),
+  attestationReceived(Icons.verified),
+  replicationComplete(Icons.check_circle),
+  repairTriggered(Icons.build),
+  bootstrapComplete(Icons.rocket_launch);
 
-  final String label;
   final IconData icon;
-  const NetworkEventType(this.label, this.icon);
+  const NetworkEventType(this.icon);
+
+  String label(AppLocalizations l) => switch (this) {
+        peerConnected => l.eventPeerConnected,
+        peerDisconnected => l.eventPeerDisconnected,
+        attestationReceived => l.eventAttestationReceived,
+        replicationComplete => l.eventReplicationComplete,
+        repairTriggered => l.eventRepairTriggered,
+        bootstrapComplete => l.eventBootstrapComplete,
+      };
 
   Color color(ColorScheme scheme) => switch (this) {
         peerConnected => Colors.green,

@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart';
+import '../../l10n/app_localizations.dart';
 import '../../providers/mock_identity_provider.dart';
 import '../../widgets/copy_button.dart';
 import '../desktop_shell.dart';
@@ -41,6 +42,7 @@ class _ReadyScreenState extends ConsumerState<ReadyScreen>
     final identity = ref.watch(mockIdentityProvider);
     final name = identity?.name ?? 'User';
     final nodeId = identity?.nodeIdHex ?? '';
+    final l = AppLocalizations.of(context);
 
     return Center(
       child: ConstrainedBox(
@@ -56,41 +58,26 @@ class _ReadyScreenState extends ConsumerState<ReadyScreen>
                 child: const Icon(
                   Icons.check_circle,
                   size: 96,
-                  color: Colors.green,
+                  color: Color(0xFF4CAF50),
                 ),
               ),
               const SizedBox(height: 24),
-              Text(
-                'Welcome, $name!',
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
+              Text(l.readyWelcome(name)).h3.semiBold,
               const SizedBox(height: 16),
               // Node ID
               if (nodeId.isNotEmpty)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(
-                      'Node: ${nodeId.substring(0, 16)}...',
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(fontFamily: 'monospace'),
-                    ),
-                    CopyButton(text: nodeId, tooltip: 'Copy Node ID'),
+                    Text(l.readyNodePrefix(nodeId.substring(0, 16)))
+                        .small.mono.muted,
+                    CopyButton(text: nodeId, tooltip: l.readyCopyNodeId),
                   ],
                 ),
               const SizedBox(height: 16),
-              Text(
-                'Your keys have been generated. Keep your device safe '
-                '\u2014 it holds your identity.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
+              Text(l.readyKeysNote, textAlign: TextAlign.center).base.muted,
               const SizedBox(height: 48),
-              FilledButton.icon(
+              PrimaryButton(
                 onPressed: () {
                   Navigator.of(context).pushAndRemoveUntil(
                     MaterialPageRoute(
@@ -98,8 +85,8 @@ class _ReadyScreenState extends ConsumerState<ReadyScreen>
                     (route) => false,
                   );
                 },
-                icon: const Icon(Icons.arrow_forward),
-                label: const Text('Open Tesseras'),
+                trailing: const Icon(Icons.arrow_forward, size: 16),
+                child: Text(l.readyOpenButton),
               ),
             ],
           ),

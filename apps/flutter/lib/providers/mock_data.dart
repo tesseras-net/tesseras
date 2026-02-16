@@ -12,6 +12,7 @@ class MockIdentity {
   final String mldsaPublicKeyHex;
   final String createdAt;
   final Color avatarColor;
+  final String? avatarImagePath;
 
   const MockIdentity({
     required this.name,
@@ -20,6 +21,7 @@ class MockIdentity {
     required this.mldsaPublicKeyHex,
     required this.createdAt,
     required this.avatarColor,
+    this.avatarImagePath,
   });
 }
 

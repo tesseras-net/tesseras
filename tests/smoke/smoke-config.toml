@@ -15,7 +15,7 @@ max_stored_pointers = 100000
 ping_failure_threshold = 3
 
 [bootstrap]
-dns_domain = "_tesseras._udp.tesseras.net"
+dns_domain = "tesseras.net"
 hardcoded = []
 
 [network]

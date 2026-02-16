@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../l10n/app_localizations.dart';
 import '../models/visibility.dart' as v;
 
 /// Small colored badge for visibility or memory type.
@@ -10,13 +11,13 @@ class StatusBadge extends StatelessWidget {
   const StatusBadge({super.key, required this.label, this.color, this.icon});
 
   /// Badge for Visibility values with appropriate icons.
-  factory StatusBadge.visibility(v.Visibility visibility) {
+  factory StatusBadge.visibility(v.Visibility visibility, AppLocalizations l) {
     final (icon, label) = switch (visibility) {
-      v.Visibility.private => (Icons.lock, 'Private'),
-      v.Visibility.circle => (Icons.group, 'Circle'),
-      v.Visibility.public => (Icons.public, 'Public'),
-      v.Visibility.publicAfterDeath => (Icons.schedule, 'After Death'),
-      v.Visibility.sealed_ => (Icons.lock_clock, 'Sealed'),
+      v.Visibility.private => (Icons.lock, l.badgePrivate),
+      v.Visibility.circle => (Icons.group, l.badgeCircle),
+      v.Visibility.public => (Icons.public, l.badgePublic),
+      v.Visibility.publicAfterDeath => (Icons.schedule, l.badgeAfterDeath),
+      v.Visibility.sealed_ => (Icons.lock_clock, l.badgeSealed),
     };
     return StatusBadge(label: label, icon: icon);
   }

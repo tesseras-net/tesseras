@@ -20,26 +20,29 @@ resource "hcloud_server" "boot1" {
     bootstrap_peers = ""
     daemon_version  = var.daemon_version
   })
+
+  lifecycle {
+    ignore_changes = [user_data]
+  }
 }
 
-# boot2 commented out for MVP — uncomment when adding second bootstrap node
-# resource "hcloud_server" "boot2" {
-#   name        = "tesseras-boot2"
-#   server_type = "cx23"
-#   image       = "debian-13"
-#   location    = "hel1"
-#   ssh_keys    = [hcloud_ssh_key.tesseras.id]
-#
-#   labels = {
-#     role    = "bootstrap"
-#     project = "tesseras"
-#   }
-#
-#   user_data = templatefile("${path.module}/scripts/provision.sh", {
-#     node_name       = "boot2"
-#     bootstrap_peers = "${hcloud_server.boot1.ipv4_address}:4433"
-#     daemon_version  = var.daemon_version
-#   })
-#
-#   depends_on = [hcloud_server.boot1]
-# }
+resource "hcloud_server" "boot2" {
+  name        = "tesseras-boot2"
+  server_type = "cx23"
+  image       = "debian-13"
+  location    = "hel1"
+  ssh_keys    = [hcloud_ssh_key.tesseras.id]
+
+  labels = {
+    role    = "bootstrap"
+    project = "tesseras"
+  }
+
+  user_data = templatefile("${path.module}/scripts/provision.sh", {
+    node_name       = "boot2"
+    bootstrap_peers = "${hcloud_server.boot1.ipv4_address}:4433"
+    daemon_version  = var.daemon_version
+  })
+
+  depends_on = [hcloud_server.boot1]
+}

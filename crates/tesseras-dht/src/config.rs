@@ -13,6 +13,8 @@ pub struct DhtConfig {
     pub max_stored_pointers: usize,
     pub ping_failure_threshold: u32,
     pub stale_check_interval: Duration,
+    /// How often to check if re-bootstrap is needed (when routing table is empty).
+    pub re_bootstrap_interval: Duration,
     /// Capabilities advertised in Pong responses.
     pub capabilities: Capabilities,
 }
@@ -29,6 +31,7 @@ impl Default for DhtConfig {
             max_stored_pointers: 100_000,
             ping_failure_threshold: 3,
             stale_check_interval: Duration::from_secs(900),
+            re_bootstrap_interval: Duration::from_secs(30),
             capabilities: Capabilities::phase2_default(),
         }
     }

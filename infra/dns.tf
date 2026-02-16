@@ -27,7 +27,36 @@ resource "cloudflare_record" "bootstrap1_v6" {
   proxied = false
 }
 
-# SRV record for bootstrap discovery: _tesseras._udp.tesseras.net
+# Reverse DNS (Hetzner) — boot2
+resource "hcloud_rdns" "boot2_v4" {
+  server_id  = hcloud_server.boot2.id
+  ip_address = hcloud_server.boot2.ipv4_address
+  dns_ptr    = "bootstrap2.tesseras.net"
+}
+
+# Forward DNS (Cloudflare) — boot2
+
+# A record: bootstrap2.tesseras.net -> boot2 IPv4
+resource "cloudflare_record" "bootstrap2" {
+  zone_id = var.cloudflare_zone_id
+  name    = "bootstrap2"
+  content = hcloud_server.boot2.ipv4_address
+  type    = "A"
+  ttl     = 300
+  proxied = false
+}
+
+# AAAA record: bootstrap2.tesseras.net -> boot2 IPv6
+resource "cloudflare_record" "bootstrap2_v6" {
+  zone_id = var.cloudflare_zone_id
+  name    = "bootstrap2"
+  content = hcloud_server.boot2.ipv6_address
+  type    = "AAAA"
+  ttl     = 300
+  proxied = false
+}
+
+# SRV records for bootstrap discovery: _tesseras._udp.tesseras.net
 resource "cloudflare_record" "bootstrap_srv" {
   zone_id = var.cloudflare_zone_id
   name    = "_tesseras._udp"
@@ -40,6 +69,22 @@ resource "cloudflare_record" "bootstrap_srv" {
     weight   = 100
     port     = 4433
     target   = "bootstrap1.tesseras.net"
+  }
+  ttl = 300
+}
+
+resource "cloudflare_record" "bootstrap_srv2" {
+  zone_id = var.cloudflare_zone_id
+  name    = "_tesseras._udp"
+  type    = "SRV"
+  data {
+    service  = "_tesseras"
+    proto    = "_udp"
+    name     = "tesseras.net"
+    priority = 10
+    weight   = 100
+    port     = 4433
+    target   = "bootstrap2.tesseras.net"
   }
   ttl = 300
 }

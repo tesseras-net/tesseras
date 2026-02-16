@@ -320,6 +320,9 @@ async fn main() -> Result<()> {
         bootstrap::resolve_bootstrap_peers(&config.bootstrap).await
     };
 
+    // Store seeds in engine for automatic re-bootstrap
+    engine.set_seeds(bootstrap_addrs.clone()).await;
+
     if !bootstrap_addrs.is_empty() {
         tracing::info!(seeds = ?bootstrap_addrs, "bootstrapping DHT");
         let mut bootstrap_ok = false;

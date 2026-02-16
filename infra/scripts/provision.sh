@@ -27,8 +27,8 @@ systemctl restart sshd
 # ── Automatic security updates ──────────────────────────────────────────────
 cat > /etc/apt/apt.conf.d/50unattended-upgrades <<'EOF'
 Unattended-Upgrade::Origins-Pattern {
-    "origin=Debian,codename=${distro_codename},label=Debian-Security";
-    "origin=Debian,codename=${distro_codename}-security,label=Debian-Security";
+    "origin=Debian,codename=$${distro_codename},label=Debian-Security";
+    "origin=Debian,codename=$${distro_codename}-security,label=Debian-Security";
 };
 Unattended-Upgrade::AutoFixInterruptedDpkg "true";
 Unattended-Upgrade::Remove-Unused-Dependencies "true";

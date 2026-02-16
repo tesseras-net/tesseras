@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
+import 'package:shadcn_flutter/shadcn_flutter.dart';
 import 'welcome_screen.dart';
 import 'identity_screen.dart';
 import 'ready_screen.dart';
@@ -44,8 +44,10 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      body: Shortcuts(
+      child: Shortcuts(
         shortcuts: {
           LogicalKeySet(LogicalKeyboardKey.escape): const _BackIntent(),
         },
@@ -87,11 +89,8 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
                         height: 8,
                         decoration: BoxDecoration(
                           color: isActive
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context)
-                                  .colorScheme
-                                  .primary
-                                  .withValues(alpha: 0.3),
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.primary.withValues(alpha: 0.3),
                           borderRadius: BorderRadius.circular(4),
                         ),
                       );

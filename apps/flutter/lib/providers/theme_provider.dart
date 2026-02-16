@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart';
 
 final themeProvider =
     NotifierProvider<ThemeNotifier, ThemeMode>(ThemeNotifier.new);

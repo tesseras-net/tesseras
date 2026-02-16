@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/memory.dart';
 import '../../models/visibility.dart' as v;
 import '../../widgets/placeholder_image.dart';
@@ -29,6 +30,7 @@ class _MemoryTileState extends State<MemoryTile> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final memory = widget.memory;
+    final l = AppLocalizations.of(context);
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovering = true),
@@ -65,7 +67,7 @@ class _MemoryTileState extends State<MemoryTile> {
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
-                            memory.type.label,
+                            memory.type.label(l),
                             style: const TextStyle(
                                 color: Colors.white, fontSize: 11),
                           ),

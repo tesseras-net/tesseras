@@ -1,5 +1,10 @@
-import 'package:flutter/material.dart';
+import 'dart:io';
+
+import 'package:flutter/material.dart' hide ThemeMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart' show ThemeMode;
+import '../../l10n/app_localizations.dart';
+import '../../providers/locale_provider.dart';
 import '../../providers/mock_data.dart';
 import '../../providers/mock_identity_provider.dart';
 import '../../providers/theme_provider.dart';
@@ -14,14 +19,17 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final identity = ref.watch(mockIdentityProvider) ?? mockIdentity;
     final themeMode = ref.watch(themeProvider);
+    final localeOverride = ref.watch(localeProvider);
     final colorScheme = Theme.of(context).colorScheme;
+    final l = AppLocalizations.of(context);
 
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Settings', style: Theme.of(context).textTheme.headlineSmall),
+          Text(l.settingsTitle,
+              style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 16),
           Expanded(
             child: Center(
@@ -36,7 +44,7 @@ class SettingsScreen extends ConsumerWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Identity',
+                            Text(l.settingsIdentity,
                                 style:
                                     Theme.of(context).textTheme.titleMedium),
                             const SizedBox(height: 12),
@@ -44,16 +52,23 @@ class SettingsScreen extends ConsumerWidget {
                               children: [
                                 CircleAvatar(
                                   radius: 28,
-                                  backgroundColor: identity.avatarColor,
-                                  child: Text(
-                                    identity.name.isNotEmpty
-                                        ? identity.name[0].toUpperCase()
-                                        : '?',
-                                    style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.bold),
-                                  ),
+                                  backgroundColor: identity.avatarImagePath == null
+                                      ? identity.avatarColor
+                                      : null,
+                                  backgroundImage: identity.avatarImagePath != null
+                                      ? FileImage(File(identity.avatarImagePath!))
+                                      : null,
+                                  child: identity.avatarImagePath == null
+                                      ? Text(
+                                          identity.name.isNotEmpty
+                                              ? identity.name[0].toUpperCase()
+                                              : '?',
+                                          style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 24,
+                                              fontWeight: FontWeight.bold),
+                                        )
+                                      : null,
                                 ),
                                 const SizedBox(width: 16),
                                 Expanded(
@@ -66,7 +81,9 @@ class SettingsScreen extends ConsumerWidget {
                                               .textTheme
                                               .titleLarge),
                                       Text(
-                                        'Node: ${identity.nodeIdHex.substring(0, 16)}...',
+                                        l.settingsNodePrefix(
+                                            identity.nodeIdHex
+                                                .substring(0, 16)),
                                         style: Theme.of(context)
                                             .textTheme
                                             .bodySmall
@@ -89,7 +106,8 @@ class SettingsScreen extends ConsumerWidget {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'Created: ${_formatDate(identity.createdAt)}',
+                              l.settingsCreatedPrefix(
+                                  _formatDate(identity.createdAt)),
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                             const SizedBox(height: 8),
@@ -102,7 +120,7 @@ class SettingsScreen extends ConsumerWidget {
                                       hexData: identity.nodeIdHex),
                                   const SizedBox(height: 8),
                                   Text(
-                                    'Scan to connect',
+                                    l.settingsScanToConnect,
                                     style: Theme.of(context)
                                         .textTheme
                                         .bodySmall
@@ -119,7 +137,7 @@ class SettingsScreen extends ConsumerWidget {
                               children: [
                                 CopyButton(
                                   text: identity.ed25519PublicKeyHex,
-                                  tooltip: 'Copy Ed25519 Public Key',
+                                  tooltip: l.settingsCopyEd25519,
                                 ),
                               ],
                             ),
@@ -136,34 +154,66 @@ class SettingsScreen extends ConsumerWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Appearance',
+                            Text(l.settingsAppearance,
                                 style:
                                     Theme.of(context).textTheme.titleMedium),
                             const SizedBox(height: 12),
                             Row(
                               children: [
-                                const Text('Theme'),
+                                Text(l.settingsTheme),
                                 const SizedBox(width: 16),
                                 SegmentedButton<ThemeMode>(
-                                  segments: const [
+                                  segments: [
                                     ButtonSegment(
                                         value: ThemeMode.light,
-                                        label: Text('Light'),
-                                        icon: Icon(Icons.light_mode)),
+                                        label: Text(l.settingsThemeLight),
+                                        icon: const Icon(Icons.light_mode)),
                                     ButtonSegment(
                                         value: ThemeMode.dark,
-                                        label: Text('Dark'),
-                                        icon: Icon(Icons.dark_mode)),
+                                        label: Text(l.settingsThemeDark),
+                                        icon: const Icon(Icons.dark_mode)),
                                     ButtonSegment(
                                         value: ThemeMode.system,
-                                        label: Text('System'),
-                                        icon: Icon(Icons.settings_suggest)),
+                                        label: Text(l.settingsThemeSystem),
+                                        icon: const Icon(
+                                            Icons.settings_suggest)),
                                   ],
                                   selected: {themeMode},
                                   onSelectionChanged: (selected) {
                                     ref
                                         .read(themeProvider.notifier)
                                         .setTheme(selected.first);
+                                  },
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Text(l.settingsLanguage),
+                                const SizedBox(width: 16),
+                                SegmentedButton<Locale?>(
+                                  segments: [
+                                    ButtonSegment(
+                                        value: const Locale('en'),
+                                        label:
+                                            Text(l.settingsLangEnglish)),
+                                    ButtonSegment(
+                                        value: const Locale('pt'),
+                                        label:
+                                            Text(l.settingsLangPortuguese)),
+                                    ButtonSegment(
+                                        value: null,
+                                        label:
+                                            Text(l.settingsLangSystem),
+                                        icon: const Icon(
+                                            Icons.settings_suggest)),
+                                  ],
+                                  selected: {localeOverride},
+                                  onSelectionChanged: (selected) {
+                                    ref
+                                        .read(localeProvider.notifier)
+                                        .setLocale(selected.first);
                                   },
                                 ),
                               ],
@@ -181,7 +231,7 @@ class SettingsScreen extends ConsumerWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Storage',
+                            Text(l.settingsStorage,
                                 style:
                                     Theme.of(context).textTheme.titleMedium),
                             const SizedBox(height: 12),
@@ -190,12 +240,12 @@ class SettingsScreen extends ConsumerWidget {
                             const SizedBox(height: 12),
                             Row(
                               children: [
-                                Text('Memories: 47',
+                                Text(l.settingsMemories(47),
                                     style: Theme.of(context)
                                         .textTheme
                                         .bodySmall),
                                 const SizedBox(width: 24),
-                                Text('Fragments: 847',
+                                Text(l.settingsFragments(847),
                                     style: Theme.of(context)
                                         .textTheme
                                         .bodySmall),
@@ -203,7 +253,7 @@ class SettingsScreen extends ConsumerWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Data dir: ~/.local/share/tesseras',
+                              l.settingsDataDir,
                               style: Theme.of(context)
                                   .textTheme
                                   .bodySmall
@@ -222,11 +272,11 @@ class SettingsScreen extends ConsumerWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Network',
+                            Text(l.settingsNetwork,
                                 style:
                                     Theme.of(context).textTheme.titleMedium),
                             const SizedBox(height: 12),
-                            Text('Bootstrap nodes:',
+                            Text(l.settingsBootstrapNodes,
                                 style:
                                     Theme.of(context).textTheme.bodySmall),
                             const SizedBox(height: 4),
@@ -241,10 +291,10 @@ class SettingsScreen extends ConsumerWidget {
                                     .bodySmall
                                     ?.copyWith(fontFamily: 'monospace')),
                             const SizedBox(height: 8),
-                            Text('Listen port: 4433',
+                            Text(l.settingsListenPort,
                                 style:
                                     Theme.of(context).textTheme.bodySmall),
-                            Text('Max storage: 10 GB',
+                            Text(l.settingsMaxStorage,
                                 style:
                                     Theme.of(context).textTheme.bodySmall),
                           ],
@@ -260,11 +310,11 @@ class SettingsScreen extends ConsumerWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Heirs',
+                            Text(l.settingsHeirs,
                                 style:
                                     Theme.of(context).textTheme.titleMedium),
                             const SizedBox(height: 12),
-                            Text('No heirs configured',
+                            Text(l.settingsNoHeirs,
                                 style: Theme.of(context)
                                     .textTheme
                                     .bodyMedium
@@ -275,12 +325,11 @@ class SettingsScreen extends ConsumerWidget {
                             OutlinedButton(
                               onPressed: () {
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                      content: Text(
-                                          'Coming in a future update')),
+                                  SnackBar(
+                                      content: Text(l.settingsComingSoon)),
                                 );
                               },
-                              child: const Text('Configure Heirs'),
+                              child: Text(l.settingsConfigureHeirs),
                             ),
                           ],
                         ),
@@ -295,25 +344,24 @@ class SettingsScreen extends ConsumerWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('About',
+                            Text(l.settingsAbout,
                                 style:
                                     Theme.of(context).textTheme.titleMedium),
                             const SizedBox(height: 12),
-                            Text('Tesseras v0.1.0',
+                            Text(l.settingsVersion,
                                 style:
                                     Theme.of(context).textTheme.bodyLarge),
                             const SizedBox(height: 4),
-                            Text(
-                                'P2P memory preservation network',
+                            Text(l.settingsDescription,
                                 style:
                                     Theme.of(context).textTheme.bodyMedium),
                             const SizedBox(height: 8),
-                            Text('tesseras.net',
+                            Text(l.settingsWebsite,
                                 style: Theme.of(context)
                                     .textTheme
                                     .bodySmall
                                     ?.copyWith(color: colorScheme.primary)),
-                            Text('#tesseras on Libera.Chat',
+                            Text(l.settingsIrc,
                                 style: Theme.of(context)
                                     .textTheme
                                     .bodySmall

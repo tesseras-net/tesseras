@@ -1,7 +1,13 @@
-import 'package:flutter/material.dart';
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart';
+import '../../l10n/app_localizations.dart';
 import '../../providers/mock_data.dart';
 import '../../providers/mock_identity_provider.dart';
+import '../../widgets/camera_capture_dialog.dart';
 
 class IdentityScreen extends ConsumerStatefulWidget {
   final VoidCallback onNext;
@@ -20,12 +26,13 @@ class IdentityScreen extends ConsumerStatefulWidget {
 class _IdentityScreenState extends ConsumerState<IdentityScreen> {
   final _nameController = TextEditingController();
   int _colorIndex = 0;
+  String? _avatarImagePath;
 
   static const _avatarColors = [
-    Colors.indigo,
-    Colors.teal,
-    Colors.orange,
-    Colors.pink,
+    Color(0xFF5C6BC0), // indigo
+    Color(0xFF009688), // teal
+    Color(0xFFFF9800), // orange
+    Color(0xFFE91E63), // pink
   ];
 
   @override
@@ -38,7 +45,6 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
     final name = _nameController.text.trim();
     if (name.isEmpty) return;
 
-    // Set mock identity with entered name
     ref.read(mockIdentityProvider.notifier).set(MockIdentity(
       name: name,
       nodeIdHex: mockIdentity.nodeIdHex,
@@ -46,14 +52,155 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
       mldsaPublicKeyHex: mockIdentity.mldsaPublicKeyHex,
       createdAt: mockIdentity.createdAt,
       avatarColor: _avatarColors[_colorIndex],
+      avatarImagePath: _avatarImagePath,
     ));
 
     widget.onNext();
   }
 
+  void _showAvatarPicker() {
+    final l = AppLocalizations.of(context);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l.identityAvatarChoose),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            GhostButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _captureFromCamera();
+              },
+              leading: const Icon(Icons.camera_alt, size: 16),
+              alignment: Alignment.centerLeft,
+              child: Text(l.identityAvatarCamera),
+            ),
+            GhostButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _pickImage(ImageSource.gallery);
+              },
+              leading: const Icon(Icons.photo_library, size: 16),
+              alignment: Alignment.centerLeft,
+              child: Text(l.identityAvatarGallery),
+            ),
+            GhostButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                setState(() {
+                  _avatarImagePath = null;
+                  _colorIndex = (_colorIndex + 1) % _avatarColors.length;
+                });
+              },
+              leading: const Icon(Icons.palette, size: 16),
+              alignment: Alignment.centerLeft,
+              child: Text(l.identityAvatarColor),
+            ),
+            if (_avatarImagePath != null)
+              GhostButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  setState(() {
+                    _avatarImagePath = null;
+                  });
+                },
+                leading: const Icon(Icons.delete_outline, size: 16),
+                alignment: Alignment.centerLeft,
+                child: Text(l.identityAvatarRemove),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _captureFromCamera() async {
+    final path = await CameraCaptureDialog.show(context);
+    if (path != null && mounted) {
+      setState(() {
+        _avatarImagePath = path;
+      });
+    }
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: source);
+      if (picked != null) {
+        setState(() {
+          _avatarImagePath = picked.path;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _importIdentity() async {
+    final l = AppLocalizations.of(context);
+    try {
+      final result = await FilePicker.platform.pickFiles(type: FileType.any);
+      if (result == null || result.files.isEmpty) return;
+    } catch (_) {
+      return;
+    }
+
+    ref.read(mockIdentityProvider.notifier).set(MockIdentity(
+      name: 'Imported User',
+      nodeIdHex: 'b4e9c3d2f8a51b7e3c2d4f6a8b9c0d1e2f3a4b56',
+      ed25519PublicKeyHex:
+          '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b',
+      mldsaPublicKeyHex:
+          '2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c',
+      createdAt: DateTime.now().toUtc().toIso8601String(),
+      avatarColor: const Color(0xFF5C6BC0),
+    ));
+
+    if (mounted) {
+      showToast(
+        context: context,
+        builder: (context, overlay) => SurfaceCard(
+          child: Basic(
+            title: Text(l.identityImported),
+            trailing: GhostButton(
+              density: ButtonDensity.icon,
+              onPressed: overlay.close,
+              child: const Icon(Icons.close, size: 16),
+            ),
+          ),
+        ),
+        showDuration: const Duration(seconds: 3),
+      );
+      widget.onNext();
+    }
+  }
+
+  Widget _buildAvatar() {
+    if (_avatarImagePath != null) {
+      return ClipOval(
+        child: SizedBox(
+          width: 96,
+          height: 96,
+          child: Image.file(File(_avatarImagePath!), fit: BoxFit.cover),
+        ),
+      );
+    }
+    return Container(
+      width: 96,
+      height: 96,
+      decoration: BoxDecoration(
+        color: _avatarColors[_colorIndex],
+        shape: BoxShape.circle,
+      ),
+      child: const Icon(Icons.add_a_photo, size: 32, color: Colors.white),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final l = AppLocalizations.of(context);
 
     return Center(
       child: ConstrainedBox(
@@ -63,68 +210,57 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(
-                'Create your identity',
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
+              Text(l.identityHeadline).h3.semiBold,
               const SizedBox(height: 32),
               // Avatar picker
               GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _colorIndex = (_colorIndex + 1) % _avatarColors.length;
-                  });
-                },
-                child: CircleAvatar(
-                  radius: 48,
-                  backgroundColor: _avatarColors[_colorIndex],
-                  child: const Icon(Icons.add_a_photo,
-                      size: 32, color: Colors.white),
-                ),
+                onTap: _showAvatarPicker,
+                child: _buildAvatar(),
               ),
               const SizedBox(height: 8),
-              Text(
-                'Tap to change color',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-              ),
+              Text(l.identityAvatarChoose).muted.small,
               const SizedBox(height: 24),
               // Name field
               TextField(
                 controller: _nameController,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: 'Your name',
-                  border: OutlineInputBorder(),
-                ),
-                textCapitalization: TextCapitalization.words,
+                placeholder: Text(l.identityNameLabel),
                 onSubmitted: (_) => _continue(),
               ),
               const SizedBox(height: 16),
-              Text(
-                'Your identity is secured with cryptographic keys '
-                'generated automatically.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-              ),
+              Text(l.identityKeysNote, textAlign: TextAlign.center).small.muted,
               const SizedBox(height: 32),
               // Back / Continue
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  OutlinedButton(
+                  OutlineButton(
                     onPressed: widget.onBack,
-                    child: const Text('Back'),
+                    child: Text(l.identityBack),
                   ),
                   const SizedBox(width: 12),
-                  FilledButton(
+                  PrimaryButton(
                     onPressed: _continue,
-                    child: const Text('Continue'),
+                    child: Text(l.identityContinue),
                   ),
                 ],
+              ),
+              const SizedBox(height: 24),
+              // Divider + Import
+              Row(
+                children: [
+                  const Expanded(child: Divider()),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(l.identityOrImport).muted.small,
+                  ),
+                  const Expanded(child: Divider()),
+                ],
+              ),
+              const SizedBox(height: 16),
+              OutlineButton(
+                onPressed: _importIdentity,
+                leading: const Icon(Icons.file_open, size: 16),
+                child: Text(l.identityImportButton),
               ),
             ],
           ),
