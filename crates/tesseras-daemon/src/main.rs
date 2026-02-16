@@ -6,7 +6,8 @@ mod config;
 mod dht_adapter;
 mod institutional;
 mod metrics;
-pub mod rpc;
+
+use tesseras_daemon::rpc;
 
 use std::net::SocketAddr;
 use std::path::PathBuf;

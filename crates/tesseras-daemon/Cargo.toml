@@ -6,6 +6,10 @@ edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
+[lib]
+name = "tesseras_daemon"
+path = "src/lib.rs"
+
 [[bin]]
 name = "tesseras-daemon"
 path = "src/main.rs"
@@ -32,6 +36,11 @@ dirs = { workspace = true }
 hex = { workspace = true }
 hickory-resolver = { workspace = true }
 prometheus = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+mockall = { workspace = true }
+rusqlite = { workspace = true }
 
 [features]
 default = []
