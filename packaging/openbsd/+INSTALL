@@ -13,6 +13,7 @@ PRE-INSTALL)
     ;;
 POST-INSTALL)
     install -d -o _tesseras -g _tesseras -m 0750 /var/lib/tesseras
+    install -d -o _tesseras -g _tesseras -m 0750 /var/run/tesseras
 
     echo ""
     echo "To enable and start tesseras:"

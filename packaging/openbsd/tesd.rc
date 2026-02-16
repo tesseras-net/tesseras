@@ -2,6 +2,7 @@
 
 daemon="/usr/local/bin/tesd"
 daemon_flags="--config /etc/tesseras/config.toml"
+daemon_logger="daemon.info"
 daemon_user="_tesseras"
 
 . /etc/rc.d/rc.subr
