@@ -775,7 +775,11 @@ impl DhtEngine {
     }
 
     /// Run the engine's main loop: receive messages, run maintenance timers.
-    pub async fn run(&self, mut shutdown: tokio::sync::watch::Receiver<bool>) {
+    ///
+    /// Must be called on `&Arc<Self>` so that maintenance tasks (re-bootstrap,
+    /// refresh, etc.) can be spawned as background tasks without blocking the
+    /// event loop that relays RPC responses.
+    pub async fn run(self: &Arc<Self>, mut shutdown: tokio::sync::watch::Receiver<bool>) {
         let mut refresh_interval = tokio::time::interval(self.config.bucket_refresh_interval);
         let mut republish_interval = tokio::time::interval(self.config.republish_interval);
         let mut stale_interval = tokio::time::interval(self.config.stale_check_interval);
@@ -806,7 +810,10 @@ impl DhtEngine {
                     self.check_stale_contacts().await;
                 }
                 _ = re_bootstrap_interval.tick() => {
-                    self.maybe_re_bootstrap().await;
+                    // Spawn as a background task — maybe_re_bootstrap uses rpc()
+                    // which depends on this run loop to relay responses.
+                    let engine = Arc::clone(self);
+                    tokio::spawn(async move { engine.maybe_re_bootstrap().await });
                 }
                 _ = shutdown.changed() => {
                     if *shutdown.borrow() {
