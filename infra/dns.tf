@@ -18,11 +18,10 @@ resource "cloudflare_record" "bootstrap1" {
 }
 
 # AAAA record: bootstrap1.tesseras.net -> boot1 IPv6
-# Hetzner returns a /64 block; cidrhost extracts first usable address
 resource "cloudflare_record" "bootstrap1_v6" {
   zone_id = var.cloudflare_zone_id
   name    = "bootstrap1"
-  content = cidrhost(hcloud_server.boot1.ipv6_address, 1)
+  content = hcloud_server.boot1.ipv6_address
   type    = "AAAA"
   ttl     = 300
   proxied = false
