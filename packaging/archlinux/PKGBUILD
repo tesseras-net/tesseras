@@ -9,6 +9,7 @@ license=('ISC')
 depends=('sqlite')
 makedepends=('cargo')
 backup=('etc/tesseras/config.toml')
+install=tesseras.install
 # No source array — builds from local workspace via TESSERAS_ROOT
 source=()
 
