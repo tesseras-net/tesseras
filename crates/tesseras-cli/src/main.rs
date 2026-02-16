@@ -27,8 +27,9 @@ const VERSION: &str = concat!(
 );
 
 const AFTER_HELP: &str = "\
-For more information about a specific command, try `tes <command> --help`
-The source code for tesseras is available at: https://github.com/tesseras-net/tesseras";
+For more information, try `tes <command> --help`
+Network commands: `tes net --help`  Identity commands: `tes identity --help`
+Source code: https://github.com/tesseras-net/tesseras";
 
 /// Create and preserve human memories
 #[derive(Parser)]
@@ -73,18 +74,30 @@ enum ColorWhen {
     Never,
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct OutputConfig {
+    pub json: bool,
+    pub color: bool,
+}
+
 #[derive(Subcommand)]
 enum Commands {
-    /// Initialize identity and local database
-    Init {
-        /// Add missing encryption keys to existing identity
-        #[arg(long)]
-        upgrade: bool,
-    },
-
     /// Create a tessera from a directory of files
     #[command(visible_alias = "c")]
     Create(commands::create::CreateArgs),
+
+    /// Show detailed information about a tessera
+    Show {
+        /// Tessera hash or prefix (base32 or hex)
+        hash: String,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// List local tesseras
+    #[command(visible_alias = "ls")]
+    List,
 
     /// Verify integrity of a stored tessera
     #[command(visible_alias = "v")]
@@ -102,39 +115,16 @@ enum Commands {
         dest: String,
     },
 
-    /// List local tesseras
-    #[command(visible_alias = "ls")]
-    List,
-
-    /// Publish a tessera to the network
-    #[command(visible_alias = "pub")]
-    Publish {
-        /// Tessera hash or prefix
-        hash: String,
-    },
-
-    /// Fetch a tessera from the network
-    Fetch {
-        /// Full tessera hash (64 hex chars)
-        hash: String,
-    },
-
-    /// Show replication status of a tessera
-    Status {
-        /// Tessera hash or prefix
-        hash: String,
-    },
-
-    /// Manage institutional node setup
-    Institutional {
+    /// Network operations (publish, fetch, status)
+    Net {
         #[command(subcommand)]
-        command: InstitutionalCommands,
+        command: NetCommands,
     },
 
-    /// Manage heir key recovery shares
-    Heir {
+    /// Identity management (init, heir, institutional)
+    Identity {
         #[command(subcommand)]
-        command: commands::heir::HeirCommands,
+        command: IdentityCommands,
     },
 
     /// Generate shell completions for your shell to stdout
@@ -143,6 +133,46 @@ enum Commands {
         /// Shell to generate completions for
         #[arg(value_enum)]
         shell: Shell,
+    },
+}
+
+#[derive(Subcommand)]
+enum NetCommands {
+    /// Publish a tessera to the network
+    #[command(visible_alias = "pub")]
+    Publish {
+        /// Tessera hash or prefix
+        hash: String,
+    },
+    /// Fetch a tessera from the network
+    Fetch {
+        /// Full tessera hash (64 hex chars)
+        hash: String,
+    },
+    /// Show replication status of a tessera
+    Status {
+        /// Tessera hash or prefix
+        hash: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum IdentityCommands {
+    /// Initialize identity and local database
+    Init {
+        /// Add missing encryption keys to existing identity
+        #[arg(long)]
+        upgrade: bool,
+    },
+    /// Manage heir key recovery shares
+    Heir {
+        #[command(subcommand)]
+        command: commands::heir::HeirCommands,
+    },
+    /// Manage institutional node setup
+    Institutional {
+        #[command(subcommand)]
+        command: InstitutionalCommands,
     },
 }
 
@@ -195,54 +225,70 @@ async fn main() -> Result<()> {
     setup_logging(cli.verbose, cli.quiet);
 
     match cli.command {
-        Commands::Init { upgrade } => commands::init::run(&cli.data_dir, upgrade).await,
         Commands::Create(ref args) => commands::create::run(args, &cli.data_dir).await,
+        Commands::Show { ref hash, json } => {
+            use std::io::IsTerminal;
+            let color = match cli.color {
+                ColorWhen::Always => true,
+                ColorWhen::Never => false,
+                ColorWhen::Auto => std::io::stdout().is_terminal(),
+            };
+            commands::show::run(hash, &cli.data_dir, OutputConfig { json, color }).await
+        }
+        Commands::List => commands::list::run(&cli.data_dir).await,
         Commands::Verify { ref hash } => commands::verify::run(hash, &cli.data_dir).await,
         Commands::Export { ref hash, ref dest } => {
             commands::export::run(hash, dest, &cli.data_dir).await
         }
-        Commands::List => commands::list::run(&cli.data_dir).await,
-        Commands::Publish { ref hash } => {
-            commands::publish::run(hash, &cli.data_dir, &cli.socket).await
-        }
-        Commands::Fetch { ref hash } => {
-            commands::fetch::run(hash, &cli.data_dir, &cli.socket).await
-        }
-        Commands::Status { ref hash } => {
-            commands::status::run(hash, &cli.data_dir, &cli.socket).await
-        }
-        Commands::Institutional { command } => match command {
-            InstitutionalCommands::Setup { ref domain, check } => {
-                commands::institutional::run_setup(domain, check, &cli.data_dir).await
+        Commands::Net { command } => match command {
+            NetCommands::Publish { ref hash } => {
+                commands::publish::run(hash, &cli.data_dir, &cli.socket).await
+            }
+            NetCommands::Fetch { ref hash } => {
+                commands::fetch::run(hash, &cli.data_dir, &cli.socket).await
+            }
+            NetCommands::Status { ref hash } => {
+                commands::status::run(hash, &cli.data_dir, &cli.socket).await
             }
         },
-        Commands::Heir { command } => match command {
-            commands::heir::HeirCommands::Create {
-                threshold,
-                shares,
-                output_dir,
-                yes,
-            } => {
-                commands::heir::run_create(threshold, shares, &output_dir, yes, &cli.data_dir).await
+        Commands::Identity { command } => match command {
+            IdentityCommands::Init { upgrade } => {
+                commands::init::run(&cli.data_dir, upgrade).await
             }
-            commands::heir::HeirCommands::Reconstruct {
-                share_files,
-                output_dir,
-                install,
-                verify_identity,
-            } => {
-                commands::heir::run_reconstruct(
-                    &share_files,
-                    &output_dir,
+            IdentityCommands::Heir { command } => match command {
+                commands::heir::HeirCommands::Create {
+                    threshold,
+                    shares,
+                    output_dir,
+                    yes,
+                } => {
+                    commands::heir::run_create(threshold, shares, &output_dir, yes, &cli.data_dir)
+                        .await
+                }
+                commands::heir::HeirCommands::Reconstruct {
+                    share_files,
+                    output_dir,
                     install,
-                    verify_identity.as_deref(),
-                    &cli.data_dir,
-                )
-                .await
-            }
-            commands::heir::HeirCommands::Info { share_file } => {
-                commands::heir::run_info(&share_file).await
-            }
+                    verify_identity,
+                } => {
+                    commands::heir::run_reconstruct(
+                        &share_files,
+                        &output_dir,
+                        install,
+                        verify_identity.as_deref(),
+                        &cli.data_dir,
+                    )
+                    .await
+                }
+                commands::heir::HeirCommands::Info { share_file } => {
+                    commands::heir::run_info(&share_file).await
+                }
+            },
+            IdentityCommands::Institutional { command } => match command {
+                InstitutionalCommands::Setup { ref domain, check } => {
+                    commands::institutional::run_setup(domain, check, &cli.data_dir).await
+                }
+            },
         },
         Commands::Completions { shell } => {
             let mut cmd = Cli::command();

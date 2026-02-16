@@ -6,5 +6,6 @@ pub mod init;
 pub mod institutional;
 pub mod list;
 pub mod publish;
+pub mod show;
 pub mod status;
 pub mod verify;

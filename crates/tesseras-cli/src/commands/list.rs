@@ -31,7 +31,7 @@ pub async fn run(data_dir: &str) -> Result<()> {
     Ok(())
 }
 
-fn format_size(bytes: u64) -> String {
+pub fn format_size(bytes: u64) -> String {
     if bytes < 1024 {
         format!("{bytes} B")
     } else if bytes < 1024 * 1024 {

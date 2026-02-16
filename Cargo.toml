@@ -61,6 +61,7 @@ clap = { version = "4", features = ["derive", "color"] }
 clap_complete = "4"
 dialoguer = "0.11"
 comfy-table = "7"
+owo-colors = "4"
 
 # Logging
 tracing = "0.1"
