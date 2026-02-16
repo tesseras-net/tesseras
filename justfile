@@ -94,6 +94,10 @@ changelog-preview:
 deb:
     cargo deb -p tesseras-daemon --target x86_64-unknown-linux-musl -- --features bundled-sqlite
 
+# Build Arch Linux package (.pkg.tar.zst)
+arch:
+    cd packaging/archlinux && TESSERAS_ROOT="$(git rev-parse --show-toplevel)" makepkg -sf
+
 # Deploy .deb to a bootstrap node via scp + dpkg
 deploy host="bootstrap1.tesseras.net":
     #!/usr/bin/env bash
