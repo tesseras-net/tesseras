@@ -217,7 +217,7 @@ class _CreateMemoryDialogState extends ConsumerState<CreateMemoryDialog> {
                         children: [
                           Expanded(
                             child: DropdownButtonFormField<MemoryType>(
-                              value: _memoryType,
+                              initialValue: _memoryType,
                               decoration: const InputDecoration(
                                 labelText: 'Type',
                                 border: OutlineInputBorder(),
@@ -236,7 +236,7 @@ class _CreateMemoryDialogState extends ConsumerState<CreateMemoryDialog> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: DropdownButtonFormField<v.Visibility>(
-                              value: _visibility,
+                              initialValue: _visibility,
                               decoration: const InputDecoration(
                                 labelText: 'Visibility',
                                 border: OutlineInputBorder(),
@@ -293,7 +293,7 @@ class _CreateMemoryDialogState extends ConsumerState<CreateMemoryDialog> {
                       const SizedBox(height: 16),
                       // Language
                       DropdownButtonFormField<String>(
-                        value: _language,
+                        initialValue: _language,
                         decoration: const InputDecoration(
                           labelText: 'Language',
                           border: OutlineInputBorder(),

@@ -5,4 +5,13 @@ import 'mock_data.dart';
 /// Replaces the FFI-dependent identityProvider for mockup mode.
 /// After onboarding, set to mockIdentity.
 /// Screens check this to determine onboarding vs home.
-final mockIdentityProvider = StateProvider<MockIdentity?>((ref) => null);
+final mockIdentityProvider =
+    NotifierProvider<MockIdentityNotifier, MockIdentity?>(
+        MockIdentityNotifier.new);
+
+class MockIdentityNotifier extends Notifier<MockIdentity?> {
+  @override
+  MockIdentity? build() => null;
+
+  void set(MockIdentity identity) => state = identity;
+}

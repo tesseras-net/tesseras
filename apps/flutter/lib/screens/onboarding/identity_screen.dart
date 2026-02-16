@@ -39,14 +39,14 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
     if (name.isEmpty) return;
 
     // Set mock identity with entered name
-    ref.read(mockIdentityProvider.notifier).state = MockIdentity(
+    ref.read(mockIdentityProvider.notifier).set(MockIdentity(
       name: name,
       nodeIdHex: mockIdentity.nodeIdHex,
       ed25519PublicKeyHex: mockIdentity.ed25519PublicKeyHex,
       mldsaPublicKeyHex: mockIdentity.mldsaPublicKeyHex,
       createdAt: mockIdentity.createdAt,
       avatarColor: _avatarColors[_colorIndex],
-    );
+    ));
 
     widget.onNext();
   }

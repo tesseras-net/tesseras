@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../models/network_event.dart';
 import '../../providers/mock_data.dart';
 import '../../providers/mock_network_provider.dart';
 import 'network_event_tile.dart';
