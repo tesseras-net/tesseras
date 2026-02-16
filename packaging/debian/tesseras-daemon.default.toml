@@ -1,7 +1,7 @@
 [node]
 data_dir = "/var/lib/tesseras"
 listen_addr = "0.0.0.0:4433"
-listen_addrs = ["0.0.0.0:4433", "[::]:4433"]
+listen_addrs = ["[::]:4433"]
 
 [dht]
 k = 20
