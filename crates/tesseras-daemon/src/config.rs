@@ -19,6 +19,8 @@ pub struct DaemonConfig {
     pub performance: PerformanceConfig,
     #[serde(default)]
     pub institutional: Option<InstitutionalConfig>,
+    #[serde(default)]
+    pub rpc: RpcConfig,
 }
 
 #[derive(Debug, Deserialize)]
@@ -181,6 +183,14 @@ pub struct InstitutionalConfig {
     pub pledge_bytes: u64,
 }
 
+/// RPC socket configuration.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct RpcConfig {
+    /// Override daemon socket path. If empty, uses default_socket_path().
+    #[serde(default)]
+    pub socket_path: Option<String>,
+}
+
 impl Default for DaemonConfig {
     fn default() -> Self {
         Self {
@@ -216,6 +226,7 @@ impl Default for DaemonConfig {
             nat: NatConfig::default(),
             performance: PerformanceConfig::default(),
             institutional: None,
+            rpc: RpcConfig::default(),
         }
     }
 }

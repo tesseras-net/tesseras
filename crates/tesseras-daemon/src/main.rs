@@ -6,6 +6,7 @@ mod config;
 mod dht_adapter;
 mod institutional;
 mod metrics;
+pub mod rpc;
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -245,6 +246,17 @@ async fn main() -> Result<()> {
     };
     engine.set_replication_handler(Arc::new(handler));
 
+    // 7f. Setup RPC socket listener
+    let socket_path = rpc::resolve_socket_path(&config.rpc.socket_path)?;
+    let rpc_handler = Arc::new(rpc::handler::RpcHandler {
+        tessera_repo: Arc::new(tesseras_storage::SqliteTesseraRepository::new(conn.clone())),
+        memory_repo: Arc::new(tesseras_storage::SqliteMemoryRepository::new(conn.clone())),
+        blob_store: Arc::new(FsBlobStore::new(conn.clone(), Arc::clone(&cas))),
+        fragment_store: Arc::new(FsFragmentStore::new(conn.clone(), Arc::clone(&cas))),
+        replication: Arc::clone(&replication),
+        cas: Arc::clone(&cas),
+    });
+
     // 8. Setup shutdown signal
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
 
@@ -260,6 +272,10 @@ async fn main() -> Result<()> {
     let repl_handle = tokio::spawn(async move {
         replication_clone.run_repair_loop(repl_shutdown_rx).await;
     });
+
+    // 9c. Spawn RPC listener
+    let rpc_shutdown = shutdown_tx.subscribe();
+    let rpc_handle = tokio::spawn(rpc::run_listener(socket_path, rpc_handler, rpc_shutdown));
 
     // 10. Bootstrap (SRV discovery with CLI override)
     let bootstrap_addrs: Vec<SocketAddr> = if let Some(ref addrs) = cli.bootstrap {
@@ -323,6 +339,7 @@ async fn main() -> Result<()> {
     // Graceful shutdown with timeout
     let _ = tokio::time::timeout(std::time::Duration::from_secs(5), engine_handle).await;
     let _ = tokio::time::timeout(std::time::Duration::from_secs(2), repl_handle).await;
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(2), rpc_handle).await;
 
     tracing::info!("goodbye");
     Ok(())

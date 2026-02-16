@@ -2993,6 +2993,7 @@ dependencies = [
  "tesseras-dht",
  "tesseras-net",
  "tesseras-replication",
+ "tesseras-rpc",
  "tesseras-storage",
  "tokio",
  "toml",
