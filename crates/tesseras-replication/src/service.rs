@@ -258,6 +258,10 @@ impl ReplicationService {
                 // Push whole file to each peer
                 let checksum = ContentHash::new(blake3::hash(tessera_data).into());
                 let id = FragmentId::new(*tessera_hash, 0, 1, checksum);
+
+                // Store fragment locally so status() can track it
+                self.fragments.store_fragment(&id, tessera_data)?;
+
                 let envelope = FragmentEnvelope {
                     id,
                     plan: encoded.plan.clone(),
@@ -698,6 +702,12 @@ mod tests {
             .times(7)
             .returning(|_, _| Ok(()));
 
+        let mut fragments = MockFragments::new();
+        fragments
+            .expect_store_fragment()
+            .once()
+            .returning(|_, _| Ok(()));
+
         let service = ReplicationService::new(
             NodeIdentity {
                 node_id: node(0xff),
@@ -705,7 +715,7 @@ mod tests {
                 nonce: 0,
             },
             Box::new(dht),
-            Box::new(MockFragments::new()),
+            Box::new(fragments),
             Box::new(ledger),
             Box::new(MockBlobs::new()),
             ReplicationConfig::default(),

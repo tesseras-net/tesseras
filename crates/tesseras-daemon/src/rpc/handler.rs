@@ -81,7 +81,7 @@ impl RpcHandler {
             }
         };
 
-        // Unpack and store into local storage
+        // Unpack
         let files = match tesseras_core::pack::unpack(&data) {
             Ok(f) => f,
             Err(e) => {
@@ -92,26 +92,33 @@ impl RpcHandler {
             }
         };
 
-        let mut total_bytes: u64 = 0;
-        let mut seen_memories = std::collections::HashSet::new();
-
-        for file in &files {
-            total_bytes += file.data.len() as u64;
-            // Track unique memory directories
-            if let Some(rest) = file.path.strip_prefix("memories/") {
-                if let Some(mem_hash) = rest.split('/').next() {
-                    seen_memories.insert(mem_hash.to_string());
+        // Import into local storage (tessera repo + memory repo + blob store)
+        let (memory_count, total_bytes) = match crate::rpc::import::import_tessera(
+            &files,
+            self.tessera_repo.as_ref(),
+            self.memory_repo.as_ref(),
+            self.blob_store.as_ref(),
+        ) {
+            Ok(result) => result,
+            Err(e) => {
+                tracing::warn!(error = %e, "failed to import fetched tessera into storage");
+                // Fall back to CAS-only storage
+                let mut total_bytes: u64 = 0;
+                let mut seen_memories = std::collections::HashSet::new();
+                for file in &files {
+                    total_bytes += file.data.len() as u64;
+                    if let Some(rest) = file.path.strip_prefix("memories/") {
+                        if let Some(mem_hash) = rest.split('/').next() {
+                            seen_memories.insert(mem_hash.to_string());
+                        }
+                    }
+                    if let Err(e) = self.cas.put(&file.data) {
+                        tracing::warn!(path = %file.path, error = %e, "failed to store fetched blob");
+                    }
                 }
+                (seen_memories.len() as u32, total_bytes)
             }
-        }
-        let memory_count = seen_memories.len() as u32;
-
-        // Store blobs into CAS
-        for file in &files {
-            if let Err(e) = self.cas.put(&file.data) {
-                tracing::warn!(path = %file.path, error = %e, "failed to store fetched blob");
-            }
-        }
+        };
 
         Response::Fetched {
             hash,

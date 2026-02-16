@@ -1,22 +1,33 @@
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 use tesseras_core::ContentHash;
+use tesseras_core::HashPrefix;
 use tesseras_rpc::{DaemonClient, Request, Response};
 
-pub async fn run(hash: &str, _data_dir: &str, socket: &Option<PathBuf>) -> Result<()> {
-    let content_hash: ContentHash = hash
-        .parse()
-        .map_err(|_| anyhow::anyhow!("invalid hash (expected 64 hex chars): {hash}"))?;
+use super::init::expand_tilde;
+
+pub async fn run(hash: &str, data_dir: &str, socket: &Option<PathBuf>) -> Result<()> {
+    let content_hash: ContentHash = match HashPrefix::parse(hash)
+        .context("invalid tessera hash or prefix")?
+    {
+        HashPrefix::Exact(h) => h,
+        _ => {
+            // Short prefix: try resolving against local DB
+            let base = expand_tilde(data_dir);
+            let prefix = HashPrefix::parse(hash)?;
+            let service = super::create::build_service(&base)?;
+            service.resolve_prefix(&prefix)?.hash
+        }
+    };
 
     let socket_path = match socket {
         Some(p) => p.clone(),
-        None => tesseras_rpc::default_socket_path()
-            .map_err(|e| anyhow::anyhow!("{e}"))?,
+        None => tesseras_rpc::default_socket_path().map_err(|e| anyhow::anyhow!("{e}"))?,
     };
 
     eprintln!(
         "Fetching tessera {} from network...",
-        &hash[..8.min(hash.len())]
+        content_hash.to_base32_short(8)
     );
 
     let mut client = DaemonClient::connect(&socket_path).with_context(|| {
