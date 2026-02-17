@@ -1,31 +1,23 @@
 [workspace]
 resolver = "3"
-members = [
-    "crates/tesseras-core",
-    "crates/tesseras-crypto",
-    "crates/tesseras-storage",
-    "crates/tesseras-cli",
-    "crates/tesseras-net",
-    "crates/tesseras-dht",
-    "crates/tesseras-daemon",
-    "crates/tesseras-replication",
-    "crates/tesseras-embedded",
-    "crates/tesseras-rpc",
-]
+members = ["tesseras", "tes"]
 
 [workspace.package]
 edition = "2024"
-license = "ISC"
 rust-version = "1.85"
+license = "ISC"
+repository = "https://git.sr.ht/~ijanc/tesseras"
 
 [workspace.dependencies]
+# Domain
+tesseras = { path = "tesseras" }
+
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 chrono = { version = "0.4", features = ["serde"] }
 toml = "0.8"
 rmp-serde = "1"
-base64 = "0.22"
 
 # Error handling
 thiserror = "2"
@@ -33,68 +25,35 @@ anyhow = "1"
 
 # Async
 tokio = { version = "1", features = ["full"] }
-async-trait = "0.1"
-
-# Network
-quinn = "0.11"
-rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
-rcgen = "0.13"
-dashmap = "6"
 
 # Crypto
-zeroize = { version = "1", features = ["derive"] }
 blake3 = "1"
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 rand = "0.8"
+zeroize = { version = "1", features = ["derive"] }
 reed-solomon-erasure = "6"
-x25519-dalek = { version = "2", features = ["static_secrets"] }
-aes-gcm = "0.10"
-pqcrypto-kyber = "0.8"
-pqcrypto-traits = "0.3"
+
+# Network
+quinn = "0.11"
+rustls = { version = "0.23", features = ["ring", "std"] }
+rcgen = "0.13"
 
 # Storage
-rusqlite = { version = "0.33" }
-lru = "0.12"
-fs2 = "0.4"
+rusqlite = { version = "0.33", features = ["bundled"] }
 
 # CLI
 clap = { version = "4", features = ["derive", "color"] }
-clap_complete = "4"
-dialoguer = "0.11"
-comfy-table = ">=7, <7.2.2" # 7.2.2 needs Rust 1.87+ (let chains); OpenBSD 7.7 has 1.86
-owo-colors = "4"
+indicatif = "0.17"
 
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 
-# FFI
-flutter_rust_bridge = "=2.11.1"
-
-# Observability
-prometheus = "0.13"
-
-# DNS
-hickory-resolver = "0.25"
-
 # Encoding
 hex = "0.4"
-qr_code = { version = "2", features = ["bmp"] }
 
 # Misc
 dirs = "6"
 
 # Testing
-bolero = "0.11"
-mockall = "0.13"
-proptest = "1"
 tempfile = "3"
-
-# Internal
-tesseras-core = { path = "crates/tesseras-core" }
-tesseras-crypto = { path = "crates/tesseras-crypto" }
-tesseras-dht = { path = "crates/tesseras-dht" }
-tesseras-net = { path = "crates/tesseras-net" }
-tesseras-replication = { path = "crates/tesseras-replication" }
-tesseras-rpc = { path = "crates/tesseras-rpc" }
-tesseras-storage = { path = "crates/tesseras-storage" }

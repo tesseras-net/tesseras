@@ -1,0 +1,20 @@
+[package]
+name = "tes"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "tes"
+path = "src/main.rs"
+
+[dependencies]
+tesseras = { workspace = true }
+clap = { workspace = true }
+anyhow = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+indicatif = { workspace = true }
+hex = { workspace = true }
