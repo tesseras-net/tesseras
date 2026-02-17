@@ -729,8 +729,17 @@ impl Node {
                 if let Ok(Some(data)) = self.fetch_blob(addr, &memory.blob_hash).await {
                     let actual_hash = crate::crypto::hash_bytes(&data);
                     if actual_hash == memory.blob_hash {
+                        if !self.check_storage_quota(data.len() as u64) {
+                            debug!("storage quota exceeded, skipping blob {}", memory.blob_hash);
+                            continue;
+                        }
+                        let data_len = data.len() as u64;
                         let storage = self.storage.lock().unwrap();
                         let _ = storage.store_blob_bytes(&data);
+                        // Track reciprocity: we stored bytes fetched from this peer
+                        if let Some(provider) = providers.iter().find(|p| p.addr == addr) {
+                            let _ = storage.record_bytes_stored(&provider.node_id, data_len);
+                        }
                         got_blob = true;
                     }
                 }
@@ -848,7 +857,14 @@ impl Node {
                 if let Ok(Some(data)) = self.fetch_blob(provider.addr, &meta.fragment_hash).await {
                     let actual_hash = crate::crypto::hash_bytes(&data);
                     if actual_hash == meta.fragment_hash {
-                        // Cache the fragment locally
+                        // Check quota before caching the fragment locally
+                        if !self.check_storage_quota(data.len() as u64) {
+                            debug!("storage quota exceeded, skipping fragment {}", meta.fragment_hash);
+                            if meta.fragment_index < total_shards {
+                                shards[meta.fragment_index] = Some(data);
+                            }
+                            break;
+                        }
                         let storage = self.storage.lock().unwrap();
                         let _ = storage.store_blob_bytes(&data);
                         drop(storage);
@@ -886,6 +902,12 @@ impl Node {
             return Err(NodeError::Replication(format!(
                 "reconstructed blob hash mismatch: expected {blob_hash}, got {actual_hash}"
             )));
+        }
+
+        // Check quota before storing the reconstructed blob
+        if !self.check_storage_quota(reconstructed.len() as u64) {
+            debug!("storage quota exceeded, not caching reconstructed blob {blob_hash}");
+            return Ok(true);
         }
 
         // Store the reconstructed blob
@@ -957,6 +979,34 @@ impl Node {
         self.external_addr.or_else(|| self.local_addr())
     }
 
+    /// Check whether storing `additional` bytes of foreign data is within quota.
+    /// Returns true if allowed (quota not exceeded or quota is unlimited).
+    pub fn check_storage_quota(&self, additional: u64) -> bool {
+        let storage = self.storage.lock().unwrap();
+        // Check foreign storage quota
+        if self.config.max_foreign_storage_bytes > 0 {
+            match storage.foreign_blob_bytes() {
+                Ok(current) => {
+                    if current + additional > self.config.max_foreign_storage_bytes {
+                        return false;
+                    }
+                }
+                Err(e) => {
+                    warn!("failed to check foreign storage: {e}");
+                    return false;
+                }
+            }
+        }
+        // Check total storage quota
+        match storage.check_quota(additional, self.config.max_total_storage_bytes) {
+            Ok(allowed) => allowed,
+            Err(e) => {
+                warn!("failed to check total storage quota: {e}");
+                false
+            }
+        }
+    }
+
     /// Number of peers in the routing table.
     pub fn peer_count(&self) -> usize {
         self.dht.lock().unwrap().routing_table.len()
@@ -974,6 +1024,8 @@ impl Node {
         let node_id = self.identity.node_id();
         let data_shards = self.config.data_shards;
         let parity_shards = self.config.parity_shards;
+        let max_foreign = self.config.max_foreign_storage_bytes;
+        let max_total = self.config.max_total_storage_bytes;
         let mut shutdown_rx = self
             .shutdown_tx
             .as_ref()
@@ -990,6 +1042,7 @@ impl Node {
                         repair_fragments(
                             &transport, &dht, &storage, node_id,
                             data_shards, parity_shards,
+                            max_foreign, max_total,
                         ).await;
                     }
                     _ = shutdown_rx.changed() => {
@@ -1260,6 +1313,7 @@ async fn handle_connection(
 }
 
 /// Check and repair missing fragments by fetching from DHT peers.
+#[allow(clippy::too_many_arguments)]
 async fn repair_fragments(
     transport: &QuicTransport,
     dht: &Arc<Mutex<Dht>>,
@@ -1267,6 +1321,8 @@ async fn repair_fragments(
     node_id: NodeId,
     data_shards: usize,
     parity_shards: usize,
+    max_foreign_storage_bytes: u64,
+    max_total_storage_bytes: u64,
 ) {
     // Collect all tesseras and their fragment metadata
     let missing: Vec<(ContentHash, usize, ContentHash)> = {
@@ -1356,6 +1412,22 @@ async fn repair_fragments(
                 // Verify the hash matches
                 let actual_hash = crate::crypto::hash_bytes(&data);
                 if actual_hash == *frag_hash {
+                    // Check quota before storing
+                    {
+                        let s = storage.lock().unwrap();
+                        if max_foreign_storage_bytes > 0 {
+                            if let Ok(current) = s.foreign_blob_bytes() {
+                                if current + data.len() as u64 > max_foreign_storage_bytes {
+                                    debug!("repair: foreign storage quota exceeded, skipping fragment {frag_index} of blob {blob_hash}");
+                                    break;
+                                }
+                            }
+                        }
+                        if let Ok(false) = s.check_quota(data.len() as u64, max_total_storage_bytes) {
+                            debug!("repair: total storage quota exceeded, skipping fragment {frag_index} of blob {blob_hash}");
+                            break;
+                        }
+                    }
                     let storage = storage.lock().unwrap();
                     if storage.store_blob_bytes(&data).is_ok() {
                         recovered += 1;
@@ -2119,5 +2191,39 @@ mod tests {
         assert_eq!(peers.len(), 1);
         assert_eq!(peers[0].node_id, fake_peer.node_id);
         assert_eq!(peers[0].addr, fake_peer.addr);
+    }
+
+    #[test]
+    fn check_storage_quota_unlimited() {
+        let (_tmp, node) = test_node();
+        // Default config has 0 (unlimited) for both quotas
+        assert!(node.check_storage_quota(1_000_000));
+    }
+
+    #[test]
+    fn check_storage_quota_total_limit() {
+        let (tmp, mut node) = test_node();
+
+        // Add some data first
+        let test_file = tmp.path().join("data.txt");
+        std::fs::write(&test_file, b"some data here").unwrap();
+        node.add_tessera(&[test_file], None, Visibility::Public).unwrap();
+
+        // Set a tight total quota
+        node.config.max_total_storage_bytes = 10;
+
+        // Should reject large addition
+        assert!(!node.check_storage_quota(1_000_000));
+    }
+
+    #[test]
+    fn check_storage_quota_allows_within_limit() {
+        let (_tmp, mut node) = test_node();
+
+        // Set generous quota
+        node.config.max_total_storage_bytes = 10_000_000;
+
+        // Should allow small addition
+        assert!(node.check_storage_quota(100));
     }
 }

@@ -502,6 +502,53 @@ impl Storage {
         }
     }
 
+    /// Total bytes used by all blobs on disk (walks the blobs/ directory).
+    pub fn total_blob_bytes(&self) -> Result<u64, StorageError> {
+        let blobs_dir = self.data_dir.blobs_dir();
+        if !blobs_dir.exists() {
+            return Ok(0);
+        }
+        fn walk_dir(dir: &std::path::Path) -> std::io::Result<u64> {
+            let mut total = 0u64;
+            for entry in std::fs::read_dir(dir)? {
+                let entry = entry?;
+                let ft = entry.file_type()?;
+                if ft.is_dir() {
+                    total += walk_dir(&entry.path())?;
+                } else if ft.is_file() {
+                    total += entry.metadata()?.len();
+                }
+            }
+            Ok(total)
+        }
+        walk_dir(&blobs_dir).map_err(StorageError::Io)
+    }
+
+    /// Bytes used by fragments not belonging to own tesseras (foreign data).
+    /// A blob_hash is "own" if it appears in the memories table.
+    pub fn foreign_blob_bytes(&self) -> Result<u64, StorageError> {
+        let result: i64 = self
+            .db
+            .query_row(
+                "SELECT COALESCE(SUM(shard_size), 0) FROM fragments
+                 WHERE blob_hash NOT IN (SELECT blob_hash FROM memories)",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(StorageError::Database)?;
+        Ok(result.max(0) as u64)
+    }
+
+    /// Check whether adding `additional` bytes would stay within `max_bytes`.
+    /// Returns true if the quota allows the addition (or max_bytes == 0 = unlimited).
+    pub fn check_quota(&self, additional: u64, max_bytes: u64) -> Result<bool, StorageError> {
+        if max_bytes == 0 {
+            return Ok(true);
+        }
+        let current = self.total_blob_bytes()?;
+        Ok(current + additional <= max_bytes)
+    }
+
     /// List all reciprocity ledger entries.
     pub fn list_reciprocity(&self) -> Result<Vec<ReciprocityEntry>, StorageError> {
         let mut stmt = self.db.prepare(
@@ -835,5 +882,94 @@ mod tests {
         assert_eq!(e1.bytes_served, 0);
         let e2 = entries.iter().find(|e| e.bytes_served == 300).unwrap();
         assert_eq!(e2.bytes_stored, 0);
+    }
+
+    #[test]
+    fn total_blob_bytes_sums_files() {
+        let (_tmp, storage) = test_storage();
+
+        // Store some blobs of known sizes
+        storage.store_blob_bytes(b"aaaa").unwrap(); // 4 bytes
+        storage.store_blob_bytes(b"bbbbbbbb").unwrap(); // 8 bytes
+        storage.store_blob_bytes(b"cc").unwrap(); // 2 bytes
+
+        let total = storage.total_blob_bytes().unwrap();
+        assert_eq!(total, 14);
+    }
+
+    #[test]
+    fn total_blob_bytes_empty() {
+        let (_tmp, storage) = test_storage();
+        assert_eq!(storage.total_blob_bytes().unwrap(), 0);
+    }
+
+    #[test]
+    fn foreign_blob_bytes_excludes_own() {
+        let (_tmp, storage) = test_storage();
+
+        // Store a blob that belongs to a tessera (own data)
+        let own_blob_hash = storage.store_blob_bytes(b"own data").unwrap();
+        let tessera = Tessera {
+            hash: crypto::hash_bytes(b"test tessera"),
+            author: vec![0u8; 32],
+            signature: vec![0u8; 64],
+            created_at: chrono::Utc::now(),
+            name: Some("Own".into()),
+            visibility: Visibility::Public,
+            memories: vec![Memory {
+                filename: "own.txt".into(),
+                media_type: MediaType::Text,
+                size: 8,
+                blob_hash: own_blob_hash,
+            }],
+        };
+        storage.store_tessera(&tessera).unwrap();
+
+        // Store a fragment that references own blob — should NOT be foreign
+        let own_frag = FragmentMeta {
+            fragment_index: 0,
+            fragment_hash: crypto::hash_bytes(b"own frag"),
+            shard_size: 100,
+            original_size: 8,
+            data_shards: 3,
+            parity_shards: 2,
+        };
+        storage.store_fragment(&own_blob_hash, &own_frag).unwrap();
+
+        // Store a fragment for a blob NOT in memories — this IS foreign
+        let foreign_blob = crypto::hash_bytes(b"foreign blob");
+        let foreign_frag = FragmentMeta {
+            fragment_index: 0,
+            fragment_hash: crypto::hash_bytes(b"foreign frag"),
+            shard_size: 200,
+            original_size: 500,
+            data_shards: 3,
+            parity_shards: 2,
+        };
+        storage.store_fragment(&foreign_blob, &foreign_frag).unwrap();
+
+        let foreign = storage.foreign_blob_bytes().unwrap();
+        assert_eq!(foreign, 200); // Only the foreign fragment's shard_size
+    }
+
+    #[test]
+    fn check_quota_unlimited() {
+        let (_tmp, storage) = test_storage();
+        // max_bytes = 0 means unlimited
+        assert!(storage.check_quota(1_000_000, 0).unwrap());
+    }
+
+    #[test]
+    fn check_quota_within_limit() {
+        let (_tmp, storage) = test_storage();
+        storage.store_blob_bytes(b"small").unwrap(); // 5 bytes
+        assert!(storage.check_quota(10, 100).unwrap()); // 5 + 10 <= 100
+    }
+
+    #[test]
+    fn check_quota_exceeds_limit() {
+        let (_tmp, storage) = test_storage();
+        storage.store_blob_bytes(b"data that uses space").unwrap(); // 20 bytes
+        assert!(!storage.check_quota(50, 30).unwrap()); // 20 + 50 > 30
     }
 }

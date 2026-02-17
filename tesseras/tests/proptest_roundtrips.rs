@@ -220,6 +220,8 @@ proptest! {
                 peer_count: pc % 100,
                 tessera_count: tc % 100,
                 listen_addr: addr,
+                total_storage_bytes: 0,
+                foreign_storage_bytes: 0,
             }),
         ]
     ) {

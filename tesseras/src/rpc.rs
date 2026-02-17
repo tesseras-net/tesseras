@@ -70,6 +70,8 @@ pub enum RpcResponse {
         peer_count: usize,
         tessera_count: usize,
         listen_addr: String,
+        total_storage_bytes: u64,
+        foreign_storage_bytes: u64,
     },
     /// Fragment health report.
     FragmentHealth {
@@ -332,6 +334,8 @@ mod tests {
                                 peer_count: 5,
                                 tessera_count: 10,
                                 listen_addr: "0.0.0.0:4433".into(),
+                                total_storage_bytes: 0,
+                                foreign_storage_bytes: 0,
                             },
                             _ => RpcResponse::Error("unhandled".into()),
                         }

@@ -153,17 +153,26 @@ fn run_daemon(data_dir: &DataDir, command: DaemonCommand) -> Result<()> {
                 if is_process_alive(pid) {
                     eprintln!("Daemon running (PID: {pid})");
 
-                    // Try RPC ping for more info
+                    // Try RPC status for more info
                     let rt = tokio::runtime::Runtime::new()?;
-                    match rt.block_on(rpc::send_request(data_dir.root(), &RpcRequest::Ping)) {
-                        Ok(RpcResponse::Pong {
+                    match rt.block_on(rpc::send_request(data_dir.root(), &RpcRequest::NodeStatus)) {
+                        Ok(RpcResponse::Status {
                             node_id,
                             peer_count,
+                            tessera_count,
                             listen_addr,
+                            total_storage_bytes,
+                            foreign_storage_bytes,
                         }) => {
                             eprintln!("Node ID:     {node_id}");
                             eprintln!("Listen:      {listen_addr}");
                             eprintln!("Peers:       {peer_count}");
+                            eprintln!("Tesseras:    {tessera_count}");
+                            eprintln!(
+                                "Storage:     {} (foreign: {})",
+                                format_bytes(total_storage_bytes),
+                                format_bytes(foreign_storage_bytes),
+                            );
                         }
                         Ok(_) => {}
                         Err(e) => {
@@ -373,11 +382,15 @@ async fn handle_rpc_request(request: RpcRequest, node: &Node, listen_addr: &str)
         RpcRequest::NodeStatus => {
             let storage = node.storage.lock().unwrap();
             let tessera_count = storage.list_tesseras().map(|t| t.len()).unwrap_or(0);
+            let total_storage_bytes = storage.total_blob_bytes().unwrap_or(0);
+            let foreign_storage_bytes = storage.foreign_blob_bytes().unwrap_or(0);
             RpcResponse::Status {
                 node_id: node_id.to_string(),
                 peer_count: node.dht.lock().unwrap().routing_table.len(),
                 tessera_count,
                 listen_addr: listen_addr.to_string(),
+                total_storage_bytes,
+                foreign_storage_bytes,
             }
         }
         RpcRequest::CheckFragments => match node.check_fragments() {
@@ -459,6 +472,21 @@ fn run_id(data_dir: &DataDir) -> Result<()> {
         eprintln!("No identity found. Run any command to auto-create one.");
     }
     Ok(())
+}
+
+fn format_bytes(bytes: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = 1024 * KB;
+    const GB: u64 = 1024 * MB;
+    if bytes >= GB {
+        format!("{:.1} GB", bytes as f64 / GB as f64)
+    } else if bytes >= MB {
+        format!("{:.1} MB", bytes as f64 / MB as f64)
+    } else if bytes >= KB {
+        format!("{:.1} KB", bytes as f64 / KB as f64)
+    } else {
+        format!("{bytes} B")
+    }
 }
 
 #[cfg(unix)]

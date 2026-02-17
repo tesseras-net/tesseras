@@ -25,6 +25,14 @@ pub struct NodeConfig {
     /// STUN servers for external address discovery.
     #[serde(default = "default_stun_servers")]
     pub stun_servers: Vec<String>,
+
+    /// Maximum bytes for storing other nodes' fragments (0 = unlimited).
+    #[serde(default)]
+    pub max_foreign_storage_bytes: u64,
+
+    /// Maximum total storage bytes including own data (0 = unlimited).
+    #[serde(default)]
+    pub max_total_storage_bytes: u64,
 }
 
 fn default_listen() -> SocketAddr {
@@ -54,6 +62,8 @@ impl Default for NodeConfig {
             data_shards: default_data_shards(),
             parity_shards: default_parity_shards(),
             stun_servers: default_stun_servers(),
+            max_foreign_storage_bytes: 0,
+            max_total_storage_bytes: 0,
         }
     }
 }
