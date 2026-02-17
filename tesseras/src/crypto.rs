@@ -79,6 +79,16 @@ impl Identity {
         self.signing_key.sign(message).to_bytes().to_vec()
     }
 
+    /// Create a signed envelope wrapping serialized data.
+    pub fn sign_envelope(&self, payload: Vec<u8>) -> crate::dht::SignedEnvelope {
+        let signature = self.sign(&payload);
+        crate::dht::SignedEnvelope {
+            payload,
+            public_key: self.public_key_bytes(),
+            signature,
+        }
+    }
+
     /// Verify a signature against a public key.
     pub fn verify(public_key: &[u8], message: &[u8], signature: &[u8]) -> Result<(), CryptoError> {
         let pk_bytes: [u8; 32] = public_key

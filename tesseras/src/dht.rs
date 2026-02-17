@@ -114,6 +114,18 @@ impl DhtMessage {
     }
 }
 
+/// Authenticated envelope wrapping a DhtMessage with sender's Ed25519 signature.
+/// The signature covers the serialized inner message bytes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SignedEnvelope {
+    /// Serialized DhtMessage (MessagePack bytes).
+    pub payload: Vec<u8>,
+    /// Sender's Ed25519 public key (32 bytes).
+    pub public_key: Vec<u8>,
+    /// Ed25519 signature over `payload` (64 bytes).
+    pub signature: Vec<u8>,
+}
+
 /// A single k-bucket in the routing table.
 #[derive(Debug, Clone, Default)]
 struct KBucket {

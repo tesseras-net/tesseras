@@ -1,6 +1,7 @@
-use std::net::SocketAddr;
+use std::collections::HashMap;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tokio::sync::watch;
 use tracing::{debug, info, warn};
@@ -24,6 +25,62 @@ const REPAIR_INTERVAL: Duration = Duration::from_secs(300);
 
 /// Timeout for a single DHT RPC round-trip.
 const RPC_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Maximum messages per IP per window (Sybil protection).
+const RATE_LIMIT_MAX: u32 = 100;
+
+/// Rate limit window duration.
+const RATE_LIMIT_WINDOW: Duration = Duration::from_secs(60);
+
+/// Per-IP rate limiter to mitigate Sybil and flood attacks.
+#[derive(Clone)]
+struct RateLimiter {
+    buckets: Arc<Mutex<HashMap<IpAddr, RateBucket>>>,
+}
+
+struct RateBucket {
+    count: u32,
+    window_start: Instant,
+}
+
+impl RateLimiter {
+    fn new() -> Self {
+        Self {
+            buckets: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    /// Check if a message from this IP is allowed. Returns false if rate-limited.
+    fn check(&self, ip: IpAddr) -> bool {
+        let mut buckets = self.buckets.lock().unwrap();
+        let now = Instant::now();
+
+        let bucket = buckets.entry(ip).or_insert(RateBucket {
+            count: 0,
+            window_start: now,
+        });
+
+        // Reset window if expired
+        if now.duration_since(bucket.window_start) >= RATE_LIMIT_WINDOW {
+            bucket.count = 0;
+            bucket.window_start = now;
+        }
+
+        if bucket.count >= RATE_LIMIT_MAX {
+            return false;
+        }
+
+        bucket.count += 1;
+        true
+    }
+
+    /// Remove stale entries (call periodically to avoid memory leak).
+    fn cleanup(&self) {
+        let mut buckets = self.buckets.lock().unwrap();
+        let now = Instant::now();
+        buckets.retain(|_, b| now.duration_since(b.window_start) < RATE_LIMIT_WINDOW * 2);
+    }
+}
 
 /// The Node orchestrator: ties storage, DHT, QUIC, and replication together.
 pub struct Node {
@@ -88,18 +145,28 @@ impl Node {
         let storage = self.storage.clone();
         let accept_transport = transport.clone();
         let node_id = self.identity.node_id();
+        let rate_limiter = RateLimiter::new();
         let mut rx = shutdown_rx.clone();
         tokio::spawn(async move {
+            let mut cleanup_interval = tokio::time::interval(RATE_LIMIT_WINDOW * 2);
+            cleanup_interval.tick().await; // skip first tick
             loop {
                 tokio::select! {
                     result = accept_transport.accept() => {
                         match result {
                             Ok(conn) => {
+                                let remote_ip = conn.remote_address().ip();
+                                if !rate_limiter.check(remote_ip) {
+                                    debug!("rate-limited connection from {remote_ip}");
+                                    conn.close(0u32.into(), b"rate limited");
+                                    continue;
+                                }
                                 let dht = dht.clone();
                                 let storage = storage.clone();
                                 let relay_transport = accept_transport.clone();
+                                let rl = rate_limiter.clone();
                                 tokio::spawn(async move {
-                                    if let Err(e) = handle_connection(conn, dht, storage, node_id, relay_transport).await {
+                                    if let Err(e) = handle_connection(conn, dht, storage, node_id, relay_transport, rl).await {
                                         debug!("connection handler error: {e}");
                                     }
                                 });
@@ -109,6 +176,9 @@ impl Node {
                                 break;
                             }
                         }
+                    }
+                    _ = cleanup_interval.tick() => {
+                        rate_limiter.cleanup();
                     }
                     _ = rx.changed() => {
                         info!("accept loop shutting down");
@@ -631,6 +701,9 @@ impl Node {
             }
         };
 
+        // 3.5. Validate tessera signature before trusting it
+        verify_tessera_signature(&tessera)?;
+
         // 4. Fetch each blob
         for memory in &tessera.memories {
             // Skip if we already have this blob
@@ -959,6 +1032,34 @@ impl Node {
     }
 }
 
+/// Verify a tessera's signature against its author public key.
+/// This must be called when ingesting tesseras from untrusted peers.
+fn verify_tessera_signature(tessera: &Tessera) -> Result<(), NodeError> {
+    let content = rmp_serde::to_vec(&tessera.memories)
+        .map_err(|e| NodeError::Serialization(e.to_string()))?;
+    let expected_hash = crypto::hash_bytes(&content);
+    if expected_hash != tessera.hash {
+        return Err(NodeError::InvalidSignature(format!(
+            "tessera hash mismatch: expected {expected_hash}, got {}",
+            tessera.hash
+        )));
+    }
+    Identity::verify(&tessera.author, &content, &tessera.signature).map_err(|e| {
+        NodeError::InvalidSignature(format!("tessera {} signature invalid: {e}", tessera.hash))
+    })?;
+    Ok(())
+}
+
+/// Verify a signed DHT message envelope.
+/// Returns the deserialized inner DhtMessage if the signature is valid.
+pub fn verify_signed_envelope(
+    envelope: &crate::dht::SignedEnvelope,
+) -> Result<DhtMessage, NodeError> {
+    Identity::verify(&envelope.public_key, &envelope.payload, &envelope.signature)
+        .map_err(|e| NodeError::InvalidSignature(format!("DHT message signature invalid: {e}")))?;
+    DhtMessage::from_bytes(&envelope.payload).map_err(|e| NodeError::Serialization(e.to_string()))
+}
+
 /// Handle a single incoming QUIC connection.
 async fn handle_connection(
     conn: quinn::Connection,
@@ -966,6 +1067,7 @@ async fn handle_connection(
     storage: Arc<Mutex<Storage>>,
     local_node_id: NodeId,
     transport: Arc<QuicTransport>,
+    rate_limiter: RateLimiter,
 ) -> Result<(), NodeError> {
     let remote_addr = conn.remote_address();
 
@@ -978,6 +1080,12 @@ async fn handle_connection(
                 break;
             }
         };
+
+        // Per-stream rate check (counts individual messages)
+        if !rate_limiter.check(remote_addr.ip()) {
+            debug!("rate-limited stream from {remote_addr}");
+            continue;
+        }
 
         let (mut send, mut recv) = stream;
         let dht = dht.clone();
@@ -1388,6 +1496,8 @@ pub enum NodeError {
     NotFound(String),
     #[error("replication error: {0}")]
     Replication(String),
+    #[error("invalid signature: {0}")]
+    InvalidSignature(String),
 }
 
 #[cfg(test)]
@@ -1849,5 +1959,104 @@ mod tests {
         node_a.shutdown();
         node_b.shutdown();
         node_c.shutdown();
+    }
+
+    #[test]
+    fn verify_tessera_signature_valid() {
+        let (tmp, node) = test_node();
+        let test_file = tmp.path().join("sign_test.txt");
+        std::fs::write(&test_file, b"signed memory").unwrap();
+        let tessera = node
+            .add_tessera(&[test_file], Some("Signed".into()), Visibility::Public)
+            .unwrap();
+
+        // Should verify successfully
+        verify_tessera_signature(&tessera).unwrap();
+    }
+
+    #[test]
+    fn verify_tessera_signature_tampered() {
+        let (tmp, node) = test_node();
+        let test_file = tmp.path().join("tamper_test.txt");
+        std::fs::write(&test_file, b"will be tampered").unwrap();
+        let mut tessera = node
+            .add_tessera(&[test_file], Some("Tampered".into()), Visibility::Public)
+            .unwrap();
+
+        // Tamper with the signature
+        tessera.signature[0] ^= 0xFF;
+        assert!(verify_tessera_signature(&tessera).is_err());
+    }
+
+    #[test]
+    fn verify_tessera_signature_wrong_author() {
+        let (tmp, node) = test_node();
+        let test_file = tmp.path().join("wrong_author.txt");
+        std::fs::write(&test_file, b"wrong author test").unwrap();
+        let mut tessera = node
+            .add_tessera(&[test_file], Some("WrongAuthor".into()), Visibility::Public)
+            .unwrap();
+
+        // Replace author with a different key
+        let other = Identity::generate();
+        tessera.author = other.public_key_bytes();
+        assert!(verify_tessera_signature(&tessera).is_err());
+    }
+
+    #[test]
+    fn signed_envelope_roundtrip() {
+        let id = Identity::generate();
+        let msg = DhtMessage::Ping {
+            sender: id.node_id(),
+        };
+        let payload = msg.to_bytes();
+        let envelope = id.sign_envelope(payload);
+
+        // Should verify successfully
+        let decoded = verify_signed_envelope(&envelope).unwrap();
+        if let DhtMessage::Ping { sender } = decoded {
+            assert_eq!(sender, id.node_id());
+        } else {
+            panic!("expected Ping");
+        }
+    }
+
+    #[test]
+    fn signed_envelope_tampered() {
+        let id = Identity::generate();
+        let msg = DhtMessage::Ping {
+            sender: id.node_id(),
+        };
+        let payload = msg.to_bytes();
+        let mut envelope = id.sign_envelope(payload);
+
+        // Tamper with the payload
+        envelope.payload.push(0xFF);
+        assert!(verify_signed_envelope(&envelope).is_err());
+    }
+
+    #[test]
+    fn rate_limiter_allows_within_limit() {
+        let rl = RateLimiter::new();
+        let ip: IpAddr = "1.2.3.4".parse().unwrap();
+        for _ in 0..RATE_LIMIT_MAX {
+            assert!(rl.check(ip));
+        }
+        // Next should be rejected
+        assert!(!rl.check(ip));
+    }
+
+    #[test]
+    fn rate_limiter_separate_ips() {
+        let rl = RateLimiter::new();
+        let ip1: IpAddr = "1.2.3.4".parse().unwrap();
+        let ip2: IpAddr = "5.6.7.8".parse().unwrap();
+
+        for _ in 0..RATE_LIMIT_MAX {
+            assert!(rl.check(ip1));
+        }
+        assert!(!rl.check(ip1));
+        // Different IP should still be allowed
+        assert!(rl.check(ip2));
     }
 }
