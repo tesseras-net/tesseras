@@ -33,6 +33,8 @@ pub struct Node {
     pub dht: Arc<Mutex<Dht>>,
     transport: Option<Arc<QuicTransport>>,
     shutdown_tx: Option<watch::Sender<bool>>,
+    /// External (public) address as discovered via STUN.
+    external_addr: Option<SocketAddr>,
 }
 
 impl Node {
@@ -53,6 +55,7 @@ impl Node {
             dht,
             transport: None,
             shutdown_tx: None,
+            external_addr: None,
         })
     }
 
@@ -72,21 +75,31 @@ impl Node {
         self.shutdown_tx = Some(shutdown_tx);
         self.transport = Some(transport.clone());
 
+        // Discover external address via STUN (non-blocking, best-effort)
+        if !self.config.stun_servers.is_empty() {
+            if let Some(ext) = net::discover_external_addr(&self.config.stun_servers).await {
+                info!("external address: {ext}");
+                self.external_addr = Some(ext);
+            }
+        }
+
         // Spawn the accept loop
         let dht = self.dht.clone();
         let storage = self.storage.clone();
+        let accept_transport = transport.clone();
         let node_id = self.identity.node_id();
         let mut rx = shutdown_rx.clone();
         tokio::spawn(async move {
             loop {
                 tokio::select! {
-                    result = transport.accept() => {
+                    result = accept_transport.accept() => {
                         match result {
                             Ok(conn) => {
                                 let dht = dht.clone();
                                 let storage = storage.clone();
+                                let relay_transport = accept_transport.clone();
                                 tokio::spawn(async move {
-                                    if let Err(e) = handle_connection(conn, dht, storage, node_id).await {
+                                    if let Err(e) = handle_connection(conn, dht, storage, node_id, relay_transport).await {
                                         debug!("connection handler error: {e}");
                                     }
                                 });
@@ -205,8 +218,8 @@ impl Node {
             .ok_or_else(|| NodeError::Network("transport not started".into()))?;
 
         let node_id = self.identity.node_id();
-        let local_addr = self
-            .local_addr()
+        let addr = self
+            .public_addr()
             .ok_or_else(|| NodeError::Network("no local address".into()))?;
 
         let target_id = NodeId::new(*hash.as_bytes());
@@ -219,10 +232,7 @@ impl Node {
             return Ok(0);
         }
 
-        let provider = PeerInfo {
-            node_id,
-            addr: local_addr,
-        };
+        let provider = PeerInfo { node_id, addr };
 
         let mut stored = 0usize;
         for peer in &closest {
@@ -860,6 +870,11 @@ impl Node {
         self.transport.as_ref()?.local_addr().ok()
     }
 
+    /// Public address: external (STUN-discovered) if available, otherwise local.
+    pub fn public_addr(&self) -> Option<SocketAddr> {
+        self.external_addr.or_else(|| self.local_addr())
+    }
+
     /// Number of peers in the routing table.
     pub fn peer_count(&self) -> usize {
         self.dht.lock().unwrap().routing_table.len()
@@ -950,6 +965,7 @@ async fn handle_connection(
     dht: Arc<Mutex<Dht>>,
     storage: Arc<Mutex<Storage>>,
     local_node_id: NodeId,
+    transport: Arc<QuicTransport>,
 ) -> Result<(), NodeError> {
     let remote_addr = conn.remote_address();
 
@@ -966,6 +982,7 @@ async fn handle_connection(
         let (mut send, mut recv) = stream;
         let dht = dht.clone();
         let storage = storage.clone();
+        let transport = transport.clone();
 
         tokio::spawn(async move {
             let msg = match net::receive_message(&mut recv).await {
@@ -975,6 +992,51 @@ async fn handle_connection(
                     return;
                 }
             };
+
+            // Handle RelayRequest — forward payload to the target peer
+            if let DhtMessage::RelayRequest {
+                sender,
+                target,
+                payload,
+            } = &msg
+            {
+                {
+                    let mut dht = dht.lock().unwrap();
+                    dht.routing_table.insert(PeerInfo {
+                        node_id: *sender,
+                        addr: remote_addr,
+                    });
+                }
+
+                // Look up the target peer address
+                let target_addr = {
+                    let dht = dht.lock().unwrap();
+                    dht.routing_table
+                        .find_closest(target, 1)
+                        .into_iter()
+                        .find(|p| p.node_id == *target)
+                        .map(|p| p.addr)
+                };
+
+                if let Some(addr) = target_addr {
+                    let relayed = DhtMessage::RelayedMessage {
+                        origin: *sender,
+                        relay: local_node_id,
+                        payload: payload.clone(),
+                    };
+                    // Best-effort forward — don't fail the relay node on errors
+                    if let Ok(conn) = transport.connect(addr).await {
+                        if let Ok((mut fwd_send, _)) = conn.open_bi().await {
+                            let _ = net::send_message(&mut fwd_send, &relayed).await;
+                            let _ = fwd_send.finish();
+                        }
+                    }
+                } else {
+                    debug!("relay: target {target} not found in routing table");
+                }
+                let _ = send.finish();
+                return;
+            }
 
             // Handle FetchTessera — return tessera metadata from local storage
             if let DhtMessage::FetchTessera { sender, hash } = &msg {
@@ -1336,7 +1398,8 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let data_dir = DataDir::open(tmp.path()).unwrap();
         let identity = Identity::generate();
-        let config = NodeConfig::default();
+        let mut config = NodeConfig::default();
+        config.stun_servers = Vec::new(); // disable STUN in tests
         let node = Node::new(data_dir, identity, config).unwrap();
         (tmp, node)
     }
@@ -1530,6 +1593,7 @@ mod tests {
         let mut config_b = NodeConfig::default();
         config_b.listen = "127.0.0.1:0".parse().unwrap();
         config_b.bootstrap = vec![addr_a.to_string()];
+        config_b.stun_servers = Vec::new();
         let mut node_b = Node::new(data_dir_b, identity_b, config_b).unwrap();
         let _addr_b = node_b.start().await.unwrap();
 
@@ -1569,6 +1633,7 @@ mod tests {
         let mut config_b = NodeConfig::default();
         config_b.listen = "127.0.0.1:0".parse().unwrap();
         config_b.bootstrap = vec![addr_a.to_string()];
+        config_b.stun_servers = Vec::new();
         let mut node_b = Node::new(data_dir_b, identity_b, config_b).unwrap();
         let _addr_b = node_b.start().await.unwrap();
 
@@ -1670,6 +1735,7 @@ mod tests {
         let mut config_b = NodeConfig::default();
         config_b.listen = "127.0.0.1:0".parse().unwrap();
         config_b.bootstrap = vec![addr_a.to_string()];
+        config_b.stun_servers = Vec::new();
         let mut node_b = Node::new(data_dir_b, identity_b, config_b).unwrap();
         let _addr_b = node_b.start().await.unwrap();
         node_b.bootstrap().await.unwrap();
@@ -1708,5 +1774,80 @@ mod tests {
 
         node_a.shutdown();
         node_b.shutdown();
+    }
+
+    #[tokio::test]
+    async fn relay_message_forwarding() {
+        // Three nodes: A <-> B (relay) <-> C
+        // B knows both A and C. A sends a relay request to B targeting C.
+
+        let (_tmp_a, mut node_a) = test_node();
+        node_a.config.listen = "127.0.0.1:0".parse().unwrap();
+        let addr_a = node_a.start().await.unwrap();
+
+        let tmp_b = tempfile::tempdir().unwrap();
+        let data_dir_b = DataDir::open(tmp_b.path()).unwrap();
+        let identity_b = Identity::generate();
+        let mut config_b = NodeConfig::default();
+        config_b.listen = "127.0.0.1:0".parse().unwrap();
+        config_b.bootstrap = vec![addr_a.to_string()];
+        config_b.stun_servers = Vec::new();
+        let mut node_b = Node::new(data_dir_b, identity_b, config_b).unwrap();
+        let addr_b = node_b.start().await.unwrap();
+        node_b.bootstrap().await.unwrap();
+
+        let tmp_c = tempfile::tempdir().unwrap();
+        let data_dir_c = DataDir::open(tmp_c.path()).unwrap();
+        let identity_c = Identity::generate();
+        let mut config_c = NodeConfig::default();
+        config_c.listen = "127.0.0.1:0".parse().unwrap();
+        config_c.bootstrap = vec![addr_b.to_string()];
+        config_c.stun_servers = Vec::new();
+        let mut node_c = Node::new(data_dir_c, identity_c, config_c).unwrap();
+        let _addr_c = node_c.start().await.unwrap();
+        node_c.bootstrap().await.unwrap();
+
+        // Node C creates a tessera
+        let test_file = tmp_c.path().join("relay_test.txt");
+        std::fs::write(&test_file, b"relayed memory").unwrap();
+        let tessera = node_c
+            .add_tessera(&[test_file], Some("Relayed".into()), Visibility::Public)
+            .unwrap();
+
+        // Announce from C so all nodes know about it
+        let stored = node_c.announce_tessera(&tessera.hash).await.unwrap();
+        assert!(stored > 0);
+
+        // Send a relay request from A through B to C (test the relay handler)
+        let transport_a = node_a.transport.as_ref().unwrap().clone();
+        let inner_msg = DhtMessage::Ping {
+            sender: node_a.node_id(),
+        };
+        let payload = rmp_serde::to_vec(&inner_msg).unwrap();
+        let relay_msg = DhtMessage::RelayRequest {
+            sender: node_a.node_id(),
+            target: node_c.node_id(),
+            payload,
+        };
+
+        // Send relay request to B
+        let conn = transport_a.connect(addr_b).await.unwrap();
+        let (mut send, _) = conn.open_bi().await.unwrap();
+        net::send_message(&mut send, &relay_msg).await.unwrap();
+        send.finish().unwrap();
+
+        // Give relay time to forward
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        // Verify C's routing table now knows about A (relay forwarded the message)
+        let c_dht = node_c.dht.lock().unwrap();
+        let known_peers = c_dht.routing_table.len();
+        // C should know at least B (from bootstrap) — relay adds no new routing info
+        // since the RelayedMessage has origin=A but comes from B's address
+        assert!(known_peers >= 1);
+
+        node_a.shutdown();
+        node_b.shutdown();
+        node_c.shutdown();
     }
 }

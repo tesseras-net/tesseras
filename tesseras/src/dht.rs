@@ -84,6 +84,22 @@ pub enum DhtMessage {
         sender: NodeId,
         tessera: Option<Tessera>,
     },
+    /// Request a relay node to forward a message to a target peer.
+    RelayRequest {
+        sender: NodeId,
+        target: NodeId,
+        /// The inner message to relay, serialized as MessagePack bytes.
+        payload: Vec<u8>,
+    },
+    /// A relayed message arriving at the target via a relay node.
+    RelayedMessage {
+        /// The original sender (not the relay).
+        origin: NodeId,
+        /// The relay node that forwarded this.
+        relay: NodeId,
+        /// The inner message, serialized as MessagePack bytes.
+        payload: Vec<u8>,
+    },
 }
 
 impl DhtMessage {
@@ -381,11 +397,13 @@ impl Dht {
                 });
                 None
             }
-            // FetchBlob/FetchTessera are handled at the connection level, not by the DHT.
+            // These are handled at the connection level, not by the DHT.
             DhtMessage::FetchBlob { sender, .. }
             | DhtMessage::FetchBlobResponse { sender, .. }
             | DhtMessage::FetchTessera { sender, .. }
-            | DhtMessage::FetchTesseraResponse { sender, .. } => {
+            | DhtMessage::FetchTesseraResponse { sender, .. }
+            | DhtMessage::RelayRequest { sender, .. }
+            | DhtMessage::RelayedMessage { origin: sender, .. } => {
                 self.routing_table.insert(PeerInfo {
                     node_id: sender,
                     addr: from_addr,

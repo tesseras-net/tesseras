@@ -21,6 +21,10 @@ pub struct NodeConfig {
     /// Reed-Solomon erasure coding: parity shards.
     #[serde(default = "default_parity_shards")]
     pub parity_shards: usize,
+
+    /// STUN servers for external address discovery.
+    #[serde(default = "default_stun_servers")]
+    pub stun_servers: Vec<String>,
 }
 
 fn default_listen() -> SocketAddr {
@@ -35,6 +39,13 @@ fn default_parity_shards() -> usize {
     2
 }
 
+fn default_stun_servers() -> Vec<String> {
+    vec![
+        "stun.l.google.com:19302".into(),
+        "stun1.l.google.com:19302".into(),
+    ]
+}
+
 impl Default for NodeConfig {
     fn default() -> Self {
         Self {
@@ -42,6 +53,7 @@ impl Default for NodeConfig {
             bootstrap: Vec::new(),
             data_shards: default_data_shards(),
             parity_shards: default_parity_shards(),
+            stun_servers: default_stun_servers(),
         }
     }
 }

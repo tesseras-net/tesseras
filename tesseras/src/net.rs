@@ -1,7 +1,8 @@
-use std::net::SocketAddr;
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 
 use quinn::{Endpoint, ServerConfig};
+use tracing::{debug, warn};
 
 use crate::dht::DhtMessage;
 
@@ -238,6 +239,189 @@ pub async fn receive_blob(recv: &mut quinn::RecvStream) -> Result<Vec<u8>, NetEr
     Ok(data)
 }
 
+// --- STUN client ---
+
+/// STUN message type: Binding Request.
+const STUN_BINDING_REQUEST: u16 = 0x0001;
+
+/// STUN magic cookie (RFC 5389).
+const STUN_MAGIC_COOKIE: u32 = 0x2112_A442;
+
+/// STUN attribute types.
+const STUN_ATTR_XOR_MAPPED_ADDRESS: u16 = 0x0020;
+const STUN_ATTR_MAPPED_ADDRESS: u16 = 0x0001;
+
+/// Discover external address via STUN Binding Request.
+/// Tries each STUN server in order, returns the first successful result.
+pub async fn discover_external_addr(stun_servers: &[String]) -> Option<SocketAddr> {
+    for server in stun_servers {
+        match stun_binding_request(server).await {
+            Ok(addr) => {
+                debug!("STUN discovered external address: {addr} (via {server})");
+                return Some(addr);
+            }
+            Err(e) => {
+                debug!("STUN request to {server} failed: {e}");
+                continue;
+            }
+        }
+    }
+    warn!("STUN: could not discover external address from any server");
+    None
+}
+
+/// Send a STUN Binding Request and parse the response.
+async fn stun_binding_request(server: &str) -> Result<SocketAddr, NetError> {
+    use tokio::net::UdpSocket;
+
+    let addr: SocketAddr = tokio::net::lookup_host(server)
+        .await
+        .map_err(|e| NetError::Stun(format!("DNS resolve {server}: {e}")))?
+        .next()
+        .ok_or_else(|| NetError::Stun(format!("no addresses for {server}")))?;
+
+    let bind_addr: SocketAddr = if addr.is_ipv6() {
+        SocketAddr::new(Ipv6Addr::UNSPECIFIED.into(), 0)
+    } else {
+        SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), 0)
+    };
+
+    let socket = UdpSocket::bind(bind_addr)
+        .await
+        .map_err(|e| NetError::Stun(e.to_string()))?;
+
+    // Build STUN Binding Request (20 bytes)
+    let mut txn_id = [0u8; 12];
+    use rand::RngCore;
+    rand::thread_rng().fill_bytes(&mut txn_id);
+
+    let mut request = [0u8; 20];
+    request[0..2].copy_from_slice(&STUN_BINDING_REQUEST.to_be_bytes());
+    request[2..4].copy_from_slice(&0u16.to_be_bytes()); // message length = 0
+    request[4..8].copy_from_slice(&STUN_MAGIC_COOKIE.to_be_bytes());
+    request[8..20].copy_from_slice(&txn_id);
+
+    socket
+        .send_to(&request, addr)
+        .await
+        .map_err(|e| NetError::Stun(e.to_string()))?;
+
+    // Wait for response (max 3 seconds)
+    let mut buf = [0u8; 512];
+    let len = match tokio::time::timeout(std::time::Duration::from_secs(3), socket.recv(&mut buf))
+        .await
+    {
+        Ok(Ok(n)) => n,
+        Ok(Err(e)) => return Err(NetError::Stun(e.to_string())),
+        Err(_) => return Err(NetError::Stun("timeout".into())),
+    };
+
+    if len < 20 {
+        return Err(NetError::Stun("response too short".into()));
+    }
+
+    // Verify transaction ID matches
+    if buf[8..20] != txn_id {
+        return Err(NetError::Stun("transaction ID mismatch".into()));
+    }
+
+    // Parse attributes to find XOR-MAPPED-ADDRESS or MAPPED-ADDRESS
+    let msg_len = u16::from_be_bytes([buf[2], buf[3]]) as usize;
+    if 20 + msg_len > len {
+        return Err(NetError::Stun("message length exceeds packet".into()));
+    }
+
+    let mut offset = 20;
+    while offset + 4 <= 20 + msg_len {
+        let attr_type = u16::from_be_bytes([buf[offset], buf[offset + 1]]);
+        let attr_len = u16::from_be_bytes([buf[offset + 2], buf[offset + 3]]) as usize;
+        offset += 4;
+
+        if offset + attr_len > len {
+            break;
+        }
+
+        if attr_type == STUN_ATTR_XOR_MAPPED_ADDRESS {
+            return parse_xor_mapped_address(&buf[offset..offset + attr_len], &txn_id);
+        }
+        if attr_type == STUN_ATTR_MAPPED_ADDRESS {
+            return parse_mapped_address(&buf[offset..offset + attr_len]);
+        }
+
+        // Pad to 4-byte boundary
+        offset += (attr_len + 3) & !3;
+    }
+
+    Err(NetError::Stun("no MAPPED-ADDRESS in response".into()))
+}
+
+/// Parse XOR-MAPPED-ADDRESS attribute (RFC 5389 Section 15.2).
+fn parse_xor_mapped_address(data: &[u8], _txn_id: &[u8; 12]) -> Result<SocketAddr, NetError> {
+    if data.len() < 8 {
+        return Err(NetError::Stun("XOR-MAPPED-ADDRESS too short".into()));
+    }
+
+    let family = data[1];
+    let xored_port = u16::from_be_bytes([data[2], data[3]]);
+    let port = xored_port ^ (STUN_MAGIC_COOKIE >> 16) as u16;
+
+    match family {
+        0x01 => {
+            // IPv4
+            let xored_ip = u32::from_be_bytes([data[4], data[5], data[6], data[7]]);
+            let ip = xored_ip ^ STUN_MAGIC_COOKIE;
+            Ok(SocketAddr::new(
+                Ipv4Addr::from(ip.to_be_bytes()).into(),
+                port,
+            ))
+        }
+        0x02 => {
+            // IPv6
+            if data.len() < 20 {
+                return Err(NetError::Stun("XOR-MAPPED-ADDRESS IPv6 too short".into()));
+            }
+            let mut ip_bytes = [0u8; 16];
+            ip_bytes.copy_from_slice(&data[4..20]);
+            // XOR with magic cookie + transaction ID
+            let cookie_bytes = STUN_MAGIC_COOKIE.to_be_bytes();
+            for i in 0..4 {
+                ip_bytes[i] ^= cookie_bytes[i];
+            }
+            for i in 0..12 {
+                ip_bytes[4 + i] ^= _txn_id[i];
+            }
+            Ok(SocketAddr::new(Ipv6Addr::from(ip_bytes).into(), port))
+        }
+        _ => Err(NetError::Stun(format!("unknown address family: {family}"))),
+    }
+}
+
+/// Parse MAPPED-ADDRESS attribute (RFC 5389 Section 15.1).
+fn parse_mapped_address(data: &[u8]) -> Result<SocketAddr, NetError> {
+    if data.len() < 8 {
+        return Err(NetError::Stun("MAPPED-ADDRESS too short".into()));
+    }
+
+    let family = data[1];
+    let port = u16::from_be_bytes([data[2], data[3]]);
+
+    match family {
+        0x01 => {
+            let ip = Ipv4Addr::new(data[4], data[5], data[6], data[7]);
+            Ok(SocketAddr::new(ip.into(), port))
+        }
+        0x02 => {
+            if data.len() < 20 {
+                return Err(NetError::Stun("MAPPED-ADDRESS IPv6 too short".into()));
+            }
+            let mut ip_bytes = [0u8; 16];
+            ip_bytes.copy_from_slice(&data[4..20]);
+            Ok(SocketAddr::new(Ipv6Addr::from(ip_bytes).into(), port))
+        }
+        _ => Err(NetError::Stun(format!("unknown address family: {family}"))),
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum NetError {
     #[error("bind error: {0}")]
@@ -256,6 +440,8 @@ pub enum NetError {
     MessageTooLarge(usize),
     #[error("deserialization error: {0}")]
     Deserialize(String),
+    #[error("STUN error: {0}")]
+    Stun(String),
 }
 
 #[cfg(test)]
@@ -345,5 +531,49 @@ mod tests {
         let received = server_task.await.unwrap();
         assert_eq!(received.len(), expected.len());
         assert_eq!(received, expected);
+    }
+
+    #[test]
+    fn parse_xor_mapped_address_ipv4() {
+        // Family=0x01 (IPv4), port=0x1234 XORed with magic cookie high bits,
+        // IP=192.168.1.100 XORed with magic cookie
+        let port: u16 = 12345;
+        let xored_port = port ^ (STUN_MAGIC_COOKIE >> 16) as u16;
+        let ip = Ipv4Addr::new(192, 168, 1, 100);
+        let ip_u32 = u32::from(ip);
+        let xored_ip = ip_u32 ^ STUN_MAGIC_COOKIE;
+
+        let mut data = [0u8; 8];
+        data[0] = 0; // reserved
+        data[1] = 0x01; // family IPv4
+        data[2..4].copy_from_slice(&xored_port.to_be_bytes());
+        data[4..8].copy_from_slice(&xored_ip.to_be_bytes());
+
+        let txn_id = [0u8; 12];
+        let result = parse_xor_mapped_address(&data, &txn_id).unwrap();
+        assert_eq!(result.port(), port);
+        assert_eq!(result.ip(), std::net::IpAddr::V4(ip));
+    }
+
+    #[test]
+    fn parse_mapped_address_ipv4() {
+        let mut data = [0u8; 8];
+        data[0] = 0; // reserved
+        data[1] = 0x01; // family IPv4
+        data[2..4].copy_from_slice(&8080u16.to_be_bytes());
+        data[4] = 10;
+        data[5] = 0;
+        data[6] = 0;
+        data[7] = 1;
+
+        let result = parse_mapped_address(&data).unwrap();
+        assert_eq!(result, "10.0.0.1:8080".parse::<SocketAddr>().unwrap());
+    }
+
+    #[test]
+    fn parse_stun_too_short() {
+        let txn_id = [0u8; 12];
+        assert!(parse_xor_mapped_address(&[0; 4], &txn_id).is_err());
+        assert!(parse_mapped_address(&[0; 4]).is_err());
     }
 }
