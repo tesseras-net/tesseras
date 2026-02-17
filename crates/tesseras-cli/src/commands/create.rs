@@ -42,6 +42,11 @@ pub struct CreateArgs {
 pub async fn run(args: &CreateArgs, data_dir: &str) -> Result<()> {
     let base = expand_tilde(data_dir);
 
+    // Auto-initialize identity and database if needed
+    if super::init::ensure_initialized(&base).await? {
+        eprintln!("Initialized new identity at {}", base.display());
+    }
+
     // 1. Scan input directory for supported files
     let files = scan_directory(&args.path)?;
     if files.is_empty() {

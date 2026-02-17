@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tesseras_core::ports::{IdentityStore, KeyAlgorithm, KeyMaterial};
 use tesseras_crypto::ed25519::Ed25519KeyGenerator;
 use tesseras_crypto::kem::HybridKem;
@@ -120,6 +120,38 @@ fn generate_encryption_keys_atomic(store: &FsIdentityStore) -> Result<()> {
 
     println!("Generated encryption keypair");
     Ok(())
+}
+
+/// Ensure identity and database are initialized at `base`. Creates them silently if missing.
+/// Returns Ok(true) if initialization was performed, Ok(false) if already initialized.
+pub async fn ensure_initialized(base: &Path) -> Result<bool> {
+    let identity_store = FsIdentityStore::new(base.to_path_buf());
+
+    if identity_store.keypair_exists(KeyAlgorithm::Ed25519)? {
+        return Ok(false); // already initialized
+    }
+
+    // Create directory structure
+    tokio::fs::create_dir_all(base.join("identity")).await?;
+    tokio::fs::create_dir_all(base.join("db")).await?;
+    tokio::fs::create_dir_all(base.join("blobs")).await?;
+
+    // Generate Ed25519 keypair
+    let keypair = Ed25519KeyGenerator::generate();
+    let material: KeyMaterial = (&keypair).into();
+    identity_store.save_keypair(&material)?;
+
+    // Generate encryption keypair
+    generate_encryption_keys_atomic(&identity_store)?;
+
+    // Initialize SQLite
+    let db_path = base.join("db/tesseras.db");
+    let conn =
+        tesseras_storage::open_database(&db_path, &tesseras_storage::StorageConfig::default())
+            .context("failed to open database")?;
+    drop(conn);
+
+    Ok(true)
 }
 
 pub fn expand_tilde(path: &str) -> PathBuf {
