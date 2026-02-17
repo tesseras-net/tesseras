@@ -6,10 +6,7 @@ use tesseras_rpc::{DaemonClient, Request, Response};
 use super::create::build_service;
 use super::init::expand_tilde;
 
-pub fn resolve_hash(
-    input: &str,
-    base: &std::path::Path,
-) -> Result<tesseras_core::ContentHash> {
+pub fn resolve_hash(input: &str, base: &std::path::Path) -> Result<tesseras_core::ContentHash> {
     let prefix = HashPrefix::parse(input).context("invalid tessera hash or prefix")?;
     let service = build_service(base)?;
     let record = service.resolve_prefix(&prefix)?;
@@ -25,8 +22,7 @@ pub async fn run(hash: &str, data_dir: &str, socket: &Option<PathBuf>) -> Result
     // Connect to daemon
     let socket_path = match socket {
         Some(p) => p.clone(),
-        None => tesseras_rpc::default_socket_path()
-            .map_err(|e| anyhow::anyhow!("{e}"))?,
+        None => tesseras_rpc::default_socket_path().map_err(|e| anyhow::anyhow!("{e}"))?,
     };
 
     let mut client = DaemonClient::connect(&socket_path).with_context(|| {
@@ -37,9 +33,7 @@ pub async fn run(hash: &str, data_dir: &str, socket: &Option<PathBuf>) -> Result
     })?;
 
     let response = client
-        .call(&Request::Publish {
-            hash: content_hash,
-        })
+        .call(&Request::Publish { hash: content_hash })
         .context("publish request failed")?;
 
     match response {

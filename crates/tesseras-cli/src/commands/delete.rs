@@ -6,8 +6,7 @@ use tesseras_rpc::{DaemonClient, Request, Response};
 /// Delete a tessera and propagate retraction to the network.
 pub async fn run(hash: &str, socket: &Option<PathBuf>) -> Result<()> {
     let socket_path = crate::commands::daemon::resolve_socket(socket)?;
-    let mut client =
-        DaemonClient::connect(&socket_path).context("failed to connect to daemon")?;
+    let mut client = DaemonClient::connect(&socket_path).context("failed to connect to daemon")?;
 
     let resp = client
         .call(&Request::Delete {

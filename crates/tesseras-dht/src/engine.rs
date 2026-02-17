@@ -211,7 +211,10 @@ impl DhtEngine {
                     return;
                 }
             };
-            self.bytes_tx.fetch_add(wire_bytes.len() as u64, std::sync::atomic::Ordering::Relaxed);
+            self.bytes_tx.fetch_add(
+                wire_bytes.len() as u64,
+                std::sync::atomic::Ordering::Relaxed,
+            );
             if let Some(resp_tx) = envelope.response_tx {
                 // Reply on the same bidirectional stream (QUIC transport).
                 let _ = resp_tx.send(wire_bytes);
@@ -497,7 +500,10 @@ impl DhtEngine {
         let (tx, rx) = oneshot::channel();
         self.pending.lock().await.insert(request_id, tx);
 
-        self.bytes_tx.fetch_add(wire_bytes.len() as u64, std::sync::atomic::Ordering::Relaxed);
+        self.bytes_tx.fetch_add(
+            wire_bytes.len() as u64,
+            std::sync::atomic::Ordering::Relaxed,
+        );
         self.transport.send(peer, &wire_bytes).await?;
 
         let result = tokio::time::timeout(self.config.rpc_timeout, rx).await;
@@ -611,9 +617,7 @@ impl DhtEngine {
             Some(other) => Err(DhtError::RpcFailed(format!(
                 "expected FetchFragmentResponse, got {other:?}"
             ))),
-            None => Err(DhtError::RpcFailed(
-                "no response to FETCH_FRAGMENT".into(),
-            )),
+            None => Err(DhtError::RpcFailed("no response to FETCH_FRAGMENT".into())),
         }
     }
 
@@ -904,8 +908,7 @@ impl DhtEngine {
         let mut refresh_interval = tokio::time::interval(self.config.bucket_refresh_interval);
         let mut republish_interval = tokio::time::interval(self.config.republish_interval);
         let mut stale_interval = tokio::time::interval(self.config.stale_check_interval);
-        let mut re_bootstrap_interval =
-            tokio::time::interval(self.config.re_bootstrap_interval);
+        let mut re_bootstrap_interval = tokio::time::interval(self.config.re_bootstrap_interval);
 
         // Skip the first immediate tick
         refresh_interval.tick().await;
@@ -977,7 +980,11 @@ impl DhtEngine {
             // Routing table is thin — ping seeds to refresh their knowledge of us,
             // then do a self-lookup to discover peers they've learned about since
             // our last bootstrap.
-            tracing::debug!(peer_count, k = self.config.k, "routing table thin, discovering peers");
+            tracing::debug!(
+                peer_count,
+                k = self.config.k,
+                "routing table thin, discovering peers"
+            );
             for &addr in &seeds {
                 self.ping(addr).await;
             }
@@ -1078,7 +1085,10 @@ impl DhtEngine {
                     );
                 }
             } else {
-                self.routing.lock().await.reset_failures(&node.identity.node_id);
+                self.routing
+                    .lock()
+                    .await
+                    .reset_failures(&node.identity.node_id);
             }
         }
     }

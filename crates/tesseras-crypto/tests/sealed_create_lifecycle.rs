@@ -1,6 +1,10 @@
 //! E2E: generate keys → create sealed tessera → unseal envelope → decrypt content
 
-#![cfg(all(feature = "encryption", feature = "shamir", feature = "experimental-visibility"))]
+#![cfg(all(
+    feature = "encryption",
+    feature = "shamir",
+    feature = "experimental-visibility"
+))]
 
 use tesseras_core::ContentHash;
 use tesseras_core::enums::EncryptionContext;

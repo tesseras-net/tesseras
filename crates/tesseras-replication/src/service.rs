@@ -1,4 +1,6 @@
-use tesseras_core::ports::{BlobStore, DhtPort, FragmentStore, ReciprocityLedger, TombstoneRepository};
+use tesseras_core::ports::{
+    BlobStore, DhtPort, FragmentStore, ReciprocityLedger, TombstoneRepository,
+};
 use tesseras_core::replication::{
     Attestation, AttestationEntry, FragmentEnvelope, FragmentId, FragmentationTier,
     MAX_TESSERA_SIZE, ReplicateAck,
@@ -962,13 +964,13 @@ mod tests {
 
         let mut fragments = MockFragments::new();
         let frag_id_clone = frag_id.clone();
-        fragments.expect_list_fragments().returning(move |_| {
-            Ok(vec![frag_id_clone.clone()])
-        });
+        fragments
+            .expect_list_fragments()
+            .returning(move |_| Ok(vec![frag_id_clone.clone()]));
         let data_clone = data.clone();
-        fragments.expect_read_fragment().returning(move |_| {
-            Ok(data_clone.clone())
-        });
+        fragments
+            .expect_read_fragment()
+            .returning(move |_| Ok(data_clone.clone()));
 
         let service = ReplicationService::new(
             NodeIdentity {
@@ -1021,13 +1023,13 @@ mod tests {
 
         let mut fragments = MockFragments::new();
         let frag_id_clone = frag_id.clone();
-        fragments.expect_list_fragments().returning(move |_| {
-            Ok(vec![frag_id_clone.clone()])
-        });
+        fragments
+            .expect_list_fragments()
+            .returning(move |_| Ok(vec![frag_id_clone.clone()]));
         let data_clone = data.clone();
-        fragments.expect_read_fragment().returning(move |_| {
-            Ok(data_clone.clone())
-        });
+        fragments
+            .expect_read_fragment()
+            .returning(move |_| Ok(data_clone.clone()));
 
         let service = ReplicationService::new(
             NodeIdentity {
@@ -1080,9 +1082,9 @@ mod tests {
 
         let mut fragments = MockFragments::new();
         let frag_id_clone = frag_id.clone();
-        fragments.expect_list_fragments().returning(move |_| {
-            Ok(vec![frag_id_clone.clone()])
-        });
+        fragments
+            .expect_list_fragments()
+            .returning(move |_| Ok(vec![frag_id_clone.clone()]));
 
         let service = ReplicationService::new(
             NodeIdentity {

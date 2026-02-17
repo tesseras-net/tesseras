@@ -39,15 +39,13 @@ fn load_contacts(base: &Path) -> Result<ContactsFile> {
     }
     let content = std::fs::read_to_string(&path)
         .with_context(|| format!("failed to read {}", path.display()))?;
-    toml::from_str(&content)
-        .with_context(|| format!("invalid contacts file at {}", path.display()))
+    toml::from_str(&content).with_context(|| format!("invalid contacts file at {}", path.display()))
 }
 
 fn save_contacts(base: &Path, contacts: &ContactsFile) -> Result<()> {
     let path = contacts_path(base);
     let content = toml::to_string_pretty(contacts).context("failed to serialize contacts")?;
-    std::fs::write(&path, content)
-        .with_context(|| format!("failed to write {}", path.display()))
+    std::fs::write(&path, content).with_context(|| format!("failed to write {}", path.display()))
 }
 
 /// Look up a contact alias, returning the public key hex string.
@@ -55,11 +53,9 @@ fn save_contacts(base: &Path, contacts: &ContactsFile) -> Result<()> {
 #[allow(dead_code)]
 pub fn resolve_alias(base: &Path, alias: &str) -> Result<String> {
     let contacts = load_contacts(base)?;
-    contacts
-        .contacts
-        .get(alias)
-        .cloned()
-        .ok_or_else(|| anyhow::anyhow!("unknown contact '{alias}'. Run 'tes contact add {alias} <key>'"))
+    contacts.contacts.get(alias).cloned().ok_or_else(|| {
+        anyhow::anyhow!("unknown contact '{alias}'. Run 'tes contact add {alias} <key>'")
+    })
 }
 
 pub async fn run(command: &ContactCommands, data_dir: &str) -> Result<()> {

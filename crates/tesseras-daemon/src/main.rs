@@ -324,10 +324,7 @@ async fn main() -> Result<()> {
 
     // 9d. Spawn queue processor
     let queue_shutdown = shutdown_tx.subscribe();
-    let queue_handle = tokio::spawn(queue::run_queue_processor(
-        rpc_handler,
-        queue_shutdown,
-    ));
+    let queue_handle = tokio::spawn(queue::run_queue_processor(rpc_handler, queue_shutdown));
 
     // 10. Bootstrap (SRV discovery with CLI override)
     let bootstrap_addrs: Vec<SocketAddr> = if let Some(ref addrs) = cli.bootstrap {
@@ -341,7 +338,9 @@ async fn main() -> Result<()> {
         for addr in &raw {
             match tokio::net::lookup_host(addr).await {
                 Ok(addrs) => resolved.extend(addrs),
-                Err(e) => tracing::warn!(addr = %addr, error = %e, "failed to resolve CLI bootstrap address"),
+                Err(e) => {
+                    tracing::warn!(addr = %addr, error = %e, "failed to resolve CLI bootstrap address")
+                }
             }
         }
         resolved

@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex};
 
 use rusqlite::Connection;
-use tesseras_core::ports::{OperationQueue, QueueEntry, QueuedOperation};
 use tesseras_core::CoreError;
+use tesseras_core::ports::{OperationQueue, QueueEntry, QueuedOperation};
 
 pub struct SqliteOperationQueue {
     conn: Arc<Mutex<Connection>>,
@@ -16,13 +16,12 @@ impl SqliteOperationQueue {
 
 fn parse_entry(row: &rusqlite::Row) -> rusqlite::Result<QueueEntry> {
     let payload: Vec<u8> = row.get(2)?;
-    let operation: QueuedOperation =
-        rmp_serde::from_slice(&payload).map_err(|e| {
-            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                e.to_string(),
-            )))
-        })?;
+    let operation: QueuedOperation = rmp_serde::from_slice(&payload).map_err(|e| {
+        rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            e.to_string(),
+        )))
+    })?;
     Ok(QueueEntry {
         id: row.get(0)?,
         operation,
@@ -30,13 +29,11 @@ fn parse_entry(row: &rusqlite::Row) -> rusqlite::Result<QueueEntry> {
         created_at: chrono::DateTime::parse_from_rfc3339(&row.get::<_, String>(4)?)
             .unwrap()
             .with_timezone(&chrono::Utc),
-        completed_at: row
-            .get::<_, Option<String>>(5)?
-            .map(|s| {
-                chrono::DateTime::parse_from_rfc3339(&s)
-                    .unwrap()
-                    .with_timezone(&chrono::Utc)
-            }),
+        completed_at: row.get::<_, Option<String>>(5)?.map(|s| {
+            chrono::DateTime::parse_from_rfc3339(&s)
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        }),
         error: row.get(6)?,
         retries: row.get::<_, u32>(7)?,
     })
@@ -45,8 +42,7 @@ fn parse_entry(row: &rusqlite::Row) -> rusqlite::Result<QueueEntry> {
 impl OperationQueue for SqliteOperationQueue {
     fn enqueue(&self, op: &QueuedOperation) -> Result<i64, CoreError> {
         let conn = self.conn.lock().unwrap();
-        let payload =
-            rmp_serde::to_vec(op).map_err(|e| CoreError::Database(e.to_string()))?;
+        let payload = rmp_serde::to_vec(op).map_err(|e| CoreError::Database(e.to_string()))?;
         let op_type = match op {
             QueuedOperation::Push { .. } => "push",
             QueuedOperation::Pull { .. } => "pull",

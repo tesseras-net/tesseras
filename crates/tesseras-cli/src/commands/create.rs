@@ -77,9 +77,8 @@ pub async fn run(args: &CreateArgs, data_dir: &str, socket: &Option<PathBuf>) ->
     let visibility = parse_visibility(&args.visibility)?;
 
     let identity_store = FsIdentityStore::new(base.clone());
-    let encryption_public =
-        if matches!(visibility, Visibility::Private | Visibility::Circle { .. })
-        {
+    let encryption_public = if matches!(visibility, Visibility::Private | Visibility::Circle { .. })
+    {
         let x_mat = identity_store
             .load_keypair(KeyAlgorithm::X25519)
             .context("encryption keys not found — run `tes init --upgrade`")?;
@@ -187,8 +186,7 @@ pub async fn run(args: &CreateArgs, data_dir: &str, socket: &Option<PathBuf>) ->
     if !args.no_publish {
         let socket_path = match socket {
             Some(p) => p.clone(),
-            None => tesseras_rpc::default_socket_path()
-                .map_err(|e| anyhow::anyhow!("{e}"))?,
+            None => tesseras_rpc::default_socket_path().map_err(|e| anyhow::anyhow!("{e}"))?,
         };
 
         // Auto-start daemon if not running

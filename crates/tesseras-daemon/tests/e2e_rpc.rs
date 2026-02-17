@@ -120,12 +120,12 @@ fn make_handler(
     );
 
     Arc::new(tesseras_daemon::rpc::handler::RpcHandler {
-        tessera_repo: Arc::new(tesseras_storage::SqliteTesseraRepository::new(
-            Arc::clone(&conn),
-        )),
-        memory_repo: Arc::new(tesseras_storage::SqliteMemoryRepository::new(
-            Arc::clone(&conn),
-        )),
+        tessera_repo: Arc::new(tesseras_storage::SqliteTesseraRepository::new(Arc::clone(
+            &conn,
+        ))),
+        memory_repo: Arc::new(tesseras_storage::SqliteMemoryRepository::new(Arc::clone(
+            &conn,
+        ))),
         blob_store,
         fragment_store,
         replication: Arc::new(replication),
@@ -134,12 +134,12 @@ fn make_handler(
         tombstone_repo: Arc::new(tesseras_storage::SqliteTombstoneRepository::new(
             Arc::clone(&conn),
         )),
-        circle_repo: Arc::new(tesseras_storage::SqliteCircleRepository::new(
-            Arc::clone(&conn),
-        )),
-        operation_queue: Arc::new(tesseras_storage::SqliteOperationQueue::new(
-            Arc::clone(&conn),
-        )),
+        circle_repo: Arc::new(tesseras_storage::SqliteCircleRepository::new(Arc::clone(
+            &conn,
+        ))),
+        operation_queue: Arc::new(tesseras_storage::SqliteOperationQueue::new(Arc::clone(
+            &conn,
+        ))),
         data_dir: dir.to_path_buf(),
         start_time: std::time::Instant::now(),
     })
@@ -185,7 +185,11 @@ async fn list_returns_empty_initially() {
 
     match resp {
         Response::Listed { records } => {
-            assert!(records.is_empty(), "expected empty list, got {} records", records.len());
+            assert!(
+                records.is_empty(),
+                "expected empty list, got {} records",
+                records.len()
+            );
         }
         other => panic!("expected Listed response, got: {other:?}"),
     }

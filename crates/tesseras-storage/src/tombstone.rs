@@ -2,10 +2,10 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 use rusqlite::Connection;
+use tesseras_core::CoreError;
 use tesseras_core::ports::TombstoneRepository;
 use tesseras_core::tombstone::Tombstone;
 use tesseras_core::types::ContentHash;
-use tesseras_core::CoreError;
 
 pub struct SqliteTombstoneRepository {
     conn: Arc<Mutex<Connection>>,
@@ -45,11 +45,9 @@ impl TombstoneRepository for SqliteTombstoneRepository {
                 Ok(Tombstone {
                     hash: ContentHash::from_str(&row.get::<_, String>(0)?)
                         .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?,
-                    retracted_at: chrono::DateTime::parse_from_rfc3339(
-                        &row.get::<_, String>(1)?,
-                    )
-                    .unwrap()
-                    .with_timezone(&chrono::Utc),
+                    retracted_at: chrono::DateTime::parse_from_rfc3339(&row.get::<_, String>(1)?)
+                        .unwrap()
+                        .with_timezone(&chrono::Utc),
                     creator_pubkey: row.get(2)?,
                     ed25519_signature: row.get(3)?,
                     mldsa_signature: row.get(4)?,
@@ -87,11 +85,9 @@ impl TombstoneRepository for SqliteTombstoneRepository {
                 Ok(Tombstone {
                     hash: ContentHash::from_str(&row.get::<_, String>(0)?)
                         .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?,
-                    retracted_at: chrono::DateTime::parse_from_rfc3339(
-                        &row.get::<_, String>(1)?,
-                    )
-                    .unwrap()
-                    .with_timezone(&chrono::Utc),
+                    retracted_at: chrono::DateTime::parse_from_rfc3339(&row.get::<_, String>(1)?)
+                        .unwrap()
+                        .with_timezone(&chrono::Utc),
                     creator_pubkey: row.get(2)?,
                     ed25519_signature: row.get(3)?,
                     mldsa_signature: row.get(4)?,

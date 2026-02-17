@@ -10,10 +10,7 @@ use crate::rpc::handler::RpcHandler;
 const MAX_RETRIES: u32 = 10;
 
 /// Polls the operation queue and processes pending operations.
-pub async fn run_queue_processor(
-    handler: Arc<RpcHandler>,
-    mut shutdown: watch::Receiver<bool>,
-) {
+pub async fn run_queue_processor(handler: Arc<RpcHandler>, mut shutdown: watch::Receiver<bool>) {
     let base_interval = Duration::from_secs(30);
     let max_interval = Duration::from_secs(3600);
     let mut interval = base_interval;
@@ -61,20 +58,32 @@ pub async fn run_queue_processor(
 async fn process_operation(handler: &RpcHandler, op: &QueuedOperation) -> Result<(), String> {
     match op {
         QueuedOperation::Push { hash } => {
-            let resp = handler.handle(tesseras_rpc::Request::Publish { hash: *hash }).await;
+            let resp = handler
+                .handle(tesseras_rpc::Request::Publish { hash: *hash })
+                .await;
             response_to_result(resp)
         }
         QueuedOperation::Pull { hash } => {
-            let resp = handler.handle(tesseras_rpc::Request::Fetch { hash: *hash }).await;
+            let resp = handler
+                .handle(tesseras_rpc::Request::Fetch { hash: *hash })
+                .await;
             response_to_result(resp)
         }
         QueuedOperation::Delete { hash } => {
-            let resp = handler.handle(tesseras_rpc::Request::Delete { hash: hash.to_string() }).await;
+            let resp = handler
+                .handle(tesseras_rpc::Request::Delete {
+                    hash: hash.to_string(),
+                })
+                .await;
             response_to_result(resp)
         }
         QueuedOperation::Retract { hash } => {
             // Retraction is handled as part of Delete
-            let resp = handler.handle(tesseras_rpc::Request::Delete { hash: hash.to_string() }).await;
+            let resp = handler
+                .handle(tesseras_rpc::Request::Delete {
+                    hash: hash.to_string(),
+                })
+                .await;
             response_to_result(resp)
         }
     }

@@ -7,8 +7,7 @@ use tesseras_rpc::{DaemonClient, Request, Response};
 pub async fn run(socket: &Option<PathBuf>) -> Result<()> {
     let socket_path = match socket {
         Some(p) => p.clone(),
-        None => tesseras_rpc::default_socket_path()
-            .map_err(|e| anyhow::anyhow!("{e}"))?,
+        None => tesseras_rpc::default_socket_path().map_err(|e| anyhow::anyhow!("{e}"))?,
     };
 
     let mut client = DaemonClient::connect(&socket_path).with_context(|| {
@@ -39,11 +38,7 @@ pub async fn run(socket: &Option<PathBuf>) -> Result<()> {
                 let addr = peer.addr.to_string();
                 let caps = format_capabilities(peer.capabilities);
 
-                table.add_row(vec![
-                    Cell::new(short_id),
-                    Cell::new(addr),
-                    Cell::new(caps),
-                ]);
+                table.add_row(vec![Cell::new(short_id), Cell::new(addr), Cell::new(caps)]);
             }
 
             println!("{table}");

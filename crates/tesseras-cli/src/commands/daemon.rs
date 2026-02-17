@@ -80,8 +80,7 @@ pub fn start_daemon(data_dir: &Path) -> Result<u32> {
         })?;
 
     let pid = child.id();
-    std::fs::write(pid_path(data_dir), pid.to_string())
-        .context("failed to write PID file")?;
+    std::fs::write(pid_path(data_dir), pid.to_string()).context("failed to write PID file")?;
 
     // Wait for daemon to become responsive (up to 15s)
     let socket_path = tesseras_rpc::default_socket_path().ok();

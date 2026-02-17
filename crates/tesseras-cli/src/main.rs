@@ -272,22 +272,12 @@ async fn main() -> Result<()> {
     setup_logging(cli.verbose, cli.quiet);
 
     match cli.command {
-        Commands::Push(ref args) => {
-            commands::push::run(args, &cli.data_dir, &cli.socket).await
-        }
-        Commands::Pull(ref args) => {
-            commands::pull::run(args, &cli.data_dir, &cli.socket).await
-        }
-        Commands::Create(ref args) => {
-            commands::create::run(args, &cli.data_dir, &cli.socket).await
-        }
+        Commands::Push(ref args) => commands::push::run(args, &cli.data_dir, &cli.socket).await,
+        Commands::Pull(ref args) => commands::pull::run(args, &cli.data_dir, &cli.socket).await,
+        Commands::Create(ref args) => commands::create::run(args, &cli.data_dir, &cli.socket).await,
         Commands::Delete { ref hash } => commands::delete::run(hash, &cli.socket).await,
-        Commands::Circles { ref command } => {
-            commands::circle::run(command, &cli.socket).await
-        }
-        Commands::Contact { ref command } => {
-            commands::contact::run(command, &cli.data_dir).await
-        }
+        Commands::Circles { ref command } => commands::circle::run(command, &cli.socket).await,
+        Commands::Contact { ref command } => commands::contact::run(command, &cli.data_dir).await,
         Commands::Daemon { command } => match command {
             DaemonCommands::Start => commands::daemon::run_start(&cli.data_dir).await,
             DaemonCommands::Stop => commands::daemon::run_stop(&cli.data_dir).await,
@@ -320,9 +310,7 @@ async fn main() -> Result<()> {
             NetCommands::Peers => commands::peers::run(&cli.socket).await,
         },
         Commands::Identity { command } => match command {
-            IdentityCommands::Init { upgrade } => {
-                commands::init::run(&cli.data_dir, upgrade).await
-            }
+            IdentityCommands::Init { upgrade } => commands::init::run(&cli.data_dir, upgrade).await,
             IdentityCommands::Heir { command } => match command {
                 commands::heir::HeirCommands::Create {
                     threshold,

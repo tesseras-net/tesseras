@@ -1,8 +1,8 @@
 use std::fmt;
 
+use chrono::NaiveDate;
 #[cfg(feature = "experimental-visibility")]
 use chrono::{DateTime, Utc};
-use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
 use crate::types::ContentHash;
@@ -21,12 +21,18 @@ pub enum MemoryType {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Visibility {
     Private,
-    Circle { circle: String },
+    Circle {
+        circle: String,
+    },
     Public,
     #[cfg(feature = "experimental-visibility")]
-    PublicAfterDeath { inactive_years: u32 },
+    PublicAfterDeath {
+        inactive_years: u32,
+    },
     #[cfg(feature = "experimental-visibility")]
-    Sealed { open_after: DateTime<Utc> },
+    Sealed {
+        open_after: DateTime<Utc>,
+    },
 }
 
 impl fmt::Display for Visibility {

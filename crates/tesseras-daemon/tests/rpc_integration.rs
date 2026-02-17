@@ -112,12 +112,12 @@ fn make_handler(
     );
 
     Arc::new(tesseras_daemon::rpc::handler::RpcHandler {
-        tessera_repo: Arc::new(tesseras_storage::SqliteTesseraRepository::new(
-            Arc::clone(&conn),
-        )),
-        memory_repo: Arc::new(tesseras_storage::SqliteMemoryRepository::new(
-            Arc::clone(&conn),
-        )),
+        tessera_repo: Arc::new(tesseras_storage::SqliteTesseraRepository::new(Arc::clone(
+            &conn,
+        ))),
+        memory_repo: Arc::new(tesseras_storage::SqliteMemoryRepository::new(Arc::clone(
+            &conn,
+        ))),
         blob_store,
         fragment_store,
         replication: Arc::new(replication),
@@ -126,12 +126,12 @@ fn make_handler(
         tombstone_repo: Arc::new(tesseras_storage::SqliteTombstoneRepository::new(
             Arc::clone(&conn),
         )),
-        circle_repo: Arc::new(tesseras_storage::SqliteCircleRepository::new(
-            Arc::clone(&conn),
-        )),
-        operation_queue: Arc::new(tesseras_storage::SqliteOperationQueue::new(
-            Arc::clone(&conn),
-        )),
+        circle_repo: Arc::new(tesseras_storage::SqliteCircleRepository::new(Arc::clone(
+            &conn,
+        ))),
+        operation_queue: Arc::new(tesseras_storage::SqliteOperationQueue::new(Arc::clone(
+            &conn,
+        ))),
         data_dir: dir.to_path_buf(),
         start_time: std::time::Instant::now(),
     })
@@ -166,7 +166,10 @@ async fn publish_unknown_hash_returns_error() {
     .unwrap();
 
     // Should get an error because the tessera doesn't exist
-    assert!(result.is_err(), "expected error for unknown hash, got: {result:?}");
+    assert!(
+        result.is_err(),
+        "expected error for unknown hash, got: {result:?}"
+    );
 
     shutdown_tx.send(true).unwrap();
     let _ = tokio::time::timeout(Duration::from_secs(2), listener).await;
@@ -198,7 +201,10 @@ async fn status_unknown_hash_returns_error() {
     .await
     .unwrap();
 
-    assert!(result.is_err(), "expected error for unknown hash, got: {result:?}");
+    assert!(
+        result.is_err(),
+        "expected error for unknown hash, got: {result:?}"
+    );
 
     shutdown_tx.send(true).unwrap();
     let _ = tokio::time::timeout(Duration::from_secs(2), listener).await;

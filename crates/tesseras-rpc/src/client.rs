@@ -38,12 +38,11 @@ impl DaemonClient {
 
     #[cfg(unix)]
     fn open_stream(socket_path: &Path) -> Result<Stream, RpcError> {
-        let stream = UnixStream::connect(socket_path).map_err(|source| {
-            RpcError::ConnectionFailed {
+        let stream =
+            UnixStream::connect(socket_path).map_err(|source| RpcError::ConnectionFailed {
                 path: socket_path.to_path_buf(),
                 source,
-            }
-        })?;
+            })?;
         stream.set_read_timeout(Some(Duration::from_secs(120)))?;
         stream.set_write_timeout(Some(Duration::from_secs(30)))?;
         Ok(stream)

@@ -261,7 +261,9 @@ mod tests {
         let bytes = rmp_serde::to_vec(&req).unwrap();
         let decoded: Request = rmp_serde::from_slice(&bytes).unwrap();
         match decoded {
-            Request::Push { paths, visibility, .. } => {
+            Request::Push {
+                paths, visibility, ..
+            } => {
                 assert_eq!(paths.len(), 1);
                 assert_eq!(visibility, "private");
             }

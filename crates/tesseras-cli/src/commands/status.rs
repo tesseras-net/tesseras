@@ -10,8 +10,7 @@ pub async fn run(hash: &str, data_dir: &str, socket: &Option<PathBuf>) -> Result
 
     let socket_path = match socket {
         Some(p) => p.clone(),
-        None => tesseras_rpc::default_socket_path()
-            .map_err(|e| anyhow::anyhow!("{e}"))?,
+        None => tesseras_rpc::default_socket_path().map_err(|e| anyhow::anyhow!("{e}"))?,
     };
 
     let mut client = DaemonClient::connect(&socket_path).with_context(|| {
@@ -22,9 +21,7 @@ pub async fn run(hash: &str, data_dir: &str, socket: &Option<PathBuf>) -> Result
     })?;
 
     let response = client
-        .call(&Request::TesseraStatus {
-            hash: content_hash,
-        })
+        .call(&Request::TesseraStatus { hash: content_hash })
         .context("status request failed")?;
 
     match response {

@@ -39,15 +39,12 @@ pub enum CircleCommands {
 
 pub async fn run(command: &CircleCommands, socket: &Option<PathBuf>) -> Result<()> {
     let socket_path = crate::commands::daemon::resolve_socket(socket)?;
-    let mut client =
-        DaemonClient::connect(&socket_path).context("failed to connect to daemon")?;
+    let mut client = DaemonClient::connect(&socket_path).context("failed to connect to daemon")?;
 
     match command {
         CircleCommands::Create { name } => {
             let resp = client
-                .call(&Request::CircleCreate {
-                    name: name.clone(),
-                })
+                .call(&Request::CircleCreate { name: name.clone() })
                 .context("RPC call failed")?;
 
             match resp {
@@ -58,9 +55,7 @@ pub async fn run(command: &CircleCommands, socket: &Option<PathBuf>) -> Result<(
         }
         CircleCommands::Delete { name } => {
             let resp = client
-                .call(&Request::CircleDelete {
-                    name: name.clone(),
-                })
+                .call(&Request::CircleDelete { name: name.clone() })
                 .context("RPC call failed")?;
 
             match resp {

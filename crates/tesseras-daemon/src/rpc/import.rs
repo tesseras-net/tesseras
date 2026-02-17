@@ -3,10 +3,10 @@
 
 use std::collections::HashMap;
 
+use tesseras_core::ContentHash;
 use tesseras_core::manifest::Manifest;
 use tesseras_core::pack::PackedFile;
 use tesseras_core::ports::{BlobStore, MemoryRepository, TesseraRepository};
-use tesseras_core::ContentHash;
 
 /// Import unpacked files into local storage (tessera repo, memory repo, blob store).
 ///
@@ -52,7 +52,12 @@ pub fn import_tessera(
     }
 
     // 3. Store MANIFEST blob (using content_hash for both tessera and memory hash)
-    blob_store.write(&content_hash, &content_hash, "MANIFEST", &manifest_file.data)?;
+    blob_store.write(
+        &content_hash,
+        &content_hash,
+        "MANIFEST",
+        &manifest_file.data,
+    )?;
 
     // 4. Store signature blob if present
     for file in files {
@@ -68,10 +73,7 @@ pub fn import_tessera(
         None => "public",
     };
 
-    let sealed_until = manifest
-        .encryption
-        .as_ref()
-        .and_then(|e| e.open_after);
+    let sealed_until = manifest.encryption.as_ref().and_then(|e| e.open_after);
 
     // 6. Store TesseraRecord (must come before memories due to FK)
     let tessera_record = tesseras_core::ports::TesseraRecord {
@@ -98,11 +100,7 @@ pub fn import_tessera(
         let mut memory_type = "moment".to_string();
 
         for file in mem_files {
-            let filename = file
-                .path
-                .split('/')
-                .next_back()
-                .unwrap_or("");
+            let filename = file.path.split('/').next_back().unwrap_or("");
 
             // Store blob
             blob_store.write(&content_hash, &mem_hash, filename, &file.data)?;
@@ -116,8 +114,7 @@ pub fn import_tessera(
                 }
                 meta_json = Some(json_str);
             } else if filename == "context.txt" {
-                context_path =
-                    Some(format!("memories/{mem_hash_str}/{filename}"));
+                context_path = Some(format!("memories/{mem_hash_str}/{filename}"));
             } else if filename != "checksum.blake3" {
                 media_path = format!("memories/{mem_hash_str}/{filename}");
             }

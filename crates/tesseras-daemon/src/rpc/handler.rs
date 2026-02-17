@@ -6,9 +6,9 @@ use tesseras_core::ports::{
     TesseraRepository, TombstoneRepository,
 };
 use tesseras_dht::engine::DhtEngine;
+use tesseras_replication::ReplicationService;
 use tesseras_rpc::error::ErrorCode;
 use tesseras_rpc::protocol::{Request, Response};
-use tesseras_replication::ReplicationService;
 use tesseras_storage::CasStore;
 
 pub struct RpcHandler {
@@ -75,7 +75,7 @@ impl RpcHandler {
                 return Response::Error {
                     code: ErrorCode::Internal,
                     message: format!("storage error: {e}"),
-                }
+                };
             }
         };
 
@@ -106,13 +106,13 @@ impl RpcHandler {
                 return Response::Error {
                     code: ErrorCode::NotFound,
                     message: format!("tessera not found: {hash}"),
-                }
+                };
             }
             Err(e) => {
                 return Response::Error {
                     code: ErrorCode::Internal,
                     message: format!("storage error: {e}"),
-                }
+                };
             }
         };
 
@@ -179,10 +179,8 @@ impl RpcHandler {
 
     async fn handle_node_status(&self) -> Response {
         let peers = self.dht_engine.all_peers().await;
-        let (pending, completed, failed) = self
-            .operation_queue
-            .count_by_status()
-            .unwrap_or((0, 0, 0));
+        let (pending, completed, failed) =
+            self.operation_queue.count_by_status().unwrap_or((0, 0, 0));
 
         Response::NodeStatus {
             online: !peers.is_empty(),
@@ -203,7 +201,7 @@ impl RpcHandler {
                 return Response::Error {
                     code: ErrorCode::Internal,
                     message: format!("queue error: {e}"),
-                }
+                };
             }
         };
 
@@ -285,7 +283,7 @@ impl RpcHandler {
                 return Response::Error {
                     code: ErrorCode::Internal,
                     message: format!("failed to list circles: {e}"),
-                }
+                };
             }
         };
 
@@ -324,10 +322,7 @@ impl RpcHandler {
                 } else {
                     ErrorCode::Internal
                 };
-                return Response::Error {
-                    code,
-                    message: msg,
-                };
+                return Response::Error { code, message: msg };
             }
         };
 
@@ -435,23 +430,20 @@ impl RpcHandler {
 
     /// Query DHT for a tessera pointer, fetch fragments from remote holders,
     /// store them locally, then reassemble.
-    async fn fetch_from_dht(
-        &self,
-        hash: &tesseras_core::ContentHash,
-    ) -> Result<Vec<u8>, Response> {
+    async fn fetch_from_dht(&self, hash: &tesseras_core::ContentHash) -> Result<Vec<u8>, Response> {
         let pointer = match self.dht_engine.find_tessera(hash).await {
             Ok(Some(ptr)) => ptr,
             Ok(None) => {
                 return Err(Response::Error {
                     code: ErrorCode::NotFound,
-                    message: format!("tessera not found in local storage or DHT"),
-                })
+                    message: "tessera not found in local storage or DHT".to_string(),
+                });
             }
             Err(e) => {
                 return Err(Response::Error {
                     code: ErrorCode::NotFound,
                     message: format!("failed to query DHT: {e}"),
-                })
+                });
             }
         };
 
@@ -479,8 +471,10 @@ impl RpcHandler {
                 {
                     Ok(Some(envelope)) => {
                         let sender_id = holder.node_id;
-                        if let Err(e) =
-                            self.replication.receive_fragment(envelope, &sender_id).await
+                        if let Err(e) = self
+                            .replication
+                            .receive_fragment(envelope, &sender_id)
+                            .await
                         {
                             tracing::warn!(error = %e, "failed to store fetched fragment");
                         } else {
@@ -509,8 +503,10 @@ impl RpcHandler {
                 match self.dht_engine.fetch_fragment(node, hash, 0).await {
                     Ok(Some(envelope)) => {
                         let sender_id = node.identity.node_id;
-                        if let Err(e) =
-                            self.replication.receive_fragment(envelope, &sender_id).await
+                        if let Err(e) = self
+                            .replication
+                            .receive_fragment(envelope, &sender_id)
+                            .await
                         {
                             tracing::warn!(error = %e, "failed to store fetched fragment");
                         } else {
@@ -526,17 +522,18 @@ impl RpcHandler {
         if !fetched_any {
             return Err(Response::Error {
                 code: ErrorCode::NotFound,
-                message: format!("tessera pointer found but could not fetch fragments"),
+                message: "tessera pointer found but could not fetch fragments".to_string(),
             });
         }
 
         // Retry local fetch now that we have fragments
-        self.replication.fetch_tessera(hash).await.map_err(|e| {
-            Response::Error {
+        self.replication
+            .fetch_tessera(hash)
+            .await
+            .map_err(|e| Response::Error {
                 code: ErrorCode::Internal,
                 message: format!("fetched remote fragments but reassembly failed: {e}"),
-            }
-        })
+            })
     }
 
     async fn handle_tessera_status(&self, hash: tesseras_core::ContentHash) -> Response {

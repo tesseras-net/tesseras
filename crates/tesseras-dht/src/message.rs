@@ -462,9 +462,7 @@ mod tests {
         let decoded = decode(&bytes).unwrap();
         assert!(matches!(
             decoded,
-            Message::FetchFragmentResponse {
-                envelope: Some(_)
-            }
+            Message::FetchFragmentResponse { envelope: Some(_) }
         ));
     }
 

@@ -3012,6 +3012,7 @@ dependencies = [
  "rand 0.8.5",
  "rusqlite",
  "serde",
+ "serde_json",
  "tempfile",
  "tesseras-core",
  "tesseras-crypto",

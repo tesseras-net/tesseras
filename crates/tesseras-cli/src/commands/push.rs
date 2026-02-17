@@ -133,10 +133,7 @@ pub async fn run(args: &PushArgs, data_dir: &str, socket: &Option<PathBuf>) -> R
         };
         println!("Would create tessera with {} files:", counts.total());
         println!("  {}", counts.summary());
-        println!(
-            "  Estimated size: {}",
-            super::list::format_size(total_size)
-        );
+        println!("  Estimated size: {}", super::list::format_size(total_size));
         println!("  Tier: {tier}");
         return Ok(());
     }
@@ -196,9 +193,7 @@ pub async fn run(args: &PushArgs, data_dir: &str, socket: &Option<PathBuf>) -> R
 
     match tesseras_rpc::DaemonClient::connect(&socket_path) {
         Ok(mut client) => {
-            match client.call(&tesseras_rpc::Request::Publish {
-                hash: content_hash,
-            }) {
+            match client.call(&tesseras_rpc::Request::Publish { hash: content_hash }) {
                 Ok(tesseras_rpc::Response::Published {
                     fragments_created, ..
                 }) => {

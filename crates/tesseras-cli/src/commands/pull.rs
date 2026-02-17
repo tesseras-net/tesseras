@@ -50,12 +50,8 @@ pub async fn run(args: &PullArgs, data_dir: &str, socket: &Option<PathBuf>) -> R
     let target = parse_target(&args.target)?;
 
     match target {
-        PullTarget::Hash(ref hash_str) => {
-            pull_by_hash(hash_str, &args.dest, &base, socket).await
-        }
-        PullTarget::Alias(ref alias) => {
-            pull_by_alias(alias, &base).await
-        }
+        PullTarget::Hash(ref hash_str) => pull_by_hash(hash_str, &args.dest, &base, socket).await,
+        PullTarget::Alias(ref alias) => pull_by_alias(alias, &base).await,
     }
 }
 
@@ -125,9 +121,7 @@ async fn pull_by_hash(
         .with_context(|| "Cannot connect to daemon. Is tesd running?")?;
 
     let response = client
-        .call(&tesseras_rpc::Request::Fetch {
-            hash: content_hash,
-        })
+        .call(&tesseras_rpc::Request::Fetch { hash: content_hash })
         .context("fetch failed")?;
 
     match response {
@@ -169,10 +163,9 @@ mod tests {
 
     #[test]
     fn parse_target_hex_hash() {
-        let result = parse_target(
-            "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
-        )
-        .unwrap();
+        let result =
+            parse_target("abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+                .unwrap();
         assert!(matches!(result, PullTarget::Hash(_)));
     }
 

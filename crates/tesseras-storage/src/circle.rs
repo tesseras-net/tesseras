@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex};
 
 use rusqlite::Connection;
-use tesseras_core::ports::{CircleMemberRecord, CircleRecord, CircleRepository};
 use tesseras_core::CoreError;
+use tesseras_core::ports::{CircleMemberRecord, CircleRecord, CircleRepository};
 
 pub struct SqliteCircleRepository {
     conn: Arc<Mutex<Connection>>,
@@ -27,8 +27,11 @@ impl CircleRepository for SqliteCircleRepository {
 
     fn delete_circle(&self, name: &str) -> Result<(), CoreError> {
         let conn = self.conn.lock().unwrap();
-        conn.execute("DELETE FROM circles WHERE name = ?1", rusqlite::params![name])
-            .map_err(|e| CoreError::Database(e.to_string()))?;
+        conn.execute(
+            "DELETE FROM circles WHERE name = ?1",
+            rusqlite::params![name],
+        )
+        .map_err(|e| CoreError::Database(e.to_string()))?;
         Ok(())
     }
 
@@ -43,11 +46,9 @@ impl CircleRepository for SqliteCircleRepository {
                 Ok(CircleRecord {
                     name: row.get(0)?,
                     symmetric_key: row.get(1)?,
-                    created_at: chrono::DateTime::parse_from_rfc3339(
-                        &row.get::<_, String>(2)?,
-                    )
-                    .unwrap()
-                    .with_timezone(&chrono::Utc),
+                    created_at: chrono::DateTime::parse_from_rfc3339(&row.get::<_, String>(2)?)
+                        .unwrap()
+                        .with_timezone(&chrono::Utc),
                 })
             })
             .map_err(|e| CoreError::Database(e.to_string()))?;
@@ -65,11 +66,9 @@ impl CircleRepository for SqliteCircleRepository {
                 Ok(CircleRecord {
                     name: row.get(0)?,
                     symmetric_key: row.get(1)?,
-                    created_at: chrono::DateTime::parse_from_rfc3339(
-                        &row.get::<_, String>(2)?,
-                    )
-                    .unwrap()
-                    .with_timezone(&chrono::Utc),
+                    created_at: chrono::DateTime::parse_from_rfc3339(&row.get::<_, String>(2)?)
+                        .unwrap()
+                        .with_timezone(&chrono::Utc),
                 })
             },
         );
@@ -122,11 +121,9 @@ impl CircleRepository for SqliteCircleRepository {
                     alias: row.get(1)?,
                     pubkey: row.get(2)?,
                     wrapped_key: row.get(3)?,
-                    added_at: chrono::DateTime::parse_from_rfc3339(
-                        &row.get::<_, String>(4)?,
-                    )
-                    .unwrap()
-                    .with_timezone(&chrono::Utc),
+                    added_at: chrono::DateTime::parse_from_rfc3339(&row.get::<_, String>(4)?)
+                        .unwrap()
+                        .with_timezone(&chrono::Utc),
                 })
             })
             .map_err(|e| CoreError::Database(e.to_string()))?;
@@ -246,9 +243,10 @@ mod tests {
         let conn = setup();
         let repo = SqliteCircleRepository::new(conn);
         assert!(repo.find_circle("nonexistent").unwrap().is_none());
-        assert!(repo
-            .find_member_wrapped_key("nonexistent", "pk")
-            .unwrap()
-            .is_none());
+        assert!(
+            repo.find_member_wrapped_key("nonexistent", "pk")
+                .unwrap()
+                .is_none()
+        );
     }
 }

@@ -12,10 +12,7 @@ pub enum RpcError {
     NoSocketPath,
 
     #[error("daemon error: [{code:?}] {message}")]
-    DaemonError {
-        code: ErrorCode,
-        message: String,
-    },
+    DaemonError { code: ErrorCode, message: String },
 
     #[error("protocol error: {0}")]
     Protocol(String),
@@ -83,7 +80,10 @@ mod tests {
             msg.contains("daemon closed the connection"),
             "expected friendly message, got: {msg}"
         );
-        assert!(!msg.contains("os error"), "should not contain raw OS error: {msg}");
+        assert!(
+            !msg.contains("os error"),
+            "should not contain raw OS error: {msg}"
+        );
     }
 
     #[test]

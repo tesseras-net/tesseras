@@ -1,6 +1,6 @@
-use tesseras_core::pack::{pack, PackedFile};
-use tesseras_core::ports::{BlobStore, MemoryRepository, TesseraRepository};
 use tesseras_core::ContentHash;
+use tesseras_core::pack::{PackedFile, pack};
+use tesseras_core::ports::{BlobStore, MemoryRepository, TesseraRepository};
 
 /// Read all files of a tessera from storage and pack into a single byte buffer.
 pub fn pack_tessera(
@@ -36,11 +36,7 @@ pub fn pack_tessera(
     let memories = memory_repo.list_by_tessera(hash)?;
     for mem in &memories {
         let mem_hash_str = mem.hash.to_string();
-        let media_filename = mem
-            .media_path
-            .split('/')
-            .next_back()
-            .unwrap_or("media.bin");
+        let media_filename = mem.media_path.split('/').next_back().unwrap_or("media.bin");
 
         if let Ok(data) = blob_store.read(hash, &mem.hash, media_filename) {
             files.push(PackedFile {
