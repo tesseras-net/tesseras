@@ -1012,6 +1012,96 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn serve_fragment_returns_stored_fragment() {
+        let tessera_hash = hash(0x10);
+        let data = vec![0xcc; 500];
+        let checksum = ContentHash::new(blake3::hash(&data).into());
+        let frag_id = FragmentId::new(tessera_hash, 0, 1, checksum);
+
+        let mut fragments = MockFragments::new();
+        let frag_id_clone = frag_id.clone();
+        fragments.expect_list_fragments().returning(move |_| {
+            Ok(vec![frag_id_clone.clone()])
+        });
+        let data_clone = data.clone();
+        fragments.expect_read_fragment().returning(move |_| {
+            Ok(data_clone.clone())
+        });
+
+        let service = ReplicationService::new(
+            NodeIdentity {
+                node_id: node(0xff),
+                public_key: [0; 32],
+                nonce: 0,
+            },
+            Box::new(MockDht::new()),
+            Box::new(fragments),
+            Box::new(MockLedger::new()),
+            Box::new(MockBlobs::new()),
+            ReplicationConfig::default(),
+        );
+
+        let result = service.serve_fragment(&tessera_hash, 0).unwrap();
+        assert!(result.is_some());
+        let envelope = result.unwrap();
+        assert_eq!(envelope.data, vec![0xcc; 500]);
+        assert_eq!(envelope.id.tessera_hash, tessera_hash);
+    }
+
+    #[test]
+    fn serve_fragment_returns_none_when_not_held() {
+        let mut fragments = MockFragments::new();
+        fragments.expect_list_fragments().returning(|_| Ok(vec![]));
+
+        let service = ReplicationService::new(
+            NodeIdentity {
+                node_id: node(0xff),
+                public_key: [0; 32],
+                nonce: 0,
+            },
+            Box::new(MockDht::new()),
+            Box::new(fragments),
+            Box::new(MockLedger::new()),
+            Box::new(MockBlobs::new()),
+            ReplicationConfig::default(),
+        );
+
+        let result = service.serve_fragment(&hash(0x20), 0).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn serve_fragment_returns_none_for_wrong_index() {
+        let tessera_hash = hash(0x10);
+        let data = vec![0xcc; 500];
+        let checksum = ContentHash::new(blake3::hash(&data).into());
+        let frag_id = FragmentId::new(tessera_hash, 0, 1, checksum);
+
+        let mut fragments = MockFragments::new();
+        let frag_id_clone = frag_id.clone();
+        fragments.expect_list_fragments().returning(move |_| {
+            Ok(vec![frag_id_clone.clone()])
+        });
+
+        let service = ReplicationService::new(
+            NodeIdentity {
+                node_id: node(0xff),
+                public_key: [0; 32],
+                nonce: 0,
+            },
+            Box::new(MockDht::new()),
+            Box::new(fragments),
+            Box::new(MockLedger::new()),
+            Box::new(MockBlobs::new()),
+            ReplicationConfig::default(),
+        );
+
+        // Request index 5 when only index 0 exists
+        let result = service.serve_fragment(&tessera_hash, 5).unwrap();
+        assert!(result.is_none());
+    }
+
     #[tokio::test]
     async fn repair_loop_skips_tombstoned_hash() {
         let tombstoned_hash = hash(0xAA);
