@@ -238,7 +238,7 @@ pub async fn run(args: &CreateArgs, data_dir: &str, socket: &Option<PathBuf>) ->
     Ok(())
 }
 
-fn scan_input(path: &str) -> Result<Vec<PathBuf>> {
+pub fn scan_input(path: &str) -> Result<Vec<PathBuf>> {
     let path = PathBuf::from(path);
 
     if path.is_file() {
@@ -284,7 +284,7 @@ fn scan_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
     Ok(())
 }
 
-fn is_supported_file(path: &Path) -> bool {
+pub fn is_supported_file(path: &Path) -> bool {
     path.extension()
         .and_then(|e| e.to_str())
         .is_some_and(|ext| {
@@ -295,14 +295,14 @@ fn is_supported_file(path: &Path) -> bool {
         })
 }
 
-fn infer_memory_type(path: &Path) -> MemoryType {
+pub fn infer_memory_type(path: &Path) -> MemoryType {
     match path.extension().and_then(|e| e.to_str()) {
         Some("txt") => MemoryType::Reflection,
         _ => MemoryType::Moment,
     }
 }
 
-fn parse_visibility(s: &str) -> Result<Visibility> {
+pub fn parse_visibility(s: &str) -> Result<Visibility> {
     match s.to_lowercase().as_str() {
         "public" => Ok(Visibility::Public),
         "private" => Ok(Visibility::Private),

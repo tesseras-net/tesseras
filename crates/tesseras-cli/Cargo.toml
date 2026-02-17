@@ -38,6 +38,9 @@ image = { version = "0.25", default-features = false, features = ["png", "bmp"] 
 owo-colors = { workspace = true }
 libc = "0.2.182"
 
+[dev-dependencies]
+tempfile = { workspace = true }
+
 [features]
 default = []
 bundled-sqlite = ["tesseras-storage/bundled-sqlite"]
