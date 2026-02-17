@@ -56,6 +56,9 @@ pub fn run_migrations(conn: &rusqlite::Connection) -> Result<(), StorageError> {
     conn.execute_batch(include_str!("../migrations/004_dedup.sql"))
         .map_err(|e| StorageError::Database(e.to_string()))?;
 
+    conn.execute_batch(include_str!("../migrations/005_daemon_first.sql"))
+        .map_err(|e| StorageError::Database(e.to_string()))?;
+
     Ok(())
 }
 
