@@ -13,6 +13,7 @@ pub mod migration;
 pub mod reciprocity;
 pub mod search_index;
 pub mod sqlite;
+pub mod tombstone;
 
 pub use blob::FsBlobStore;
 pub use cache::CachedFragmentStore;
@@ -27,6 +28,7 @@ pub use migration::{MigrationStats, migrate_to_cas};
 pub use reciprocity::SqliteReciprocityLedger;
 pub use search_index::SqliteSearchIndex;
 pub use sqlite::{SqliteMemoryRepository, SqliteTesseraRepository};
+pub use tombstone::SqliteTombstoneRepository;
 
 /// Run database migrations on the given connection.
 pub fn run_migrations(conn: &rusqlite::Connection) -> Result<(), StorageError> {

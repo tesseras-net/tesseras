@@ -190,6 +190,14 @@ pub trait ManifestVerifier: Send + Sync {
     fn verify(&self, manifest: &[u8], signature: &[u8], public_key_hex: &str) -> bool;
 }
 
+/// Repository for tombstone records (retracted tesseras).
+pub trait TombstoneRepository: Send + Sync {
+    fn store(&self, tombstone: &crate::Tombstone) -> Result<(), CoreError>;
+    fn find(&self, hash: &ContentHash) -> Result<Option<crate::Tombstone>, CoreError>;
+    fn exists(&self, hash: &ContentHash) -> Result<bool, CoreError>;
+    fn list(&self) -> Result<Vec<crate::Tombstone>, CoreError>;
+}
+
 /// Flat record for DB storage (not the domain aggregate).
 #[derive(Debug, Clone)]
 pub struct TesseraRecord {
