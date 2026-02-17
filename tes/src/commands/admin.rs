@@ -42,9 +42,7 @@ pub fn run(data_dir: &DataDir, command: AdminCommand) -> Result<()> {
     match command {
         AdminCommand::Bootstrap { command } => match command {
             BootstrapCommand::Add { addr } => {
-                let mut config = data_dir
-                    .load_config()
-                    .map_err(|e| anyhow::anyhow!("{e}"))?;
+                let mut config = data_dir.load_config().map_err(|e| anyhow::anyhow!("{e}"))?;
                 if !config.bootstrap.contains(&addr) {
                     config.bootstrap.push(addr.clone());
                     data_dir
@@ -55,9 +53,7 @@ pub fn run(data_dir: &DataDir, command: AdminCommand) -> Result<()> {
                 Ok(())
             }
             BootstrapCommand::Rm { addr } => {
-                let mut config = data_dir
-                    .load_config()
-                    .map_err(|e| anyhow::anyhow!("{e}"))?;
+                let mut config = data_dir.load_config().map_err(|e| anyhow::anyhow!("{e}"))?;
                 config.bootstrap.retain(|a| a != &addr);
                 data_dir
                     .save_config(&config)
@@ -66,9 +62,7 @@ pub fn run(data_dir: &DataDir, command: AdminCommand) -> Result<()> {
                 Ok(())
             }
             BootstrapCommand::Ls => {
-                let config = data_dir
-                    .load_config()
-                    .map_err(|e| anyhow::anyhow!("{e}"))?;
+                let config = data_dir.load_config().map_err(|e| anyhow::anyhow!("{e}"))?;
                 if config.bootstrap.is_empty() {
                     eprintln!("No bootstrap nodes configured.");
                 } else {
@@ -93,9 +87,7 @@ pub fn run(data_dir: &DataDir, command: AdminCommand) -> Result<()> {
                     #[cfg(unix)]
                     {
                         use std::process::Command;
-                        let _ = Command::new("kill")
-                            .arg(pid_str.trim())
-                            .status();
+                        let _ = Command::new("kill").arg(pid_str.trim()).status();
                     }
                     let _ = std::fs::remove_file(&pid_path);
                     eprintln!("Daemon stopped.");

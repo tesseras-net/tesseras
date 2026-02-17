@@ -18,7 +18,11 @@ pub struct Node {
 
 impl Node {
     /// Create a new node with the given data directory.
-    pub fn new(data_dir: DataDir, identity: Identity, config: NodeConfig) -> Result<Self, NodeError> {
+    pub fn new(
+        data_dir: DataDir,
+        identity: Identity,
+        config: NodeConfig,
+    ) -> Result<Self, NodeError> {
         let storage = Storage::open(data_dir).map_err(|e| NodeError::Storage(e.to_string()))?;
         let node_id = identity.node_id();
         let dht = Dht::new(node_id);
@@ -67,8 +71,8 @@ impl Node {
                 .map_err(|e| NodeError::Io(e.to_string()))?
                 .len();
 
-            let mut reader = std::fs::File::open(file_path)
-                .map_err(|e| NodeError::Io(e.to_string()))?;
+            let mut reader =
+                std::fs::File::open(file_path).map_err(|e| NodeError::Io(e.to_string()))?;
             let blob_hash = self
                 .storage
                 .store_blob(&mut reader)
@@ -193,11 +197,7 @@ mod tests {
         std::fs::write(&test_file, b"hello world").unwrap();
 
         let tessera = node
-            .add_tessera(
-                &[test_file],
-                Some("Test".into()),
-                Visibility::Public,
-            )
+            .add_tessera(&[test_file], Some("Test".into()), Visibility::Public)
             .unwrap();
 
         assert_eq!(tessera.name, Some("Test".into()));

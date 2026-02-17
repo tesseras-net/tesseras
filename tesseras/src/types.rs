@@ -65,8 +65,8 @@ impl NodeId {
     /// XOR distance for Kademlia routing.
     pub fn distance(&self, other: &NodeId) -> [u8; 32] {
         let mut result = [0u8; 32];
-        for i in 0..32 {
-            result[i] = self.0[i] ^ other.0[i];
+        for (i, byte) in result.iter_mut().enumerate() {
+            *byte = self.0[i] ^ other.0[i];
         }
         result
     }

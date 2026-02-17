@@ -25,7 +25,10 @@ pub fn run(data_dir: &DataDir, args: CatArgs) -> Result<()> {
         tessera.name.as_deref().unwrap_or("(unnamed)")
     );
     println!("Visibility: {}", tessera.visibility);
-    println!("Created:    {}", tessera.created_at.format("%Y-%m-%d %H:%M"));
+    println!(
+        "Created:    {}",
+        tessera.created_at.format("%Y-%m-%d %H:%M")
+    );
     println!("Author:     {}", hex::encode(&tessera.author[..8]));
     println!("Files:");
     for m in &tessera.memories {

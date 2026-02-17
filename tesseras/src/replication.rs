@@ -23,7 +23,7 @@ pub fn encode_fragments(
         .map_err(|e| ReplicationError::ReedSolomon(format!("{e}")))?;
 
     // Pad data to be evenly divisible by data_shards
-    let shard_size = (data.len() + data_shards - 1) / data_shards;
+    let shard_size = data.len().div_ceil(data_shards);
     let mut padded = data.to_vec();
     padded.resize(shard_size * data_shards, 0);
 

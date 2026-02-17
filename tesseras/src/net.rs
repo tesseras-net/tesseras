@@ -6,7 +6,13 @@ use quinn::{Endpoint, ServerConfig};
 use crate::dht::DhtMessage;
 
 /// Generate a self-signed TLS certificate for QUIC transport.
-fn generate_self_signed_cert() -> Result<(rustls::pki_types::CertificateDer<'static>, rustls::pki_types::PrivateKeyDer<'static>), NetError> {
+fn generate_self_signed_cert() -> Result<
+    (
+        rustls::pki_types::CertificateDer<'static>,
+        rustls::pki_types::PrivateKeyDer<'static>,
+    ),
+    NetError,
+> {
     let cert = rcgen::generate_simple_self_signed(vec!["tesseras".into()])
         .map_err(|e| NetError::Tls(e.to_string()))?;
     let cert_der = rustls::pki_types::CertificateDer::from(cert.cert);
@@ -26,8 +32,8 @@ fn make_server_config() -> Result<ServerConfig, NetError> {
     .with_safe_default_protocol_versions()
     .map_err(|e| NetError::Tls(e.to_string()))?
     .with_no_client_auth()
-        .with_single_cert(vec![cert], key)
-        .map_err(|e| NetError::Tls(e.to_string()))?;
+    .with_single_cert(vec![cert], key)
+    .map_err(|e| NetError::Tls(e.to_string()))?;
     server_crypto.alpn_protocols = vec![b"tesseras/1".to_vec()];
 
     let server_config = ServerConfig::with_crypto(Arc::new(
@@ -45,8 +51,8 @@ fn make_client_config() -> Result<quinn::ClientConfig, NetError> {
     .with_safe_default_protocol_versions()
     .map_err(|e| NetError::Tls(e.to_string()))?
     .dangerous()
-        .with_custom_certificate_verifier(Arc::new(SkipServerVerification))
-        .with_no_client_auth();
+    .with_custom_certificate_verifier(Arc::new(SkipServerVerification))
+    .with_no_client_auth();
     client_crypto.alpn_protocols = vec![b"tesseras/1".to_vec()];
 
     let client_config = quinn::ClientConfig::new(Arc::new(
@@ -165,10 +171,7 @@ impl QuicTransport {
 }
 
 /// Send a length-prefixed MessagePack message over a QUIC send stream.
-pub async fn send_message(
-    send: &mut quinn::SendStream,
-    msg: &DhtMessage,
-) -> Result<(), NetError> {
+pub async fn send_message(send: &mut quinn::SendStream, msg: &DhtMessage) -> Result<(), NetError> {
     let data = msg.to_bytes();
     let len = (data.len() as u32).to_be_bytes();
     send.write_all(&len)
@@ -181,9 +184,7 @@ pub async fn send_message(
 }
 
 /// Receive a length-prefixed MessagePack message from a QUIC receive stream.
-pub async fn receive_message(
-    recv: &mut quinn::RecvStream,
-) -> Result<DhtMessage, NetError> {
+pub async fn receive_message(recv: &mut quinn::RecvStream) -> Result<DhtMessage, NetError> {
     let mut len_buf = [0u8; 4];
     recv.read_exact(&mut len_buf)
         .await
@@ -203,10 +204,7 @@ pub async fn receive_message(
 }
 
 /// Stream a blob over a dedicated QUIC send stream.
-pub async fn stream_blob(
-    send: &mut quinn::SendStream,
-    data: &[u8],
-) -> Result<(), NetError> {
+pub async fn stream_blob(send: &mut quinn::SendStream, data: &[u8]) -> Result<(), NetError> {
     let len = (data.len() as u64).to_be_bytes();
     send.write_all(&len)
         .await
@@ -219,9 +217,7 @@ pub async fn stream_blob(
 }
 
 /// Receive a blob from a dedicated QUIC receive stream.
-pub async fn receive_blob(
-    recv: &mut quinn::RecvStream,
-) -> Result<Vec<u8>, NetError> {
+pub async fn receive_blob(recv: &mut quinn::RecvStream) -> Result<Vec<u8>, NetError> {
     let mut len_buf = [0u8; 8];
     recv.read_exact(&mut len_buf)
         .await

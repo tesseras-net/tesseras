@@ -123,9 +123,9 @@ impl RoutingTable {
     fn bucket_index(&self, node_id: &NodeId) -> usize {
         let distance = self.local_id.distance(node_id);
         // Find the index of the highest bit set in the distance
-        for i in 0..32 {
-            if distance[i] != 0 {
-                let leading = distance[i].leading_zeros() as usize;
+        for (i, &byte) in distance.iter().enumerate() {
+            if byte != 0 {
+                let leading = byte.leading_zeros() as usize;
                 return 255 - (i * 8 + leading);
             }
         }
@@ -161,11 +161,8 @@ impl RoutingTable {
 
     /// Find the k closest nodes to a target.
     pub fn find_closest(&self, target: &NodeId, count: usize) -> Vec<PeerInfo> {
-        let mut all_peers: Vec<&PeerInfo> = self
-            .buckets
-            .iter()
-            .flat_map(|b| b.peers.iter())
-            .collect();
+        let mut all_peers: Vec<&PeerInfo> =
+            self.buckets.iter().flat_map(|b| b.peers.iter()).collect();
 
         all_peers.sort_by(|a, b| {
             let dist_a = target.distance(&a.node_id);

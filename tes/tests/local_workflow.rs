@@ -30,17 +30,11 @@ fn local_add_ls_cat_export_rm() {
         "add failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let hash = String::from_utf8(output.stdout)
-        .unwrap()
-        .trim()
-        .to_string();
+    let hash = String::from_utf8(output.stdout).unwrap().trim().to_string();
     assert_eq!(hash.len(), 64, "expected 64-char hex hash, got: {hash}");
 
     // Ls
-    let output = tes_cmd()
-        .args([&identity_flag, "ls"])
-        .output()
-        .unwrap();
+    let output = tes_cmd().args([&identity_flag, "ls"]).output().unwrap();
     assert!(output.status.success());
     let ls_out = String::from_utf8(output.stdout).unwrap();
     assert!(
@@ -89,14 +83,8 @@ fn local_add_ls_cat_export_rm() {
     assert!(output.status.success());
 
     // Ls should be empty now
-    let output = tes_cmd()
-        .args([&identity_flag, "ls"])
-        .output()
-        .unwrap();
+    let output = tes_cmd().args([&identity_flag, "ls"]).output().unwrap();
     assert!(output.status.success());
     let ls_out = String::from_utf8(output.stdout).unwrap();
-    assert!(
-        !ls_out.contains("Test Photo"),
-        "should be empty after rm"
-    );
+    assert!(!ls_out.contains("Test Photo"), "should be empty after rm");
 }

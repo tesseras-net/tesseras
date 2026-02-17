@@ -63,9 +63,7 @@ fn make_node(
     data_dir: &tesseras::config::DataDir,
     identity: tesseras::crypto::Identity,
 ) -> Result<tesseras::node::Node> {
-    let config = data_dir
-        .load_config()
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    let config = data_dir.load_config().map_err(|e| anyhow::anyhow!("{e}"))?;
     Ok(tesseras::node::Node::new(
         data_dir.clone(),
         identity,
