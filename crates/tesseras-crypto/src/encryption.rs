@@ -76,6 +76,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "experimental-visibility")]
     fn test_sealed_ctx() -> EncryptionContext {
         use chrono::TimeZone;
         EncryptionContext::Sealed {
@@ -121,6 +122,7 @@ mod tests {
         assert!(matches!(result, Err(CryptoError::DecryptFailed)));
     }
 
+    #[cfg(feature = "experimental-visibility")]
     #[test]
     fn aes256gcm_wrong_aad() {
         use chrono::TimeZone;
@@ -141,6 +143,7 @@ mod tests {
         assert!(matches!(result, Err(CryptoError::DecryptFailed)));
     }
 
+    #[cfg(feature = "experimental-visibility")]
     #[test]
     fn aes256gcm_private_vs_sealed_context() {
         let plaintext = b"same content";

@@ -20,8 +20,8 @@ pub struct PushArgs {
     #[arg(long)]
     pub tags: Option<String>,
 
-    /// Visibility: public (default), private, circle
-    #[arg(long, default_value = "public")]
+    /// Visibility: private (default), public, circle:<name>
+    #[arg(long, default_value = "private")]
     pub visibility: String,
 
     /// Show what would be created without writing

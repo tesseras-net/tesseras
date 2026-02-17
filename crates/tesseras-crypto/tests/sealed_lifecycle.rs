@@ -21,6 +21,7 @@ use tesseras_crypto::encryption::Aes256GcmEncryptor;
 use tesseras_crypto::kem::{ContentKey, HybridKem};
 use tesseras_crypto::sealed::{KeyPublication, SealedKeyEnvelope};
 
+#[cfg(feature = "experimental-visibility")]
 #[test]
 fn sealed_tessera_full_cycle() {
     // 1. Generate identity: signing keys + encryption keys

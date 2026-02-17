@@ -74,22 +74,12 @@ pub async fn run(args: &CreateArgs, data_dir: &str, socket: &Option<PathBuf>) ->
         .collect();
 
     // 4. Build CreateInput
-    let visibility = if args.sealed {
-        let open_after_str = args
-            .open_after
-            .as_deref()
-            .ok_or_else(|| anyhow::anyhow!("--sealed requires --open-after"))?;
-        let date = chrono::NaiveDate::parse_from_str(open_after_str, "%Y-%m-%d")
-            .context("--open-after must be YYYY-MM-DD")?;
-        let dt = date.and_hms_opt(0, 0, 0).unwrap().and_utc();
-        Visibility::Sealed { open_after: dt }
-    } else {
-        parse_visibility(&args.visibility)?
-    };
+    let visibility = parse_visibility(&args.visibility)?;
 
     let identity_store = FsIdentityStore::new(base.clone());
-    let encryption_public = if matches!(visibility, Visibility::Sealed { .. } | Visibility::Private)
-    {
+    let encryption_public =
+        if matches!(visibility, Visibility::Private | Visibility::Circle { .. })
+        {
         let x_mat = identity_store
             .load_keypair(KeyAlgorithm::X25519)
             .context("encryption keys not found — run `tes init --upgrade`")?;
@@ -303,11 +293,21 @@ pub fn infer_memory_type(path: &Path) -> MemoryType {
 }
 
 pub fn parse_visibility(s: &str) -> Result<Visibility> {
-    match s.to_lowercase().as_str() {
-        "public" => Ok(Visibility::Public),
-        "private" => Ok(Visibility::Private),
-        "circle" => Ok(Visibility::Circle),
-        other => anyhow::bail!("unknown visibility: {other}"),
+    let lower = s.to_lowercase();
+    if lower == "public" {
+        Ok(Visibility::Public)
+    } else if lower == "private" {
+        Ok(Visibility::Private)
+    } else if lower.starts_with("circle:") {
+        let circle = lower.strip_prefix("circle:").unwrap().to_string();
+        if circle.is_empty() {
+            anyhow::bail!("circle name required: --visibility circle:<name>");
+        }
+        Ok(Visibility::Circle { circle })
+    } else if lower == "circle" {
+        anyhow::bail!("circle name required: --visibility circle:<name>");
+    } else {
+        anyhow::bail!("unknown visibility: {s} (use: public, private, circle:<name>)");
     }
 }
 
@@ -381,10 +381,7 @@ impl tesseras_core::ContentEncryptor for CryptoEncryptor {
     ) -> Result<Vec<u8>, tesseras_core::CoreError> {
         use tesseras_core::enums::EncryptionContext;
         let content_hash = tesseras_core::ContentHash::new(aad.try_into().unwrap_or([0u8; 32]));
-        let ctx = EncryptionContext::Sealed {
-            content_hash,
-            open_after: chrono::Utc::now(),
-        };
+        let ctx = EncryptionContext::Private { content_hash };
         let blob = tesseras_crypto::encryption::Aes256GcmEncryptor::encrypt(content, key, &ctx)
             .map_err(|e| tesseras_core::CoreError::CryptoError(e.to_string()))?;
         // Serialize EncryptedBlob as nonce (12 bytes) + ciphertext

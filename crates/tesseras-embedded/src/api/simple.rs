@@ -137,10 +137,16 @@ fn parse_memory_type(s: &str) -> Result<tesseras_core::enums::MemoryType, String
 }
 
 fn parse_visibility(s: &str) -> Result<tesseras_core::enums::Visibility, String> {
-    match s.to_lowercase().as_str() {
+    let lower = s.to_lowercase();
+    match lower.as_str() {
         "private" => Ok(tesseras_core::enums::Visibility::Private),
-        "circle" => Ok(tesseras_core::enums::Visibility::Circle),
         "public" => Ok(tesseras_core::enums::Visibility::Public),
+        "circle" => Ok(tesseras_core::enums::Visibility::Circle {
+            circle: String::new(),
+        }),
+        _ if lower.starts_with("circle:") => Ok(tesseras_core::enums::Visibility::Circle {
+            circle: lower.strip_prefix("circle:").unwrap().to_string(),
+        }),
         _ => Err(format!("unknown visibility: {s}")),
     }
 }

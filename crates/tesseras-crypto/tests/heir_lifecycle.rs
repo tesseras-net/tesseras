@@ -107,10 +107,7 @@ fn heir_reconstruct_then_decrypt_sealed_tessera() {
         let original_content = b"This is a sealed memory that heirs will decrypt.";
         let content_hash =
             tesseras_core::ContentHash::new(*blake3::hash(original_content).as_bytes());
-        let ctx = EncryptionContext::Sealed {
-            content_hash,
-            open_after: chrono::Utc::now(),
-        };
+        let ctx = EncryptionContext::Private { content_hash };
         let encrypted = Aes256GcmEncryptor::encrypt(original_content, &content_key, &ctx).unwrap();
 
         // Split identity keys
