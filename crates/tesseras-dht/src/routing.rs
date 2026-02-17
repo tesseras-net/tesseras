@@ -8,10 +8,23 @@ use crate::distance;
 pub const K: usize = 20;
 pub const NUM_BUCKETS: usize = 160;
 
+/// Entry in the routing table, wrapping NodeInfo with failure tracking.
+#[derive(Debug, Clone)]
+struct RoutingEntry {
+    info: NodeInfo,
+    failures: u8,
+}
+
+impl RoutingEntry {
+    fn new(info: NodeInfo) -> Self {
+        Self { info, failures: 0 }
+    }
+}
+
 /// A single k-bucket: ordered deque, front = least-recently-seen.
 #[derive(Debug)]
 struct KBucket {
-    entries: VecDeque<NodeInfo>,
+    entries: VecDeque<RoutingEntry>,
 }
 
 impl KBucket {
@@ -35,22 +48,23 @@ impl KBucket {
         if let Some(pos) = self
             .entries
             .iter()
-            .position(|n| n.identity.node_id == node.identity.node_id)
+            .position(|n| n.info.identity.node_id == node.identity.node_id)
         {
-            self.entries.remove(pos);
-            self.entries.push_back(node);
+            let mut entry = self.entries.remove(pos).unwrap();
+            entry.info = node;
+            self.entries.push_back(entry);
             return InsertResult::Updated;
         }
 
         // If bucket not full, add to the back
         if !self.is_full() {
-            self.entries.push_back(node);
+            self.entries.push_back(RoutingEntry::new(node));
             return InsertResult::Inserted;
         }
 
         // Bucket is full: return the least-recently-seen node for ping check
         InsertResult::BucketFull {
-            least_recent: self.entries.front().cloned().unwrap(),
+            least_recent: self.entries.front().unwrap().info.clone(),
             pending: Box::new(node),
         }
     }
@@ -60,10 +74,10 @@ impl KBucket {
         if let Some(pos) = self
             .entries
             .iter()
-            .position(|n| n.identity.node_id == *old_id)
+            .position(|n| n.info.identity.node_id == *old_id)
         {
             self.entries.remove(pos);
-            self.entries.push_back(new_node);
+            self.entries.push_back(RoutingEntry::new(new_node));
             true
         } else {
             false
@@ -72,15 +86,23 @@ impl KBucket {
 
     /// The least-recently-seen responded to ping: keep it, move to back, discard pending.
     fn refresh_least_recent(&mut self, id: &NodeId) {
-        if let Some(pos) = self.entries.iter().position(|n| n.identity.node_id == *id) {
-            let node = self.entries.remove(pos).unwrap();
-            self.entries.push_back(node);
+        if let Some(pos) = self
+            .entries
+            .iter()
+            .position(|n| n.info.identity.node_id == *id)
+        {
+            let entry = self.entries.remove(pos).unwrap();
+            self.entries.push_back(entry);
         }
     }
 
     /// Remove a node by ID.
     fn remove(&mut self, id: &NodeId) -> bool {
-        if let Some(pos) = self.entries.iter().position(|n| n.identity.node_id == *id) {
+        if let Some(pos) = self
+            .entries
+            .iter()
+            .position(|n| n.info.identity.node_id == *id)
+        {
             self.entries.remove(pos);
             true
         } else {
@@ -89,7 +111,7 @@ impl KBucket {
     }
 
     fn closest(&self) -> impl Iterator<Item = &NodeInfo> {
-        self.entries.iter()
+        self.entries.iter().map(|e| &e.info)
     }
 }
 
@@ -181,7 +203,43 @@ impl RoutingTable {
 
     /// Return all peers from every bucket.
     pub fn all_peers(&self) -> Vec<NodeInfo> {
-        self.buckets.iter().flat_map(|b| b.entries.iter().cloned()).collect()
+        self.buckets
+            .iter()
+            .flat_map(|b| b.entries.iter().map(|e| e.info.clone()))
+            .collect()
+    }
+
+    /// Increment failure counter for a node. Returns new failure count.
+    pub fn increment_failures(&mut self, id: &NodeId) -> u8 {
+        let idx = match distance::bucket_index(&self.local_id, id) {
+            Some(i) => i,
+            None => return 0,
+        };
+        if let Some(entry) = self.buckets[idx]
+            .entries
+            .iter_mut()
+            .find(|e| e.info.identity.node_id == *id)
+        {
+            entry.failures = entry.failures.saturating_add(1);
+            entry.failures
+        } else {
+            0
+        }
+    }
+
+    /// Reset failure counter for a node (called after successful ping).
+    pub fn reset_failures(&mut self, id: &NodeId) {
+        let idx = match distance::bucket_index(&self.local_id, id) {
+            Some(i) => i,
+            None => return,
+        };
+        if let Some(entry) = self.buckets[idx]
+            .entries
+            .iter_mut()
+            .find(|e| e.info.identity.node_id == *id)
+        {
+            entry.failures = 0;
+        }
     }
 }
 
@@ -366,5 +424,35 @@ mod tests {
         assert_eq!(rt.len(), 1);
         assert!(rt.remove(&node.identity.node_id));
         assert_eq!(rt.len(), 0);
+    }
+
+    #[test]
+    fn increment_failures_tracks_count() {
+        let mut rt = RoutingTable::new(make_node_id(0x00));
+        let node = make_node(0x01);
+        rt.update(node.clone());
+
+        assert_eq!(rt.increment_failures(&node.identity.node_id), 1);
+        assert_eq!(rt.increment_failures(&node.identity.node_id), 2);
+        assert_eq!(rt.increment_failures(&node.identity.node_id), 3);
+        assert_eq!(rt.len(), 1); // still present
+    }
+
+    #[test]
+    fn reset_failures_clears_count() {
+        let mut rt = RoutingTable::new(make_node_id(0x00));
+        let node = make_node(0x01);
+        rt.update(node.clone());
+
+        rt.increment_failures(&node.identity.node_id);
+        rt.increment_failures(&node.identity.node_id);
+        rt.reset_failures(&node.identity.node_id);
+        assert_eq!(rt.increment_failures(&node.identity.node_id), 1);
+    }
+
+    #[test]
+    fn increment_failures_on_unknown_returns_zero() {
+        let mut rt = RoutingTable::new(make_node_id(0x00));
+        assert_eq!(rt.increment_failures(&make_node_id(0x99)), 0);
     }
 }
