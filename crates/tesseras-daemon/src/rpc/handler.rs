@@ -369,9 +369,16 @@ impl RpcHandler {
     }
 
     async fn handle_fetch(&self, hash: tesseras_core::ContentHash) -> Response {
-        // Fetch from network/local fragments
+        // Try local fragments first
         let data = match self.replication.fetch_tessera(&hash).await {
             Ok(d) => d,
+            Err(tesseras_replication::ReplicationError::NoFragmentsAvailable { .. }) => {
+                // Fallback: query DHT for the tessera pointer
+                match self.fetch_from_dht(&hash).await {
+                    Ok(d) => d,
+                    Err(resp) => return resp,
+                }
+            }
             Err(e) => {
                 return Response::Error {
                     code: ErrorCode::NotFound,
@@ -424,6 +431,112 @@ impl RpcHandler {
             memories: memory_count,
             bytes: total_bytes,
         }
+    }
+
+    /// Query DHT for a tessera pointer, fetch fragments from remote holders,
+    /// store them locally, then reassemble.
+    async fn fetch_from_dht(
+        &self,
+        hash: &tesseras_core::ContentHash,
+    ) -> Result<Vec<u8>, Response> {
+        let pointer = match self.dht_engine.find_tessera(hash).await {
+            Ok(Some(ptr)) => ptr,
+            Ok(None) => {
+                return Err(Response::Error {
+                    code: ErrorCode::NotFound,
+                    message: format!("tessera not found in local storage or DHT"),
+                })
+            }
+            Err(e) => {
+                return Err(Response::Error {
+                    code: ErrorCode::NotFound,
+                    message: format!("failed to query DHT: {e}"),
+                })
+            }
+        };
+
+        tracing::info!(%hash, holders = pointer.holders.len(), "found tessera pointer in DHT");
+
+        let mut fetched_any = false;
+
+        // Try fetching fragments from holders listed in the pointer
+        for holder in &pointer.holders {
+            for &frag_idx in &holder.fragments {
+                let target = tesseras_core::NodeInfo {
+                    identity: tesseras_core::NodeIdentity {
+                        node_id: holder.node_id,
+                        public_key: [0u8; 32],
+                        nonce: 0,
+                    },
+                    addr: holder.addr,
+                    alt_addrs: holder.alt_addrs.clone(),
+                    capabilities: tesseras_core::Capabilities::phase1_default(),
+                };
+                match self
+                    .dht_engine
+                    .fetch_fragment(&target, hash, frag_idx as u16)
+                    .await
+                {
+                    Ok(Some(envelope)) => {
+                        let sender_id = holder.node_id;
+                        if let Err(e) =
+                            self.replication.receive_fragment(envelope, &sender_id).await
+                        {
+                            tracing::warn!(error = %e, "failed to store fetched fragment");
+                        } else {
+                            fetched_any = true;
+                        }
+                    }
+                    Ok(None) => {
+                        tracing::debug!(%hash, index = frag_idx, "holder does not have fragment");
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "failed to fetch fragment from holder");
+                    }
+                }
+            }
+        }
+
+        // If pointer had no holders, try closest nodes
+        if pointer.holders.is_empty() {
+            let mut target_bytes = [0u8; 20];
+            target_bytes.copy_from_slice(&hash.as_bytes()[..20]);
+            let target_node = tesseras_core::types::NodeId::new(target_bytes);
+            let closest = self.dht_engine.find_closest_nodes(&target_node).await;
+
+            for node in &closest {
+                // Try fetching fragment index 0 (small tier = single fragment)
+                match self.dht_engine.fetch_fragment(node, hash, 0).await {
+                    Ok(Some(envelope)) => {
+                        let sender_id = node.identity.node_id;
+                        if let Err(e) =
+                            self.replication.receive_fragment(envelope, &sender_id).await
+                        {
+                            tracing::warn!(error = %e, "failed to store fetched fragment");
+                        } else {
+                            fetched_any = true;
+                            break;
+                        }
+                    }
+                    _ => continue,
+                }
+            }
+        }
+
+        if !fetched_any {
+            return Err(Response::Error {
+                code: ErrorCode::NotFound,
+                message: format!("tessera pointer found but could not fetch fragments"),
+            });
+        }
+
+        // Retry local fetch now that we have fragments
+        self.replication.fetch_tessera(hash).await.map_err(|e| {
+            Response::Error {
+                code: ErrorCode::Internal,
+                message: format!("fetched remote fragments but reassembly failed: {e}"),
+            }
+        })
     }
 
     async fn handle_tessera_status(&self, hash: tesseras_core::ContentHash) -> Response {
