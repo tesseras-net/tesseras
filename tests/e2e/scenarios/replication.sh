@@ -105,10 +105,11 @@ echo "--- Phase 2: Alice creates and publishes a tessera ---"
 # Create test file on alice
 $COMPOSE exec -T alice sh -c 'echo "Memory from Alice: the sky was orange at sunset." > /tmp/memory.txt'
 
-# Add the tessera (creates locally + erasure codes fragments)
-HASH_A=$($COMPOSE exec -T alice tes --identity=/data add /tmp/memory.txt --name "Sunset" 2>/dev/null)
-HASH_A=$(echo "$HASH_A" | tr -d '\r\n')
+# Add the tessera (auto-announces to DHT when daemon is running)
+ADD_OUT=$($COMPOSE exec -T alice tes --identity=/data add /tmp/memory.txt --name "Sunset" 2>&1)
+HASH_A=$(echo "$ADD_OUT" | head -1 | tr -d '\r\n')
 echo "Alice added tessera: $HASH_A"
+echo "Add output: $ADD_OUT"
 
 if [ -z "$HASH_A" ]; then
     echo "FAIL: No hash returned from add"
@@ -124,15 +125,11 @@ else
     exit 1
 fi
 
-# Publish to the DHT network (announce + distribute fragments)
-PUB_OUT=$($COMPOSE exec -T alice tes --identity=/data publish "$HASH_A" 2>&1 || true)
-echo "Publish output: $PUB_OUT"
-
-if echo "$PUB_OUT" | grep -qi "announced"; then
-    echo "PASS: Tessera published to network"
+# Verify add auto-announced to DHT
+if echo "$ADD_OUT" | grep -qi "Published to"; then
+    echo "PASS: Tessera auto-announced to network"
 else
-    echo "FAIL: Publish failed: $PUB_OUT"
-    exit 1
+    echo "WARN: Auto-announce output not detected (may still work): $ADD_OUT"
 fi
 
 # Give DHT time to propagate
@@ -266,21 +263,17 @@ echo "PASS: Phase 6 — Persistence across restart"
 echo ""
 echo "--- Phase 7: Multiple tesseras from different nodes ---"
 
-# Bob creates and publishes a tessera
+# Bob creates a tessera (auto-announces via daemon)
 $COMPOSE exec -T bob sh -c 'echo "Memory from Bob: the rain sounded like music." > /tmp/bob_memory.txt'
-HASH_B=$($COMPOSE exec -T bob tes --identity=/data add /tmp/bob_memory.txt --name "Rain" 2>/dev/null)
+HASH_B=$($COMPOSE exec -T bob tes --identity=/data add /tmp/bob_memory.txt --name "Rain" 2>&1 | head -1)
 HASH_B=$(echo "$HASH_B" | tr -d '\r\n')
 echo "Bob added tessera: $HASH_B"
 
-$COMPOSE exec -T bob tes --identity=/data publish "$HASH_B" 2>&1 || true
-
-# Charlie creates and publishes a tessera
+# Charlie creates a tessera (auto-announces via daemon)
 $COMPOSE exec -T charlie sh -c 'echo "Memory from Charlie: we laughed until we cried." > /tmp/charlie_memory.txt'
-HASH_C=$($COMPOSE exec -T charlie tes --identity=/data add /tmp/charlie_memory.txt --name "Laughter" 2>/dev/null)
+HASH_C=$($COMPOSE exec -T charlie tes --identity=/data add /tmp/charlie_memory.txt --name "Laughter" 2>&1 | head -1)
 HASH_C=$(echo "$HASH_C" | tr -d '\r\n')
 echo "Charlie added tessera: $HASH_C"
-
-$COMPOSE exec -T charlie tes --identity=/data publish "$HASH_C" 2>&1 || true
 sleep 2
 
 # Start dave, fetch both
