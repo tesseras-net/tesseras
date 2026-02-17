@@ -11,7 +11,7 @@ use super::init::expand_tilde;
 
 #[derive(clap::Args)]
 pub struct CreateArgs {
-    /// Directory containing files to include
+    /// File or directory containing files to include (recursive)
     pub path: String,
     /// Non-interactive mode (skip prompts)
     #[arg(short = 'n', long)]
@@ -47,11 +47,8 @@ pub async fn run(args: &CreateArgs, data_dir: &str) -> Result<()> {
         eprintln!("Initialized new identity at {}", base.display());
     }
 
-    // 1. Scan input directory for supported files
-    let files = scan_directory(&args.path)?;
-    if files.is_empty() {
-        anyhow::bail!("No supported files found in {}", args.path);
-    }
+    // 1. Scan input for supported files
+    let files = scan_input(&args.path)?;
 
     // 2. Dry run: just print what would happen
     if args.dry_run {
@@ -137,28 +134,61 @@ pub async fn run(args: &CreateArgs, data_dir: &str) -> Result<()> {
     Ok(())
 }
 
-fn scan_directory(path: &str) -> Result<Vec<PathBuf>> {
-    let dir = PathBuf::from(path);
-    if !dir.is_dir() {
-        anyhow::bail!("{} is not a directory", path);
-    }
-    let mut files = Vec::new();
-    for entry in std::fs::read_dir(&dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_file() {
-            if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                match ext.to_lowercase().as_str() {
-                    "jpg" | "jpeg" | "png" | "wav" | "webm" | "txt" => {
-                        files.push(path);
-                    }
-                    _ => {}
-                }
-            }
+fn scan_input(path: &str) -> Result<Vec<PathBuf>> {
+    let path = PathBuf::from(path);
+
+    if path.is_file() {
+        if is_supported_file(&path) {
+            return Ok(vec![path]);
+        } else {
+            anyhow::bail!(
+                "unsupported file format: {}. Supported: jpg, jpeg, png, wav, webm, txt",
+                path.display()
+            );
         }
     }
+
+    if !path.is_dir() {
+        anyhow::bail!("{} is not a file or directory", path.display());
+    }
+
+    // Recursive directory scan
+    let mut files = Vec::new();
+    scan_recursive(&path, &mut files)?;
     files.sort();
+
+    if files.is_empty() {
+        anyhow::bail!(
+            "no supported files found in {}. Supported: jpg, jpeg, png, wav, webm, txt",
+            path.display()
+        );
+    }
+
     Ok(files)
+}
+
+fn scan_recursive(dir: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            scan_recursive(&path, files)?;
+        } else if path.is_file() && is_supported_file(&path) {
+            files.push(path);
+        }
+    }
+    Ok(())
+}
+
+fn is_supported_file(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|ext| {
+            matches!(
+                ext.to_lowercase().as_str(),
+                "jpg" | "jpeg" | "png" | "wav" | "webm" | "txt"
+            )
+        })
 }
 
 fn infer_memory_type(path: &Path) -> MemoryType {
