@@ -15,6 +15,7 @@ pub mod search;
 #[cfg(feature = "service")]
 pub mod service;
 pub mod tessera;
+pub mod tombstone;
 pub mod types;
 
 pub use enums::{ApproximateDate, EncryptionContext, MemoryType, SchemaVersion, Visibility};
@@ -30,4 +31,5 @@ pub use search::*;
 #[cfg(feature = "service")]
 pub use service::{CreateInput, FileInput, FileVerification, TesseraService, VerifyReport};
 pub use tessera::{HeirShareMeta, HybridEncryptionPublic, Tessera, TesseraIdentity};
+pub use tombstone::Tombstone;
 pub use types::{ContentHash, HashPrefix, NodeId};
