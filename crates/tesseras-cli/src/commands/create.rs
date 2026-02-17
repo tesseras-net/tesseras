@@ -130,10 +130,68 @@ pub async fn run(args: &CreateArgs, data_dir: &str, socket: &Option<PathBuf>) ->
         encryption_public,
     };
 
+    // Count files by type for summary (before moving file_inputs)
+    let file_summary = {
+        let photo_count = files
+            .iter()
+            .filter(|f| {
+                f.extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|e| matches!(e.to_lowercase().as_str(), "jpg" | "jpeg" | "png"))
+            })
+            .count();
+        let audio_count = files
+            .iter()
+            .filter(|f| {
+                f.extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|e| e.to_lowercase() == "wav")
+            })
+            .count();
+        let video_count = files
+            .iter()
+            .filter(|f| {
+                f.extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|e| e.to_lowercase() == "webm")
+            })
+            .count();
+        let text_count = files
+            .iter()
+            .filter(|f| {
+                f.extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|e| e.to_lowercase() == "txt")
+            })
+            .count();
+
+        let mut parts = Vec::new();
+        if photo_count > 0 {
+            parts.push(format!(
+                "{photo_count} photo{}",
+                if photo_count > 1 { "s" } else { "" }
+            ));
+        }
+        if audio_count > 0 {
+            parts.push(format!("{audio_count} audio"));
+        }
+        if video_count > 0 {
+            parts.push(format!("{video_count} video"));
+        }
+        if text_count > 0 {
+            parts.push(format!("{text_count} text"));
+        }
+        parts.join(", ")
+    };
+
     // 5. Build service and create tessera
     let service = build_service(&base)?;
     let content_hash = service.create(input).await?;
-    println!("Created tessera: {}", content_hash.to_base32());
+
+    println!();
+    println!("Memory preserved.");
+    println!("  Hash:  {}", content_hash.to_base32_short(8));
+    println!("  Files: {file_summary}");
 
     // 6. Auto-publish to network (unless --no-publish)
     if !args.no_publish {
@@ -156,7 +214,7 @@ pub async fn run(args: &CreateArgs, data_dir: &str, socket: &Option<PathBuf>) ->
                     Ok(tesseras_rpc::Response::Published {
                         fragments_created, ..
                     }) => {
-                        println!("Published to network ({fragments_created} fragments)");
+                        println!("  Network: {fragments_created} fragments distributed");
                     }
                     Ok(_) => {
                         eprintln!("Warning: unexpected response from daemon");
@@ -176,6 +234,7 @@ pub async fn run(args: &CreateArgs, data_dir: &str, socket: &Option<PathBuf>) ->
         }
     }
 
+    println!("  Show:  tes show {}", content_hash.to_base32_short(8));
     Ok(())
 }
 
