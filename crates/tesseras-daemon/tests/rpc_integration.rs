@@ -123,6 +123,17 @@ fn make_handler(
         replication: Arc::new(replication),
         cas,
         dht_engine,
+        tombstone_repo: Arc::new(tesseras_storage::SqliteTombstoneRepository::new(
+            Arc::clone(&conn),
+        )),
+        circle_repo: Arc::new(tesseras_storage::SqliteCircleRepository::new(
+            Arc::clone(&conn),
+        )),
+        operation_queue: Arc::new(tesseras_storage::SqliteOperationQueue::new(
+            Arc::clone(&conn),
+        )),
+        data_dir: dir.to_path_buf(),
+        start_time: std::time::Instant::now(),
     })
 }
 

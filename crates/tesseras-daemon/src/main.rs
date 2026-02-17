@@ -278,6 +278,13 @@ async fn main() -> Result<()> {
         replication: Arc::clone(&replication),
         cas: Arc::clone(&cas),
         dht_engine: Arc::clone(&engine),
+        tombstone_repo: Arc::new(tesseras_storage::SqliteTombstoneRepository::new(
+            conn.clone(),
+        )),
+        circle_repo: Arc::new(tesseras_storage::SqliteCircleRepository::new(conn.clone())),
+        operation_queue: Arc::new(tesseras_storage::SqliteOperationQueue::new(conn.clone())),
+        data_dir: config.node.data_dir.clone(),
+        start_time: std::time::Instant::now(),
     });
 
     // 8. Setup shutdown signal
