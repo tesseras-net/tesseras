@@ -8,6 +8,7 @@ pub mod institutional;
 pub mod list;
 pub mod peers;
 pub mod publish;
+pub mod pull;
 pub mod push;
 pub mod show;
 pub mod status;

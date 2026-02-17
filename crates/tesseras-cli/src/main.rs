@@ -85,6 +85,9 @@ enum Commands {
     /// Share memories on the network
     Push(commands::push::PushArgs),
 
+    /// Download memories from the network
+    Pull(commands::pull::PullArgs),
+
     /// Create a tessera from a directory of files
     #[command(visible_alias = "c")]
     Create(commands::create::CreateArgs),
@@ -248,6 +251,9 @@ async fn main() -> Result<()> {
     match cli.command {
         Commands::Push(ref args) => {
             commands::push::run(args, &cli.data_dir, &cli.socket).await
+        }
+        Commands::Pull(ref args) => {
+            commands::pull::run(args, &cli.data_dir, &cli.socket).await
         }
         Commands::Create(ref args) => {
             commands::create::run(args, &cli.data_dir, &cli.socket).await
