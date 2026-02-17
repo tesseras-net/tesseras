@@ -333,10 +333,34 @@ impl RpcHandler {
 
         // 2. Replicate to network
         match self.replication.replicate_tessera(&hash, &packed).await {
-            Ok(report) => Response::Published {
-                hash,
-                fragments_created: report.fragments_distributed as u32,
-            },
+            Ok(report) => {
+                // 3. Publish pointer to DHT so other nodes can discover this tessera
+                if let Ok(Some(record)) = self.tessera_repo.find_by_hash(&hash) {
+                    let visibility: tesseras_core::Visibility =
+                        serde_json::from_str(&record.visibility)
+                            .unwrap_or(tesseras_core::Visibility::Public);
+                    let pointer = tesseras_core::TesseraPointer {
+                        tessera_hash: hash,
+                        size_bytes: record.size_bytes,
+                        holders: vec![],
+                        visibility,
+                        created_at: record.created_at,
+                    };
+                    match self.dht_engine.publish(pointer).await {
+                        Ok(acks) => {
+                            tracing::info!(%hash, acks, "published tessera pointer to DHT")
+                        }
+                        Err(e) => {
+                            tracing::warn!(%hash, error = %e, "failed to publish pointer to DHT")
+                        }
+                    }
+                }
+
+                Response::Published {
+                    hash,
+                    fragments_created: report.fragments_distributed as u32,
+                }
+            }
             Err(e) => Response::Error {
                 code: ErrorCode::Internal,
                 message: format!("replication failed: {e}"),
