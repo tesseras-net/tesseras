@@ -31,3 +31,4 @@ rusqlite = { workspace = true }
 [features]
 default = []
 service = ["dep:tokio", "dep:async-trait"]
+experimental-visibility = []

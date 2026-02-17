@@ -97,7 +97,7 @@ impl TesseraService {
         // Validate: Sealed and Private require encryption keys
         let requires_encryption = matches!(
             input.visibility,
-            Visibility::Sealed { .. } | Visibility::Private
+            Visibility::Private | Visibility::Circle { .. }
         );
         if requires_encryption && input.encryption_public.is_none() {
             return Err(CoreError::MissingEncryptionKeys {
@@ -259,9 +259,18 @@ impl TesseraService {
             Some(ManifestEncryption {
                 scheme: "hybrid-kem-v1".to_string(),
                 envelope_base64,
-                open_after: match &input.visibility {
-                    Visibility::Sealed { open_after } => Some(*open_after),
-                    _ => None,
+                open_after: {
+                    #[cfg(feature = "experimental-visibility")]
+                    {
+                        match &input.visibility {
+                            Visibility::Sealed { open_after } => Some(*open_after),
+                            _ => None,
+                        }
+                    }
+                    #[cfg(not(feature = "experimental-visibility"))]
+                    {
+                        None
+                    }
                 },
             })
         } else {
@@ -302,9 +311,18 @@ impl TesseraService {
             size_bytes: total_size,
             memory_count: memory_entries.len() as u32,
             visibility: vis_str,
-            sealed_until: match &input.visibility {
-                Visibility::Sealed { open_after } => Some(*open_after),
-                _ => None,
+            sealed_until: {
+                #[cfg(feature = "experimental-visibility")]
+                {
+                    match &input.visibility {
+                        Visibility::Sealed { open_after } => Some(*open_after),
+                        _ => None,
+                    }
+                }
+                #[cfg(not(feature = "experimental-visibility"))]
+                {
+                    None
+                }
             },
             is_mine: true,
         };
@@ -795,6 +813,7 @@ mod tests {
         assert!(report.files.iter().all(|f| f.valid));
     }
 
+    #[cfg(feature = "experimental-visibility")]
     #[tokio::test]
     async fn create_sealed_without_encryption_keys_rejected() {
         use chrono::TimeZone;
@@ -856,7 +875,9 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "experimental-visibility")]
     struct MockEncryptor;
+    #[cfg(feature = "experimental-visibility")]
     impl ContentEncryptor for MockEncryptor {
         fn encrypt(
             &self,
@@ -881,6 +902,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "experimental-visibility")]
     fn build_service_with_encryption() -> TesseraService {
         TesseraService::new_with_encryption(
             Box::new(InMemoryTesseraRepo::new()),
@@ -893,6 +915,7 @@ mod tests {
         )
     }
 
+    #[cfg(feature = "experimental-visibility")]
     #[tokio::test]
     async fn create_sealed_tessera_encrypts_memories() {
         use chrono::TimeZone;

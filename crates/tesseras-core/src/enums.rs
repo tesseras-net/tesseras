@@ -1,6 +1,8 @@
 use std::fmt;
 
-use chrono::{DateTime, NaiveDate, Utc};
+#[cfg(feature = "experimental-visibility")]
+use chrono::{DateTime, Utc};
+use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
 use crate::types::ContentHash;
@@ -19,9 +21,11 @@ pub enum MemoryType {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Visibility {
     Private,
-    Circle,
+    Circle { circle: String },
     Public,
+    #[cfg(feature = "experimental-visibility")]
     PublicAfterDeath { inactive_years: u32 },
+    #[cfg(feature = "experimental-visibility")]
     Sealed { open_after: DateTime<Utc> },
 }
 
@@ -29,11 +33,13 @@ impl fmt::Display for Visibility {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Visibility::Private => write!(f, "private"),
-            Visibility::Circle => write!(f, "circle"),
+            Visibility::Circle { circle } => write!(f, "circle:{circle}"),
             Visibility::Public => write!(f, "public"),
+            #[cfg(feature = "experimental-visibility")]
             Visibility::PublicAfterDeath { inactive_years } => {
                 write!(f, "public after {inactive_years}y inactive")
             }
+            #[cfg(feature = "experimental-visibility")]
             Visibility::Sealed { open_after } => {
                 write!(f, "sealed until {}", open_after.format("%Y-%m-%d"))
             }
@@ -50,6 +56,11 @@ pub enum EncryptionContext {
     Private {
         content_hash: ContentHash,
     },
+    Circle {
+        content_hash: ContentHash,
+        circle: String,
+    },
+    #[cfg(feature = "experimental-visibility")]
     Sealed {
         content_hash: ContentHash,
         open_after: DateTime<Utc>,
@@ -65,6 +76,16 @@ impl EncryptionContext {
                 buf.extend_from_slice(content_hash.as_bytes());
                 buf
             }
+            Self::Circle {
+                content_hash,
+                circle,
+            } => {
+                let mut buf = vec![0x02]; // tag byte for Circle
+                buf.extend_from_slice(content_hash.as_bytes());
+                buf.extend_from_slice(circle.as_bytes());
+                buf
+            }
+            #[cfg(feature = "experimental-visibility")]
             Self::Sealed {
                 content_hash,
                 open_after,
@@ -126,6 +147,26 @@ mod tests {
     }
 
     #[test]
+    fn visibility_circle_serde() {
+        let v = Visibility::Circle {
+            circle: "family".to_string(),
+        };
+        let json = serde_json::to_string(&v).unwrap();
+        assert!(json.contains("family"));
+        let parsed: Visibility = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, v);
+    }
+
+    #[test]
+    fn visibility_circle_display() {
+        let v = Visibility::Circle {
+            circle: "family".to_string(),
+        };
+        assert_eq!(v.to_string(), "circle:family");
+    }
+
+    #[cfg(feature = "experimental-visibility")]
+    #[test]
     fn visibility_sealed_serde_rfc3339() {
         let dt = chrono::DateTime::parse_from_rfc3339("2050-01-01T00:00:00Z")
             .unwrap()
@@ -137,6 +178,7 @@ mod tests {
         assert_eq!(parsed, v);
     }
 
+    #[cfg(feature = "experimental-visibility")]
     #[test]
     fn visibility_public_after_death_serde() {
         let v = Visibility::PublicAfterDeath { inactive_years: 5 };
