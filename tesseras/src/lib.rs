@@ -5,3 +5,4 @@ pub mod storage;
 pub mod dht;
 pub mod net;
 pub mod replication;
+pub mod node;
