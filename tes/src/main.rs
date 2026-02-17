@@ -58,6 +58,21 @@ fn ensure_identity(data_dir: &tesseras::config::DataDir) -> Result<tesseras::cry
     }
 }
 
+/// Create a Node from data directory and identity.
+fn make_node(
+    data_dir: &tesseras::config::DataDir,
+    identity: tesseras::crypto::Identity,
+) -> Result<tesseras::node::Node> {
+    let config = data_dir
+        .load_config()
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    Ok(tesseras::node::Node::new(
+        data_dir.clone(),
+        identity,
+        config,
+    )?)
+}
+
 fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
@@ -69,19 +84,22 @@ fn main() -> Result<()> {
     match cli.command {
         Commands::Add(args) => {
             let identity = ensure_identity(&data_dir)?;
-            commands::add::run(&data_dir, &identity, args)
+            let node = make_node(&data_dir, identity)?;
+            commands::add::run_with_node(&node, args)
         }
         Commands::Get(args) => {
             let _identity = ensure_identity(&data_dir)?;
             commands::get::run(&data_dir, args)
         }
         Commands::Rm(args) => {
-            let _identity = ensure_identity(&data_dir)?;
-            commands::rm::run(&data_dir, args)
+            let identity = ensure_identity(&data_dir)?;
+            let node = make_node(&data_dir, identity)?;
+            commands::rm::run_with_node(&node, args)
         }
         Commands::Ls => {
-            let _identity = ensure_identity(&data_dir)?;
-            commands::ls::run(&data_dir)
+            let identity = ensure_identity(&data_dir)?;
+            let node = make_node(&data_dir, identity)?;
+            commands::ls::run_with_node(&node)
         }
         Commands::Cat(args) => {
             let _identity = ensure_identity(&data_dir)?;

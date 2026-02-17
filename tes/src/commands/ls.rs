@@ -1,11 +1,9 @@
 use anyhow::Result;
 
-use tesseras::config::DataDir;
-use tesseras::storage::Storage;
+use tesseras::node::Node;
 
-pub fn run(data_dir: &DataDir) -> Result<()> {
-    let storage = Storage::open(data_dir.clone())?;
-    let tesseras = storage.list_tesseras()?;
+pub fn run_with_node(node: &Node) -> Result<()> {
+    let tesseras = node.list_tesseras()?;
 
     if tesseras.is_empty() {
         eprintln!("No tesseras found.");

@@ -14,6 +14,8 @@ pub enum AdminCommand {
         #[command(subcommand)]
         command: DaemonCommand,
     },
+    /// Show node identity info
+    Id,
 }
 
 #[derive(clap::Subcommand)]
@@ -28,7 +30,7 @@ pub enum BootstrapCommand {
 
 #[derive(clap::Subcommand)]
 pub enum DaemonCommand {
-    /// Start the daemon in the background
+    /// Start the daemon in the foreground
     Start,
     /// Stop the daemon
     Stop,
@@ -79,17 +81,63 @@ pub fn run(data_dir: &DataDir, command: AdminCommand) -> Result<()> {
         },
         AdminCommand::Daemon { command } => match command {
             DaemonCommand::Start => {
-                eprintln!("Daemon start not yet implemented.");
+                eprintln!("Daemon start not yet implemented (requires Task 13 E2E setup).");
+                eprintln!("Use the node library directly for now.");
                 Ok(())
             }
             DaemonCommand::Stop => {
-                eprintln!("Daemon stop not yet implemented.");
+                let pid_path = data_dir.root().join("daemon.pid");
+                if pid_path.exists() {
+                    let pid_str = std::fs::read_to_string(&pid_path)?;
+                    eprintln!("Stopping daemon (PID: {})...", pid_str.trim());
+                    #[cfg(unix)]
+                    {
+                        use std::process::Command;
+                        let _ = Command::new("kill")
+                            .arg(pid_str.trim())
+                            .status();
+                    }
+                    let _ = std::fs::remove_file(&pid_path);
+                    eprintln!("Daemon stopped.");
+                } else {
+                    eprintln!("No daemon PID file found.");
+                }
                 Ok(())
             }
             DaemonCommand::Status => {
-                eprintln!("Daemon status not yet implemented.");
+                let pid_path = data_dir.root().join("daemon.pid");
+                if pid_path.exists() {
+                    let pid_str = std::fs::read_to_string(&pid_path)?;
+                    eprintln!("Daemon PID: {}", pid_str.trim());
+                    // Check if process is alive
+                    #[cfg(unix)]
+                    {
+                        let status = std::process::Command::new("kill")
+                            .args(["-0", pid_str.trim()])
+                            .status();
+                        if status.is_ok() && status.unwrap().success() {
+                            eprintln!("Status: running");
+                        } else {
+                            eprintln!("Status: not running (stale PID file)");
+                        }
+                    }
+                } else {
+                    eprintln!("Daemon is not running.");
+                }
                 Ok(())
             }
         },
+        AdminCommand::Id => {
+            let key_path = data_dir.identity_key_path();
+            if key_path.exists() {
+                let identity = tesseras::crypto::Identity::load(&key_path)?;
+                println!("Node ID:     {}", identity.node_id());
+                println!("Public Key:  {}", hex::encode(identity.public_key_bytes()));
+                println!("Key File:    {}", key_path.display());
+            } else {
+                eprintln!("No identity found. Run any command to auto-create one.");
+            }
+            Ok(())
+        }
     }
 }
