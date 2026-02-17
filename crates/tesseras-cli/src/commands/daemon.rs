@@ -137,7 +137,7 @@ pub async fn run_status(data_dir: &str) -> Result<()> {
             // Try to get peer count
             if let Ok(socket_path) = tesseras_rpc::default_socket_path() {
                 if let Ok(mut client) = tesseras_rpc::DaemonClient::connect(&socket_path) {
-                    if let Ok(tesseras_rpc::Response::Peers { peers }) =
+                    if let Ok(tesseras_rpc::Response::PeerList { peers }) =
                         client.call(&tesseras_rpc::Request::Peers)
                     {
                         println!("  Peers: {}", peers.len());

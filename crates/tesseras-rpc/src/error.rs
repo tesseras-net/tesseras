@@ -60,8 +60,13 @@ fn friendly_io_message(err: &std::io::Error) -> String {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum ErrorCode {
     NotFound,
+    NotOwner,
     DaemonBusy,
     NetworkUnavailable,
+    CircleNotFound,
+    ContactNotFound,
+    AlreadyExists,
+    InvalidInput,
     Internal,
 }
 

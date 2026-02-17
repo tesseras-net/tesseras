@@ -180,7 +180,7 @@ async fn status_unknown_hash_returns_error() {
     let sp = socket_path.clone();
     let result = tokio::task::spawn_blocking(move || {
         let mut client = DaemonClient::connect(&sp).unwrap();
-        client.call(&Request::Status {
+        client.call(&Request::TesseraStatus {
             hash: ContentHash::new([0xbb; 32]),
         })
     })

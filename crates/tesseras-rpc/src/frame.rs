@@ -53,7 +53,7 @@ mod tests {
     #[test]
     fn frame_roundtrip_response() {
         let hash = ContentHash::new([0x22; 32]);
-        let resp = Response::Status {
+        let resp = Response::LegacyStatus {
             hash,
             state: PublishState::Healthy,
             fragments_total: 12,
@@ -67,7 +67,7 @@ mod tests {
         let mut cursor = std::io::Cursor::new(&buf);
         let decoded: Response = read_frame(&mut cursor).unwrap();
         match decoded {
-            Response::Status {
+            Response::LegacyStatus {
                 fragments_total,
                 peers_holding,
                 ..

@@ -23,7 +23,7 @@ pub async fn run(socket: &Option<PathBuf>) -> Result<()> {
         .context("peers request failed")?;
 
     match response {
-        Response::Peers { peers } => {
+        Response::PeerList { peers } => {
             if peers.is_empty() {
                 println!("No peers in routing table.");
                 return Ok(());

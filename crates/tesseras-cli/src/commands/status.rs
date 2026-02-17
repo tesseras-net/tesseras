@@ -22,13 +22,13 @@ pub async fn run(hash: &str, data_dir: &str, socket: &Option<PathBuf>) -> Result
     })?;
 
     let response = client
-        .call(&Request::Status {
+        .call(&Request::TesseraStatus {
             hash: content_hash,
         })
         .context("status request failed")?;
 
     match response {
-        Response::Status {
+        Response::LegacyStatus {
             hash,
             state,
             fragments_total,

@@ -20,15 +20,22 @@ pub struct RpcHandler {
 impl RpcHandler {
     pub async fn handle(&self, request: Request) -> Response {
         match request {
+            // Legacy
             Request::Publish { hash } => self.handle_publish(hash).await,
             Request::Fetch { hash } => self.handle_fetch(hash).await,
-            Request::Status { hash } => self.handle_status(hash).await,
+            Request::TesseraStatus { hash } => self.handle_tessera_status(hash).await,
             Request::Peers => self.handle_peers().await,
+
+            // New operations (stub for now, will be implemented in Task 12)
+            _ => Response::Error {
+                code: ErrorCode::Internal,
+                message: "not yet implemented".to_string(),
+            },
         }
     }
 
     async fn handle_peers(&self) -> Response {
-        Response::Peers {
+        Response::PeerList {
             peers: self.dht_engine.all_peers().await,
         }
     }
@@ -127,7 +134,7 @@ impl RpcHandler {
         }
     }
 
-    async fn handle_status(&self, hash: tesseras_core::ContentHash) -> Response {
+    async fn handle_tessera_status(&self, hash: tesseras_core::ContentHash) -> Response {
         // Check if tessera exists locally
         let exists = match self.tessera_repo.exists(&hash) {
             Ok(e) => e,
@@ -174,7 +181,7 @@ impl RpcHandler {
                     state
                 };
 
-                Response::Status {
+                Response::LegacyStatus {
                     hash,
                     state,
                     fragments_total,
