@@ -52,6 +52,18 @@ impl Storage {
                 node_id     TEXT PRIMARY KEY,
                 addresses   TEXT NOT NULL,
                 last_seen   TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS fragments (
+                id              INTEGER PRIMARY KEY,
+                blob_hash       TEXT NOT NULL,
+                fragment_index  INTEGER NOT NULL,
+                fragment_hash   TEXT NOT NULL,
+                shard_size      INTEGER NOT NULL,
+                original_size   INTEGER NOT NULL,
+                data_shards     INTEGER NOT NULL,
+                parity_shards   INTEGER NOT NULL,
+                UNIQUE(blob_hash, fragment_index)
             );",
         )?;
         Ok(())
@@ -244,6 +256,93 @@ impl Storage {
         Ok(tesseras)
     }
 
+    /// Store a blob directly from bytes. Returns the BLAKE3 hash.
+    pub fn store_blob_bytes(&self, data: &[u8]) -> Result<ContentHash, StorageError> {
+        self.store_blob(&mut &data[..])
+    }
+
+    /// Read a blob into a Vec<u8>.
+    pub fn read_blob_bytes(&self, hash: &ContentHash) -> Result<Vec<u8>, StorageError> {
+        let mut buf = Vec::new();
+        self.read_blob(hash, &mut buf)?;
+        Ok(buf)
+    }
+
+    /// Store fragment metadata in SQLite. The fragment data itself is stored as a blob.
+    pub fn store_fragment(
+        &self,
+        blob_hash: &ContentHash,
+        meta: &FragmentMeta,
+    ) -> Result<(), StorageError> {
+        self.db.execute(
+            "INSERT OR REPLACE INTO fragments
+             (blob_hash, fragment_index, fragment_hash, shard_size, original_size, data_shards, parity_shards)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            rusqlite::params![
+                blob_hash.to_string(),
+                meta.fragment_index as i64,
+                meta.fragment_hash.to_string(),
+                meta.shard_size as i64,
+                meta.original_size as i64,
+                meta.data_shards as i64,
+                meta.parity_shards as i64,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Find all fragment metadata for a blob hash.
+    pub fn find_fragments(
+        &self,
+        blob_hash: &ContentHash,
+    ) -> Result<Vec<FragmentMeta>, StorageError> {
+        let mut stmt = self.db.prepare(
+            "SELECT fragment_index, fragment_hash, shard_size, original_size, data_shards, parity_shards
+             FROM fragments WHERE blob_hash = ?1 ORDER BY fragment_index",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![blob_hash.to_string()], |row| {
+            let index: i64 = row.get(0)?;
+            let hash_s: String = row.get(1)?;
+            let shard_size: i64 = row.get(2)?;
+            let original_size: i64 = row.get(3)?;
+            let data_shards: i64 = row.get(4)?;
+            let parity_shards: i64 = row.get(5)?;
+            Ok((
+                index,
+                hash_s,
+                shard_size,
+                original_size,
+                data_shards,
+                parity_shards,
+            ))
+        })?;
+
+        let mut fragments = Vec::new();
+        for row in rows {
+            let (index, hash_s, shard_size, original_size, data_shards, parity_shards) = row?;
+            fragments.push(FragmentMeta {
+                fragment_index: index as usize,
+                fragment_hash: hash_s
+                    .parse()
+                    .map_err(|e| StorageError::Data(format!("{e}")))?,
+                shard_size: shard_size as usize,
+                original_size: original_size as usize,
+                data_shards: data_shards as usize,
+                parity_shards: parity_shards as usize,
+            });
+        }
+        Ok(fragments)
+    }
+
+    /// Delete fragment metadata for a blob hash.
+    pub fn delete_fragments(&self, blob_hash: &ContentHash) -> Result<(), StorageError> {
+        self.db.execute(
+            "DELETE FROM fragments WHERE blob_hash = ?1",
+            rusqlite::params![blob_hash.to_string()],
+        )?;
+        Ok(())
+    }
+
     /// Delete a tessera and its memories from SQLite (blobs deleted separately).
     pub fn delete_tessera(&self, hash: &ContentHash) -> Result<(), StorageError> {
         let hash_str = hash.to_string();
@@ -257,6 +356,17 @@ impl Storage {
         )?;
         Ok(())
     }
+}
+
+/// Fragment metadata stored in SQLite.
+#[derive(Debug, Clone)]
+pub struct FragmentMeta {
+    pub fragment_index: usize,
+    pub fragment_hash: ContentHash,
+    pub shard_size: usize,
+    pub original_size: usize,
+    pub data_shards: usize,
+    pub parity_shards: usize,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -395,5 +505,66 @@ mod tests {
         let fake = crypto::hash_bytes(b"nope");
         let mut buf = Vec::new();
         assert!(storage.read_blob(&fake, &mut buf).is_err());
+    }
+
+    #[test]
+    fn store_and_find_fragments() {
+        let (_tmp, storage) = test_storage();
+        let blob_hash = crypto::hash_bytes(b"original blob");
+
+        // Store 5 fragment metadata entries
+        for i in 0..5 {
+            let frag_hash = crypto::hash_bytes(format!("fragment-{i}").as_bytes());
+            let meta = FragmentMeta {
+                fragment_index: i,
+                fragment_hash: frag_hash,
+                shard_size: 128,
+                original_size: 300,
+                data_shards: 3,
+                parity_shards: 2,
+            };
+            storage.store_fragment(&blob_hash, &meta).unwrap();
+        }
+
+        let fragments = storage.find_fragments(&blob_hash).unwrap();
+        assert_eq!(fragments.len(), 5);
+        assert_eq!(fragments[0].fragment_index, 0);
+        assert_eq!(fragments[4].fragment_index, 4);
+        assert_eq!(fragments[0].shard_size, 128);
+        assert_eq!(fragments[0].original_size, 300);
+        assert_eq!(fragments[0].data_shards, 3);
+        assert_eq!(fragments[0].parity_shards, 2);
+    }
+
+    #[test]
+    fn delete_fragments() {
+        let (_tmp, storage) = test_storage();
+        let blob_hash = crypto::hash_bytes(b"blob to delete frags");
+
+        for i in 0..3 {
+            let frag_hash = crypto::hash_bytes(format!("frag-{i}").as_bytes());
+            let meta = FragmentMeta {
+                fragment_index: i,
+                fragment_hash: frag_hash,
+                shard_size: 64,
+                original_size: 100,
+                data_shards: 3,
+                parity_shards: 2,
+            };
+            storage.store_fragment(&blob_hash, &meta).unwrap();
+        }
+
+        storage.delete_fragments(&blob_hash).unwrap();
+        let fragments = storage.find_fragments(&blob_hash).unwrap();
+        assert!(fragments.is_empty());
+    }
+
+    #[test]
+    fn store_and_read_blob_bytes() {
+        let (_tmp, storage) = test_storage();
+        let data = b"direct bytes storage";
+        let hash = storage.store_blob_bytes(data).unwrap();
+        let read_back = storage.read_blob_bytes(&hash).unwrap();
+        assert_eq!(read_back, data);
     }
 }

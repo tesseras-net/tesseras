@@ -1,9 +1,0 @@
-cargo:
-  debug:
-    extra_flags:
-      - "--features"
-      - "bundled-sqlite"
-  release:
-    extra_flags:
-      - "--features"
-      - "bundled-sqlite"

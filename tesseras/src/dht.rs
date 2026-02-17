@@ -63,6 +63,17 @@ pub enum DhtMessage {
         sender: NodeId,
         success: bool,
     },
+    /// Request a blob by its content hash.
+    FetchBlob {
+        sender: NodeId,
+        hash: ContentHash,
+    },
+    /// Response to FetchBlob: if found is true, blob data follows on the same stream.
+    FetchBlobResponse {
+        sender: NodeId,
+        found: bool,
+        size: u64,
+    },
 }
 
 impl DhtMessage {
@@ -354,6 +365,21 @@ impl Dht {
                 })
             }
             DhtMessage::RetractResponse { sender, .. } => {
+                self.routing_table.insert(PeerInfo {
+                    node_id: sender,
+                    addr: from_addr,
+                });
+                None
+            }
+            // FetchBlob is handled at the connection level, not by the DHT.
+            DhtMessage::FetchBlob { sender, .. } => {
+                self.routing_table.insert(PeerInfo {
+                    node_id: sender,
+                    addr: from_addr,
+                });
+                None
+            }
+            DhtMessage::FetchBlobResponse { sender, .. } => {
                 self.routing_table.insert(PeerInfo {
                     node_id: sender,
                     addr: from_addr,

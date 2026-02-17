@@ -9,6 +9,7 @@ use crate::config::{DataDir, NodeConfig};
 use crate::crypto::{self, Identity};
 use crate::dht::{Dht, DhtMessage, PeerInfo};
 use crate::net::{self, QuicTransport};
+use crate::replication;
 use crate::storage::Storage;
 use crate::types::{ContentHash, MediaType, Memory, NodeId, Tessera, Visibility};
 
@@ -18,12 +19,15 @@ const K: usize = 20;
 /// Interval between routing table refresh rounds.
 const REFRESH_INTERVAL: Duration = Duration::from_secs(60);
 
+/// Interval between repair loop rounds (check fragment availability).
+const REPAIR_INTERVAL: Duration = Duration::from_secs(300);
+
 /// Timeout for a single DHT RPC round-trip.
 const RPC_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The Node orchestrator: ties storage, DHT, QUIC, and replication together.
 pub struct Node {
-    pub storage: Storage,
+    pub storage: Arc<Mutex<Storage>>,
     pub identity: Identity,
     pub config: NodeConfig,
     pub dht: Arc<Mutex<Dht>>,
@@ -43,7 +47,7 @@ impl Node {
         let dht = Arc::new(Mutex::new(Dht::new(node_id)));
 
         Ok(Self {
-            storage,
+            storage: Arc::new(Mutex::new(storage)),
             identity,
             config,
             dht,
@@ -70,6 +74,8 @@ impl Node {
 
         // Spawn the accept loop
         let dht = self.dht.clone();
+        let storage = self.storage.clone();
+        let node_id = self.identity.node_id();
         let mut rx = shutdown_rx.clone();
         tokio::spawn(async move {
             loop {
@@ -78,8 +84,9 @@ impl Node {
                         match result {
                             Ok(conn) => {
                                 let dht = dht.clone();
+                                let storage = storage.clone();
                                 tokio::spawn(async move {
-                                    if let Err(e) = handle_connection(conn, dht).await {
+                                    if let Err(e) = handle_connection(conn, dht, storage, node_id).await {
                                         debug!("connection handler error: {e}");
                                     }
                                 });
@@ -103,7 +110,6 @@ impl Node {
     }
 
     /// Bootstrap the DHT by contacting configured bootstrap nodes.
-    /// Sends FindNode(self) to each bootstrap peer to populate the routing table.
     pub async fn bootstrap(&self) -> Result<usize, NodeError> {
         let transport = self
             .transport
@@ -159,8 +165,6 @@ impl Node {
     }
 
     /// Spawn a periodic routing table refresh task.
-    /// Every REFRESH_INTERVAL, picks a random NodeId and does FindNode to keep
-    /// the routing table fresh and discover new peers.
     pub fn start_refresh_loop(&self) {
         let transport = match self.transport.as_ref() {
             Some(t) => t.clone(),
@@ -205,7 +209,6 @@ impl Node {
             .local_addr()
             .ok_or_else(|| NodeError::Network("no local address".into()))?;
 
-        // Find the K closest nodes to this content hash
         let target_id = NodeId::new(*hash.as_bytes());
         let closest = {
             let dht = self.dht.lock().unwrap();
@@ -250,9 +253,7 @@ impl Node {
     }
 
     /// Look up providers for a content hash via DHT FindValue.
-    /// First checks the local pointer store, then queries the K closest peers.
     pub async fn find_providers(&self, hash: &ContentHash) -> Result<Vec<PeerInfo>, NodeError> {
-        // Check local pointer store first
         {
             let dht = self.dht.lock().unwrap();
             if let Some(providers) = dht.pointer_store.find(hash) {
@@ -306,6 +307,70 @@ impl Node {
         Ok(Vec::new())
     }
 
+    /// Fetch a blob from a remote peer by hash.
+    pub async fn fetch_blob(
+        &self,
+        addr: SocketAddr,
+        hash: &ContentHash,
+    ) -> Result<Option<Vec<u8>>, NodeError> {
+        let transport = self
+            .transport
+            .as_ref()
+            .ok_or_else(|| NodeError::Network("transport not started".into()))?;
+
+        let node_id = self.identity.node_id();
+        let msg = DhtMessage::FetchBlob {
+            sender: node_id,
+            hash: *hash,
+        };
+
+        let result = tokio::time::timeout(RPC_TIMEOUT, async {
+            let conn = transport
+                .connect(addr)
+                .await
+                .map_err(|e| NodeError::Network(e.to_string()))?;
+
+            let (mut send, mut recv) = conn
+                .open_bi()
+                .await
+                .map_err(|e| NodeError::Network(e.to_string()))?;
+
+            net::send_message(&mut send, &msg)
+                .await
+                .map_err(|e| NodeError::Network(e.to_string()))?;
+            send.finish()
+                .map_err(|e| NodeError::Network(e.to_string()))?;
+
+            let response = net::receive_message(&mut recv)
+                .await
+                .map_err(|e| NodeError::Network(e.to_string()))?;
+
+            if let DhtMessage::FetchBlobResponse {
+                found: true, size, ..
+            } = response
+            {
+                let data = net::receive_blob(&mut recv)
+                    .await
+                    .map_err(|e| NodeError::Network(e.to_string()))?;
+                if data.len() as u64 != size {
+                    return Err(NodeError::Network("blob size mismatch".into()));
+                }
+                Ok(Some(data))
+            } else {
+                Ok(None)
+            }
+        })
+        .await;
+
+        match result {
+            Ok(inner) => inner,
+            Err(_) => {
+                debug!("fetch_blob from {addr} timed out");
+                Ok(None)
+            }
+        }
+    }
+
     /// Send a DHT RPC to a peer and wait for a response.
     async fn send_rpc(
         &self,
@@ -347,13 +412,14 @@ impl Node {
         }
     }
 
-    /// Add a tessera from local files.
+    /// Add a tessera from local files, erasure-code each blob into fragments.
     pub fn add_tessera(
         &self,
         files: &[std::path::PathBuf],
         name: Option<String>,
         visibility: Visibility,
     ) -> Result<Tessera, NodeError> {
+        let storage = self.storage.lock().unwrap();
         let mut memories = Vec::new();
         for file_path in files {
             let filename = file_path
@@ -372,10 +438,39 @@ impl Node {
 
             let mut reader =
                 std::fs::File::open(file_path).map_err(|e| NodeError::Io(e.to_string()))?;
-            let blob_hash = self
-                .storage
+            let blob_hash = storage
                 .store_blob(&mut reader)
                 .map_err(|e| NodeError::Storage(e.to_string()))?;
+
+            // Erasure-code the blob into fragments
+            let blob_data = storage
+                .read_blob_bytes(&blob_hash)
+                .map_err(|e| NodeError::Storage(e.to_string()))?;
+            let fragments = replication::encode_fragments(
+                &blob_data,
+                self.config.data_shards,
+                self.config.parity_shards,
+            )
+            .map_err(|e| NodeError::Replication(e.to_string()))?;
+
+            for fragment in &fragments {
+                let frag_hash = storage
+                    .store_blob_bytes(&fragment.data)
+                    .map_err(|e| NodeError::Storage(e.to_string()))?;
+                storage
+                    .store_fragment(
+                        &blob_hash,
+                        &crate::storage::FragmentMeta {
+                            fragment_index: fragment.index,
+                            fragment_hash: frag_hash,
+                            shard_size: fragment.data.len(),
+                            original_size: blob_data.len(),
+                            data_shards: self.config.data_shards,
+                            parity_shards: self.config.parity_shards,
+                        },
+                    )
+                    .map_err(|e| NodeError::Storage(e.to_string()))?;
+            }
 
             memories.push(Memory {
                 filename,
@@ -400,35 +495,108 @@ impl Node {
             memories,
         };
 
-        self.storage
+        storage
             .store_tessera(&tessera)
             .map_err(|e| NodeError::Storage(e.to_string()))?;
 
         Ok(tessera)
     }
 
+    /// Distribute fragments of a tessera's blobs to DHT peers.
+    /// Announces each fragment hash so peers know where to find them.
+    pub async fn distribute_fragments(&self, tessera: &Tessera) -> Result<usize, NodeError> {
+        let transport = self
+            .transport
+            .as_ref()
+            .ok_or_else(|| NodeError::Network("transport not started".into()))?;
+
+        let node_id = self.identity.node_id();
+        let local_addr = self
+            .local_addr()
+            .ok_or_else(|| NodeError::Network("no local address".into()))?;
+
+        let provider = PeerInfo {
+            node_id,
+            addr: local_addr,
+        };
+
+        let mut total_announced = 0usize;
+
+        for memory in &tessera.memories {
+            let fragment_metas = {
+                let storage = self.storage.lock().unwrap();
+                storage
+                    .find_fragments(&memory.blob_hash)
+                    .map_err(|e| NodeError::Storage(e.to_string()))?
+            };
+
+            for meta in &fragment_metas {
+                let target_id = NodeId::new(*meta.fragment_hash.as_bytes());
+                let closest = {
+                    let dht = self.dht.lock().unwrap();
+                    dht.routing_table.find_closest(&target_id, K)
+                };
+
+                for peer in &closest {
+                    let msg = DhtMessage::Store {
+                        sender: node_id,
+                        key: meta.fragment_hash,
+                        provider: provider.clone(),
+                    };
+                    if let Ok(Some(DhtMessage::StoreResponse { success: true, .. })) =
+                        self.send_rpc(transport, peer.addr, &msg).await
+                    {
+                        total_announced += 1;
+                    }
+                }
+            }
+        }
+
+        info!(
+            "distributed {} fragment pointers for tessera {}",
+            total_announced, tessera.hash
+        );
+        Ok(total_announced)
+    }
+
     /// Get a tessera by hash (local lookup).
     pub fn get_tessera(&self, hash: &ContentHash) -> Result<Option<Tessera>, NodeError> {
         self.storage
+            .lock()
+            .unwrap()
             .find_tessera(hash)
             .map_err(|e| NodeError::Storage(e.to_string()))
     }
 
-    /// Remove a tessera and its blobs.
+    /// Remove a tessera, its blobs, and fragment data.
     pub fn remove_tessera(&self, hash: &ContentHash) -> Result<(), NodeError> {
-        let tessera = self
-            .storage
+        let storage = self.storage.lock().unwrap();
+        let tessera = storage
             .find_tessera(hash)
             .map_err(|e| NodeError::Storage(e.to_string()))?
             .ok_or_else(|| NodeError::NotFound(hash.to_string()))?;
 
         for memory in &tessera.memories {
-            self.storage
+            // Delete fragments for this blob
+            let fragment_metas = storage
+                .find_fragments(&memory.blob_hash)
+                .map_err(|e| NodeError::Storage(e.to_string()))?;
+            for meta in &fragment_metas {
+                storage
+                    .delete_blob(&meta.fragment_hash)
+                    .map_err(|e| NodeError::Storage(e.to_string()))?;
+            }
+            storage
+                .delete_fragments(&memory.blob_hash)
+                .map_err(|e| NodeError::Storage(e.to_string()))?;
+
+            // Delete the original blob
+            storage
                 .delete_blob(&memory.blob_hash)
                 .map_err(|e| NodeError::Storage(e.to_string()))?;
         }
 
-        self.storage
+        storage
             .delete_tessera(hash)
             .map_err(|e| NodeError::Storage(e.to_string()))?;
 
@@ -438,6 +606,8 @@ impl Node {
     /// List all tesseras.
     pub fn list_tesseras(&self) -> Result<Vec<Tessera>, NodeError> {
         self.storage
+            .lock()
+            .unwrap()
             .list_tesseras()
             .map_err(|e| NodeError::Storage(e.to_string()))
     }
@@ -457,6 +627,69 @@ impl Node {
         self.dht.lock().unwrap().routing_table.len()
     }
 
+    /// Spawn a periodic repair loop that checks fragment availability
+    /// and re-replicates missing fragments by fetching from DHT peers.
+    pub fn start_repair_loop(&self) {
+        let transport = match self.transport.as_ref() {
+            Some(t) => t.clone(),
+            None => return,
+        };
+        let dht = self.dht.clone();
+        let storage = self.storage.clone();
+        let node_id = self.identity.node_id();
+        let data_shards = self.config.data_shards;
+        let parity_shards = self.config.parity_shards;
+        let mut shutdown_rx = self
+            .shutdown_tx
+            .as_ref()
+            .expect("start() must be called first")
+            .subscribe();
+
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(REPAIR_INTERVAL);
+            interval.tick().await; // skip immediate first tick
+
+            loop {
+                tokio::select! {
+                    _ = interval.tick() => {
+                        repair_fragments(
+                            &transport, &dht, &storage, node_id,
+                            data_shards, parity_shards,
+                        ).await;
+                    }
+                    _ = shutdown_rx.changed() => {
+                        info!("repair loop shutting down");
+                        break;
+                    }
+                }
+            }
+        });
+    }
+
+    /// Check fragment availability for all tesseras. Returns a list of
+    /// (blob_hash, fragment_index, fragment_hash) tuples for missing fragments.
+    pub fn check_fragments(&self) -> Result<Vec<(ContentHash, usize, ContentHash)>, NodeError> {
+        let storage = self.storage.lock().unwrap();
+        let tesseras = storage
+            .list_tesseras()
+            .map_err(|e| NodeError::Storage(e.to_string()))?;
+
+        let mut missing = Vec::new();
+        for tessera in &tesseras {
+            for memory in &tessera.memories {
+                let fragments = storage
+                    .find_fragments(&memory.blob_hash)
+                    .map_err(|e| NodeError::Storage(e.to_string()))?;
+                for meta in &fragments {
+                    if !storage.has_blob(&meta.fragment_hash) {
+                        missing.push((memory.blob_hash, meta.fragment_index, meta.fragment_hash));
+                    }
+                }
+            }
+        }
+        Ok(missing)
+    }
+
     /// Close the transport and signal background tasks to stop.
     pub fn shutdown(&self) {
         if let Some(tx) = &self.shutdown_tx {
@@ -468,8 +701,13 @@ impl Node {
     }
 }
 
-/// Handle a single incoming QUIC connection: read messages, dispatch to DHT, send responses.
-async fn handle_connection(conn: quinn::Connection, dht: Arc<Mutex<Dht>>) -> Result<(), NodeError> {
+/// Handle a single incoming QUIC connection.
+async fn handle_connection(
+    conn: quinn::Connection,
+    dht: Arc<Mutex<Dht>>,
+    storage: Arc<Mutex<Storage>>,
+    local_node_id: NodeId,
+) -> Result<(), NodeError> {
     let remote_addr = conn.remote_address();
 
     loop {
@@ -484,6 +722,7 @@ async fn handle_connection(conn: quinn::Connection, dht: Arc<Mutex<Dht>>) -> Res
 
         let (mut send, mut recv) = stream;
         let dht = dht.clone();
+        let storage = storage.clone();
 
         tokio::spawn(async move {
             let msg = match net::receive_message(&mut recv).await {
@@ -494,6 +733,54 @@ async fn handle_connection(conn: quinn::Connection, dht: Arc<Mutex<Dht>>) -> Res
                 }
             };
 
+            // Handle FetchBlob specially — needs storage access and blob streaming
+            if let DhtMessage::FetchBlob { sender, hash } = &msg {
+                // Update routing table
+                {
+                    let mut dht = dht.lock().unwrap();
+                    dht.routing_table.insert(PeerInfo {
+                        node_id: *sender,
+                        addr: remote_addr,
+                    });
+                }
+
+                let blob_data = {
+                    let storage = storage.lock().unwrap();
+                    if storage.has_blob(hash) {
+                        storage.read_blob_bytes(hash).ok()
+                    } else {
+                        None
+                    }
+                };
+
+                if let Some(data) = blob_data {
+                    let resp = DhtMessage::FetchBlobResponse {
+                        sender: local_node_id,
+                        found: true,
+                        size: data.len() as u64,
+                    };
+                    if let Err(e) = net::send_message(&mut send, &resp).await {
+                        debug!("send FetchBlobResponse error to {remote_addr}: {e}");
+                        return;
+                    }
+                    if let Err(e) = net::stream_blob(&mut send, &data).await {
+                        debug!("stream blob error to {remote_addr}: {e}");
+                    }
+                } else {
+                    let resp = DhtMessage::FetchBlobResponse {
+                        sender: local_node_id,
+                        found: false,
+                        size: 0,
+                    };
+                    if let Err(e) = net::send_message(&mut send, &resp).await {
+                        debug!("send FetchBlobResponse error to {remote_addr}: {e}");
+                    }
+                    let _ = send.finish();
+                }
+                return;
+            }
+
+            // All other messages go through normal DHT handling
             let response = {
                 let mut dht = dht.lock().unwrap();
                 dht.handle_message(msg, remote_addr)
@@ -511,15 +798,202 @@ async fn handle_connection(conn: quinn::Connection, dht: Arc<Mutex<Dht>>) -> Res
     Ok(())
 }
 
-/// Refresh the routing table by doing FindNode for a random ID in each non-empty bucket.
+/// Check and repair missing fragments by fetching from DHT peers.
+async fn repair_fragments(
+    transport: &QuicTransport,
+    dht: &Arc<Mutex<Dht>>,
+    storage: &Arc<Mutex<Storage>>,
+    node_id: NodeId,
+    data_shards: usize,
+    parity_shards: usize,
+) {
+    // Collect all tesseras and their fragment metadata
+    let missing: Vec<(ContentHash, usize, ContentHash)> = {
+        let storage = storage.lock().unwrap();
+        let tesseras = match storage.list_tesseras() {
+            Ok(t) => t,
+            Err(e) => {
+                warn!("repair: failed to list tesseras: {e}");
+                return;
+            }
+        };
+
+        let mut missing = Vec::new();
+        for tessera in &tesseras {
+            for memory in &tessera.memories {
+                let fragments = match storage.find_fragments(&memory.blob_hash) {
+                    Ok(f) => f,
+                    Err(_) => continue,
+                };
+                for meta in &fragments {
+                    if !storage.has_blob(&meta.fragment_hash) {
+                        missing.push((memory.blob_hash, meta.fragment_index, meta.fragment_hash));
+                    }
+                }
+            }
+        }
+        missing
+    };
+
+    if missing.is_empty() {
+        debug!("repair: all fragments healthy");
+        return;
+    }
+
+    info!(
+        "repair: found {} missing fragments, attempting recovery",
+        missing.len()
+    );
+    let mut recovered = 0usize;
+
+    for (blob_hash, frag_index, frag_hash) in &missing {
+        // Look up providers for this fragment via DHT
+        let target_id = NodeId::new(*frag_hash.as_bytes());
+        let closest = {
+            let dht_guard = dht.lock().unwrap();
+            dht_guard.routing_table.find_closest(&target_id, K)
+        };
+
+        // Ask closest peers if they have the fragment
+        for peer in &closest {
+            let msg = DhtMessage::FetchBlob {
+                sender: node_id,
+                hash: *frag_hash,
+            };
+
+            let result = tokio::time::timeout(RPC_TIMEOUT, async {
+                let conn = transport
+                    .connect(peer.addr)
+                    .await
+                    .map_err(|e| NodeError::Network(e.to_string()))?;
+                let (mut send, mut recv) = conn
+                    .open_bi()
+                    .await
+                    .map_err(|e| NodeError::Network(e.to_string()))?;
+                net::send_message(&mut send, &msg)
+                    .await
+                    .map_err(|e| NodeError::Network(e.to_string()))?;
+                send.finish()
+                    .map_err(|e| NodeError::Network(e.to_string()))?;
+
+                let response = net::receive_message(&mut recv)
+                    .await
+                    .map_err(|e| NodeError::Network(e.to_string()))?;
+
+                if let DhtMessage::FetchBlobResponse { found: true, .. } = response {
+                    let data = net::receive_blob(&mut recv)
+                        .await
+                        .map_err(|e| NodeError::Network(e.to_string()))?;
+                    Ok::<_, NodeError>(Some(data))
+                } else {
+                    Ok(None)
+                }
+            })
+            .await;
+
+            if let Ok(Ok(Some(data))) = result {
+                // Verify the hash matches
+                let actual_hash = crate::crypto::hash_bytes(&data);
+                if actual_hash == *frag_hash {
+                    let storage = storage.lock().unwrap();
+                    if storage.store_blob_bytes(&data).is_ok() {
+                        recovered += 1;
+                        info!(
+                            "repair: recovered fragment {frag_index} of blob {blob_hash} from {}",
+                            peer.addr
+                        );
+                        break; // Got this fragment, move on
+                    }
+                } else {
+                    warn!(
+                        "repair: hash mismatch for fragment {frag_index} of blob {blob_hash} from {}",
+                        peer.addr
+                    );
+                }
+            }
+        }
+    }
+
+    // If we have enough fragments for any blob, try to reconstruct
+    if recovered > 0 {
+        let storage = storage.lock().unwrap();
+        let tesseras = match storage.list_tesseras() {
+            Ok(t) => t,
+            Err(_) => return,
+        };
+
+        for tessera in &tesseras {
+            for memory in &tessera.memories {
+                // Skip if original blob already exists
+                if storage.has_blob(&memory.blob_hash) {
+                    continue;
+                }
+
+                let fragments = match storage.find_fragments(&memory.blob_hash) {
+                    Ok(f) => f,
+                    Err(_) => continue,
+                };
+
+                // Collect available fragment data
+                let mut available: Vec<Option<Vec<u8>>> = vec![None; data_shards + parity_shards];
+                for meta in &fragments {
+                    if meta.fragment_index < available.len() {
+                        if let Ok(data) = storage.read_blob_bytes(&meta.fragment_hash) {
+                            available[meta.fragment_index] = Some(data);
+                        }
+                    }
+                }
+
+                let present = available.iter().filter(|f| f.is_some()).count();
+                if present >= data_shards {
+                    // Build Fragment structs for decode
+                    let decode_frags: Vec<replication::Fragment> = available
+                        .into_iter()
+                        .enumerate()
+                        .filter_map(|(i, data)| {
+                            data.map(|d| replication::Fragment { index: i, data: d })
+                        })
+                        .collect();
+
+                    let original_size = fragments.first().map(|f| f.original_size).unwrap_or(0);
+                    match replication::decode_fragments(
+                        &decode_frags,
+                        data_shards,
+                        parity_shards,
+                        original_size,
+                    ) {
+                        Ok(reconstructed) => {
+                            info!(
+                                "repair: reconstructed blob {} ({} bytes)",
+                                memory.blob_hash,
+                                reconstructed.len()
+                            );
+                        }
+                        Err(e) => {
+                            debug!(
+                                "repair: reconstruction failed for {}: {e}",
+                                memory.blob_hash
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    info!(
+        "repair: recovered {recovered}/{} missing fragments",
+        missing.len()
+    );
+}
+
+/// Refresh the routing table by doing FindNode for a random ID.
 async fn refresh_routing_table(transport: &QuicTransport, dht: &Arc<Mutex<Dht>>, node_id: NodeId) {
-    // Pick a random peer to query
     let peers: Vec<PeerInfo> = {
         let dht = dht.lock().unwrap();
         dht.routing_table.find_closest(&node_id, 3)
     };
 
-    // Generate a random target for the lookup
     let random_target = {
         let mut bytes = [0u8; 32];
         use rand::RngCore;
@@ -581,6 +1055,8 @@ pub enum NodeError {
     Serialization(String),
     #[error("not found: {0}")]
     NotFound(String),
+    #[error("replication error: {0}")]
+    Replication(String),
 }
 
 #[cfg(test)]
@@ -615,18 +1091,65 @@ mod tests {
     }
 
     #[test]
-    fn remove_tessera() {
+    fn add_tessera_creates_fragments() {
+        let (tmp, node) = test_node();
+
+        let test_file = tmp.path().join("photo.jpg");
+        std::fs::write(&test_file, b"fake jpeg data for testing fragments").unwrap();
+
+        let tessera = node
+            .add_tessera(&[test_file], Some("Photo".into()), Visibility::Public)
+            .unwrap();
+
+        // Check that fragments were created for the blob
+        let storage = node.storage.lock().unwrap();
+        let fragments = storage
+            .find_fragments(&tessera.memories[0].blob_hash)
+            .unwrap();
+        assert_eq!(
+            fragments.len(),
+            node.config.data_shards + node.config.parity_shards
+        );
+        assert_eq!(fragments[0].data_shards, 3);
+        assert_eq!(fragments[0].parity_shards, 2);
+
+        // Each fragment blob should exist on disk
+        for meta in &fragments {
+            assert!(storage.has_blob(&meta.fragment_hash));
+        }
+    }
+
+    #[test]
+    fn remove_tessera_cleans_fragments() {
         let (tmp, node) = test_node();
 
         let test_file = tmp.path().join("test.txt");
-        std::fs::write(&test_file, b"to be removed").unwrap();
+        std::fs::write(&test_file, b"to be removed with fragments").unwrap();
 
         let tessera = node
             .add_tessera(&[test_file], None, Visibility::Private)
             .unwrap();
 
+        let blob_hash = tessera.memories[0].blob_hash;
+        let fragment_hashes: Vec<ContentHash> = {
+            let storage = node.storage.lock().unwrap();
+            storage
+                .find_fragments(&blob_hash)
+                .unwrap()
+                .iter()
+                .map(|m| m.fragment_hash)
+                .collect()
+        };
+
         node.remove_tessera(&tessera.hash).unwrap();
-        assert!(node.get_tessera(&tessera.hash).unwrap().is_none());
+
+        let storage = node.storage.lock().unwrap();
+        assert!(storage.find_tessera(&tessera.hash).unwrap().is_none());
+        assert!(!storage.has_blob(&blob_hash));
+        assert!(storage.find_fragments(&blob_hash).unwrap().is_empty());
+        for fh in &fragment_hashes {
+            assert!(!storage.has_blob(fh));
+        }
     }
 
     #[test]
@@ -647,10 +1170,49 @@ mod tests {
         assert_eq!(list.len(), 2);
     }
 
+    #[test]
+    fn fragments_can_reconstruct_blob() {
+        let (tmp, node) = test_node();
+
+        let test_file = tmp.path().join("data.bin");
+        let original_data = b"this data should survive erasure coding";
+        std::fs::write(&test_file, original_data).unwrap();
+
+        let tessera = node
+            .add_tessera(&[test_file], Some("Data".into()), Visibility::Public)
+            .unwrap();
+
+        let storage = node.storage.lock().unwrap();
+        let blob_hash = tessera.memories[0].blob_hash;
+        let fragment_metas = storage.find_fragments(&blob_hash).unwrap();
+
+        // Read fragment blobs and reconstruct
+        let fragments: Vec<replication::Fragment> = fragment_metas
+            .iter()
+            .map(|m| {
+                let data = storage.read_blob_bytes(&m.fragment_hash).unwrap();
+                replication::Fragment {
+                    index: m.fragment_index,
+                    data,
+                }
+            })
+            .collect();
+
+        let reconstructed = replication::decode_fragments(
+            &fragments,
+            fragment_metas[0].data_shards,
+            fragment_metas[0].parity_shards,
+            fragment_metas[0].original_size,
+        )
+        .unwrap();
+
+        assert_eq!(reconstructed, original_data);
+    }
+
     #[tokio::test]
     async fn start_and_accept_ping() {
         let (tmp, mut node_a) = test_node();
-        let _ = tmp; // keep alive
+        let _ = tmp;
 
         let mut config_a = NodeConfig::default();
         config_a.listen = "127.0.0.1:0".parse().unwrap();
@@ -658,7 +1220,6 @@ mod tests {
 
         let addr_a = node_a.start().await.unwrap();
 
-        // Create a client and send a ping
         let client = QuicTransport::client().unwrap();
         let conn = client.connect(addr_a).await.unwrap();
         let (mut send, mut recv) = conn.open_bi().await.unwrap();
@@ -675,7 +1236,6 @@ mod tests {
             panic!("expected Pong, got {response:?}");
         }
 
-        // Node A should have learned about the ping sender
         assert!(
             node_a
                 .dht
@@ -690,13 +1250,11 @@ mod tests {
 
     #[tokio::test]
     async fn two_nodes_bootstrap() {
-        // Node A
         let (tmp_a, mut node_a) = test_node();
         let _ = tmp_a;
         node_a.config.listen = "127.0.0.1:0".parse().unwrap();
         let addr_a = node_a.start().await.unwrap();
 
-        // Node B with A as bootstrap
         let tmp_b = tempfile::tempdir().unwrap();
         let data_dir_b = DataDir::open(tmp_b.path()).unwrap();
         let identity_b = Identity::generate();
@@ -706,11 +1264,9 @@ mod tests {
         let mut node_b = Node::new(data_dir_b, identity_b, config_b).unwrap();
         let _addr_b = node_b.start().await.unwrap();
 
-        // Bootstrap B from A
         let discovered = node_b.bootstrap().await.unwrap();
-        assert!(discovered > 0, "should discover at least 1 peer");
+        assert!(discovered > 0);
 
-        // B should know about A
         assert!(
             node_b
                 .dht
@@ -719,8 +1275,6 @@ mod tests {
                 .routing_table
                 .contains(&node_a.node_id())
         );
-
-        // A should know about B (from the FindNode request)
         assert!(
             node_a
                 .dht
@@ -736,12 +1290,10 @@ mod tests {
 
     #[tokio::test]
     async fn announce_and_find_tessera() {
-        // Node A
         let (tmp_a, mut node_a) = test_node();
         node_a.config.listen = "127.0.0.1:0".parse().unwrap();
         let addr_a = node_a.start().await.unwrap();
 
-        // Node B with A as bootstrap
         let tmp_b = tempfile::tempdir().unwrap();
         let data_dir_b = DataDir::open(tmp_b.path()).unwrap();
         let identity_b = Identity::generate();
@@ -751,26 +1303,88 @@ mod tests {
         let mut node_b = Node::new(data_dir_b, identity_b, config_b).unwrap();
         let _addr_b = node_b.start().await.unwrap();
 
-        // Bootstrap B from A
         node_b.bootstrap().await.unwrap();
 
-        // Node A adds a tessera
         let test_file = tmp_a.path().join("memory.txt");
         std::fs::write(&test_file, b"a precious memory").unwrap();
         let tessera = node_a
             .add_tessera(&[test_file], Some("My Memory".into()), Visibility::Public)
             .unwrap();
 
-        // Node A announces it to the DHT (B is the only peer)
         let stored = node_a.announce_tessera(&tessera.hash).await.unwrap();
-        assert!(stored > 0, "should store to at least 1 peer");
+        assert!(stored > 0);
 
-        // Node B should be able to find the provider via DHT
         let providers = node_b.find_providers(&tessera.hash).await.unwrap();
-        assert!(!providers.is_empty(), "should find at least 1 provider");
+        assert!(!providers.is_empty());
         assert_eq!(providers[0].node_id, node_a.node_id());
 
         node_a.shutdown();
         node_b.shutdown();
+    }
+
+    #[tokio::test]
+    async fn fetch_blob_from_peer() {
+        // Node A stores a blob
+        let (_tmp_a, mut node_a) = test_node();
+        node_a.config.listen = "127.0.0.1:0".parse().unwrap();
+        let addr_a = node_a.start().await.unwrap();
+
+        // Store a blob on node A
+        let blob_data = b"hello from node A";
+        let blob_hash = {
+            let storage = node_a.storage.lock().unwrap();
+            storage.store_blob_bytes(blob_data).unwrap()
+        };
+
+        // Node B fetches the blob from A
+        let tmp_b = tempfile::tempdir().unwrap();
+        let data_dir_b = DataDir::open(tmp_b.path()).unwrap();
+        let identity_b = Identity::generate();
+        let mut config_b = NodeConfig::default();
+        config_b.listen = "127.0.0.1:0".parse().unwrap();
+        let mut node_b = Node::new(data_dir_b, identity_b, config_b).unwrap();
+        let _addr_b = node_b.start().await.unwrap();
+
+        let fetched = node_b.fetch_blob(addr_a, &blob_hash).await.unwrap();
+        assert_eq!(fetched, Some(blob_data.to_vec()));
+
+        // Try fetching a nonexistent blob
+        let fake_hash = crypto::hash_bytes(b"does not exist");
+        let not_found = node_b.fetch_blob(addr_a, &fake_hash).await.unwrap();
+        assert_eq!(not_found, None);
+
+        node_a.shutdown();
+        node_b.shutdown();
+    }
+
+    #[test]
+    fn check_fragments_reports_missing() {
+        let (tmp, node) = test_node();
+
+        let test_file = tmp.path().join("check.txt");
+        std::fs::write(&test_file, b"data for fragment check").unwrap();
+
+        let tessera = node
+            .add_tessera(&[test_file], Some("Check".into()), Visibility::Public)
+            .unwrap();
+
+        // All fragments should be present initially
+        let missing = node.check_fragments().unwrap();
+        assert!(missing.is_empty(), "expected no missing fragments");
+
+        // Delete one fragment blob to simulate loss
+        let blob_hash = tessera.memories[0].blob_hash;
+        let storage = node.storage.lock().unwrap();
+        let fragments = storage.find_fragments(&blob_hash).unwrap();
+        let lost_frag = &fragments[0];
+        storage.delete_blob(&lost_frag.fragment_hash).unwrap();
+        drop(storage);
+
+        // Now check_fragments should report the missing one
+        let missing = node.check_fragments().unwrap();
+        assert_eq!(missing.len(), 1);
+        assert_eq!(missing[0].0, blob_hash);
+        assert_eq!(missing[0].1, lost_frag.fragment_index);
+        assert_eq!(missing[0].2, lost_frag.fragment_hash);
     }
 }
