@@ -118,10 +118,12 @@ pub struct QuicTransport {
 
 impl QuicTransport {
     /// Create a new QUIC transport listening on the given address.
+    /// The endpoint supports both accepting incoming and initiating outgoing connections.
     pub async fn bind(listen_addr: SocketAddr) -> Result<Self, NetError> {
         let server_config = make_server_config()?;
-        let endpoint = Endpoint::server(server_config, listen_addr)
+        let mut endpoint = Endpoint::server(server_config, listen_addr)
             .map_err(|e| NetError::Bind(e.to_string()))?;
+        endpoint.set_default_client_config(make_client_config()?);
         Ok(Self { endpoint })
     }
 
