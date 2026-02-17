@@ -76,6 +76,10 @@ pub struct DhtEngine {
     replication_handler: std::sync::Mutex<Option<Arc<dyn ReplicationHandler>>>,
     nat_handler: std::sync::Mutex<Option<Arc<dyn NatHandler>>>,
     seeds: Mutex<Vec<SocketAddr>>,
+    /// Total bytes sent (atomic for lock-free reads).
+    bytes_tx: std::sync::atomic::AtomicU64,
+    /// Total bytes received (atomic for lock-free reads).
+    bytes_rx: std::sync::atomic::AtomicU64,
 }
 
 impl DhtEngine {
@@ -99,6 +103,8 @@ impl DhtEngine {
             replication_handler: std::sync::Mutex::new(None),
             nat_handler: std::sync::Mutex::new(None),
             seeds: Mutex::new(Vec::new()),
+            bytes_tx: std::sync::atomic::AtomicU64::new(0),
+            bytes_rx: std::sync::atomic::AtomicU64::new(0),
         })
     }
 
@@ -146,7 +152,9 @@ impl DhtEngine {
             alt_addrs: listen_addrs.to_vec(),
             capabilities: caps,
         };
-        self.routing.lock().await.update(info);
+        let mut rt = self.routing.lock().await;
+        rt.update(info);
+        rt.reset_failures(&identity.node_id);
     }
 
     /// Handle an incoming envelope: decode wire message, dispatch, and send response.
@@ -201,6 +209,7 @@ impl DhtEngine {
                     return;
                 }
             };
+            self.bytes_tx.fetch_add(wire_bytes.len() as u64, std::sync::atomic::Ordering::Relaxed);
             if let Some(resp_tx) = envelope.response_tx {
                 // Reply on the same bidirectional stream (QUIC transport).
                 let _ = resp_tx.send(wire_bytes);
@@ -448,6 +457,7 @@ impl DhtEngine {
         let (tx, rx) = oneshot::channel();
         self.pending.lock().await.insert(request_id, tx);
 
+        self.bytes_tx.fetch_add(wire_bytes.len() as u64, std::sync::atomic::Ordering::Relaxed);
         self.transport.send(peer, &wire_bytes).await?;
 
         let result = tokio::time::timeout(self.config.rpc_timeout, rx).await;
@@ -774,6 +784,14 @@ impl DhtEngine {
         self.store.lock().await.len()
     }
 
+    /// Get total bytes transmitted and received.
+    pub fn bandwidth_bytes(&self) -> (u64, u64) {
+        (
+            self.bytes_tx.load(std::sync::atomic::Ordering::Relaxed),
+            self.bytes_rx.load(std::sync::atomic::Ordering::Relaxed),
+        )
+    }
+
     /// Run the engine's main loop: receive messages, run maintenance timers.
     ///
     /// Must be called on `&Arc<Self>` so that maintenance tasks (re-bootstrap,
@@ -796,7 +814,10 @@ impl DhtEngine {
             tokio::select! {
                 msg = self.transport.recv() => {
                     match msg {
-                        Ok(envelope) => self.handle_envelope(envelope).await,
+                        Ok(envelope) => {
+                            self.bytes_rx.fetch_add(envelope.payload.len() as u64, std::sync::atomic::Ordering::Relaxed);
+                            self.handle_envelope(envelope).await;
+                        }
                         Err(_) => break,
                     }
                 }
@@ -886,7 +907,17 @@ impl DhtEngine {
     }
 
     /// Check for stale contacts by pinging random nodes.
+    /// Uses failure threshold: only evict after N consecutive failed pings.
+    /// Scales the number of nodes checked proportionally to routing table size.
     async fn check_stale_contacts(&self) {
+        let peer_count = self.routing.lock().await.len();
+        if peer_count == 0 {
+            return;
+        }
+
+        // Scale: check 1 node on small networks, up to routing_table_size/10
+        let check_count = (peer_count / 10).max(1).min(5);
+
         let target = {
             use rand::Rng;
             let mut rng = rand::thread_rng();
@@ -894,10 +925,30 @@ impl DhtEngine {
             rng.fill(&mut target_bytes);
             NodeId::new(target_bytes)
         };
-        let nodes = self.routing.lock().await.closest(&target, 3);
+
+        let nodes = self.routing.lock().await.closest(&target, check_count);
         for node in nodes {
             if !self.ping(node.addr).await {
-                self.routing.lock().await.remove(&node.identity.node_id);
+                let mut rt = self.routing.lock().await;
+                let failures = rt.increment_failures(&node.identity.node_id);
+                if failures >= self.config.ping_failure_threshold as u8 {
+                    tracing::info!(
+                        node = %node.identity.node_id,
+                        failures,
+                        "evicting stale peer after {} failed pings",
+                        failures
+                    );
+                    rt.remove(&node.identity.node_id);
+                } else {
+                    tracing::debug!(
+                        node = %node.identity.node_id,
+                        failures,
+                        threshold = self.config.ping_failure_threshold,
+                        "ping failed, tracking failure"
+                    );
+                }
+            } else {
+                self.routing.lock().await.reset_failures(&node.identity.node_id);
             }
         }
     }
