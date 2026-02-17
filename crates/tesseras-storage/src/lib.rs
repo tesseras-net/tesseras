@@ -13,6 +13,7 @@ pub mod metrics;
 pub mod migration;
 pub mod reciprocity;
 pub mod search_index;
+pub mod queue;
 pub mod sqlite;
 pub mod tombstone;
 
@@ -29,6 +30,7 @@ pub use metrics::StorageMetrics;
 pub use migration::{MigrationStats, migrate_to_cas};
 pub use reciprocity::SqliteReciprocityLedger;
 pub use search_index::SqliteSearchIndex;
+pub use queue::SqliteOperationQueue;
 pub use sqlite::{SqliteMemoryRepository, SqliteTesseraRepository};
 pub use tombstone::SqliteTombstoneRepository;
 

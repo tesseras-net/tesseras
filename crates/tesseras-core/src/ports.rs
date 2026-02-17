@@ -238,6 +238,40 @@ pub trait CircleRepository: Send + Sync {
     ) -> Result<Option<Vec<u8>>, CoreError>;
 }
 
+/// Queued operation types for offline push/pull/delete.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum QueuedOperation {
+    Push { hash: ContentHash },
+    Pull { hash: ContentHash },
+    Delete { hash: ContentHash },
+    Retract { hash: ContentHash },
+}
+
+/// Entry in the persistent operation queue.
+#[derive(Debug, Clone)]
+pub struct QueueEntry {
+    pub id: i64,
+    pub operation: QueuedOperation,
+    pub status: String,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub completed_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub error: Option<String>,
+    pub retries: u32,
+}
+
+/// Persistent operation queue for offline operations.
+pub trait OperationQueue: Send + Sync {
+    fn enqueue(&self, op: &QueuedOperation) -> Result<i64, CoreError>;
+    fn dequeue_pending(&self) -> Result<Option<QueueEntry>, CoreError>;
+    fn mark_completed(&self, id: i64) -> Result<(), CoreError>;
+    fn mark_failed(&self, id: i64, error: &str) -> Result<(), CoreError>;
+    fn increment_retries(&self, id: i64) -> Result<(), CoreError>;
+    fn list_pending(&self) -> Result<Vec<QueueEntry>, CoreError>;
+    fn list_recent(&self, limit: u32) -> Result<Vec<QueueEntry>, CoreError>;
+    /// Returns (pending, completed, failed) counts.
+    fn count_by_status(&self) -> Result<(u32, u32, u32), CoreError>;
+}
+
 /// Flat record for DB storage (not the domain aggregate).
 #[derive(Debug, Clone)]
 pub struct TesseraRecord {

@@ -10,6 +10,7 @@ tesseras-core = { workspace = true, features = ["service"] }
 tesseras-crypto = { workspace = true, features = ["service"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
+rmp-serde = { workspace = true }
 chrono = { workspace = true }
 thiserror = { workspace = true }
 rusqlite = { workspace = true }
