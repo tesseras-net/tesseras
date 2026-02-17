@@ -198,6 +198,46 @@ pub trait TombstoneRepository: Send + Sync {
     fn list(&self) -> Result<Vec<crate::Tombstone>, CoreError>;
 }
 
+/// A named circle with its encryption key.
+#[derive(Debug, Clone)]
+pub struct CircleRecord {
+    pub name: String,
+    pub symmetric_key: Vec<u8>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// A member of a circle.
+#[derive(Debug, Clone)]
+pub struct CircleMemberRecord {
+    pub circle_name: String,
+    pub alias: String,
+    pub pubkey: String,
+    pub wrapped_key: Vec<u8>,
+    pub added_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Repository for named circles (Trusted Wheel).
+pub trait CircleRepository: Send + Sync {
+    fn create_circle(&self, name: &str, symmetric_key: &[u8]) -> Result<(), CoreError>;
+    fn delete_circle(&self, name: &str) -> Result<(), CoreError>;
+    fn list_circles(&self) -> Result<Vec<CircleRecord>, CoreError>;
+    fn find_circle(&self, name: &str) -> Result<Option<CircleRecord>, CoreError>;
+    fn add_member(
+        &self,
+        circle: &str,
+        alias: &str,
+        pubkey: &str,
+        wrapped_key: &[u8],
+    ) -> Result<(), CoreError>;
+    fn remove_member(&self, circle: &str, alias: &str) -> Result<(), CoreError>;
+    fn list_members(&self, circle: &str) -> Result<Vec<CircleMemberRecord>, CoreError>;
+    fn find_member_wrapped_key(
+        &self,
+        circle: &str,
+        pubkey: &str,
+    ) -> Result<Option<Vec<u8>>, CoreError>;
+}
+
 /// Flat record for DB storage (not the domain aggregate).
 #[derive(Debug, Clone)]
 pub struct TesseraRecord {
