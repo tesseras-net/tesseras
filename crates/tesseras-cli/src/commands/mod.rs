@@ -1,3 +1,4 @@
+pub mod contact;
 pub mod create;
 pub mod daemon;
 pub mod export;

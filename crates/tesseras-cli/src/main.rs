@@ -121,6 +121,12 @@ enum Commands {
         dest: String,
     },
 
+    /// Manage contacts (@aliases for public keys)
+    Contact {
+        #[command(subcommand)]
+        command: commands::contact::ContactCommands,
+    },
+
     /// Daemon management (start, stop, status)
     Daemon {
         #[command(subcommand)]
@@ -257,6 +263,9 @@ async fn main() -> Result<()> {
         }
         Commands::Create(ref args) => {
             commands::create::run(args, &cli.data_dir, &cli.socket).await
+        }
+        Commands::Contact { ref command } => {
+            commands::contact::run(command, &cli.data_dir).await
         }
         Commands::Daemon { command } => match command {
             DaemonCommands::Start => commands::daemon::run_start(&cli.data_dir).await,
