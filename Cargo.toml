@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["tesseras", "tes"]
+members = ["tesseras", "tes", "crates/tesseras-embedded"]
 
 [workspace.package]
 edition = "2024"
@@ -51,6 +51,9 @@ tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
 
 # Encoding
 hex = "0.4"
+
+# FFI
+flutter_rust_bridge = "=2.11.1"
 
 # Misc
 dirs = "6"

@@ -1,0 +1,5 @@
+cargo:
+  debug:
+    extra_flags: []
+  release:
+    extra_flags: []
