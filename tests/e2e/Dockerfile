@@ -6,6 +6,7 @@ WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
 COPY tesseras/ tesseras/
 COPY tes/ tes/
+COPY crates/ crates/
 
 RUN cargo build --release -p tes
 

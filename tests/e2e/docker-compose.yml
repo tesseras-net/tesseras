@@ -1,10 +1,10 @@
 services:
-  # Bootstrap nodes
+  # Bootstrap node — runs the daemon
   bootstrap1:
     build:
       context: ../..
       dockerfile: tests/e2e/Dockerfile
-    command: ["admin", "daemon", "start"]
+    command: ["admin", "daemon", "start", "--foreground"]
     volumes:
       - bootstrap1-data:/data
     environment:
@@ -13,20 +13,7 @@ services:
       tesseras-net:
         ipv4_address: 10.10.0.10
 
-  bootstrap2:
-    build:
-      context: ../..
-      dockerfile: tests/e2e/Dockerfile
-    command: ["admin", "daemon", "start"]
-    volumes:
-      - bootstrap2-data:/data
-    environment:
-      - TES_IDENTITY=/data
-    networks:
-      tesseras-net:
-        ipv4_address: 10.10.0.11
-
-  # Region A nodes
+  # Client nodes — run ad-hoc commands, bootstrap from bootstrap1
   alice:
     build:
       context: ../..
@@ -69,35 +56,6 @@ services:
       tesseras-net:
         ipv4_address: 10.10.1.12
 
-  # Region B nodes
-  diana:
-    build:
-      context: ../..
-      dockerfile: tests/e2e/Dockerfile
-    command: ["sleep", "infinity"]
-    entrypoint: ["/bin/sh", "-c"]
-    volumes:
-      - diana-data:/data
-    environment:
-      - TES_IDENTITY=/data
-    networks:
-      tesseras-net:
-        ipv4_address: 10.10.2.10
-
-  eve:
-    build:
-      context: ../..
-      dockerfile: tests/e2e/Dockerfile
-    command: ["sleep", "infinity"]
-    entrypoint: ["/bin/sh", "-c"]
-    volumes:
-      - eve-data:/data
-    environment:
-      - TES_IDENTITY=/data
-    networks:
-      tesseras-net:
-        ipv4_address: 10.10.2.11
-
 networks:
   tesseras-net:
     driver: bridge
@@ -107,9 +65,6 @@ networks:
 
 volumes:
   bootstrap1-data:
-  bootstrap2-data:
   alice-data:
   bob-data:
   charlie-data:
-  diana-data:
-  eve-data:

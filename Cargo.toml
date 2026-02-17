@@ -60,3 +60,4 @@ dirs = "6"
 
 # Testing
 tempfile = "3"
+proptest = "1"
