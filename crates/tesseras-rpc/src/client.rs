@@ -1,3 +1,4 @@
+#[cfg(unix)]
 use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::time::Duration;
@@ -11,12 +12,18 @@ const MAX_RETRIES: u32 = 1;
 /// Delay between retries.
 const RETRY_DELAY: Duration = Duration::from_millis(500);
 
-/// Synchronous RPC client. Connects to the daemon Unix socket,
-/// sends one request, reads one response, then the connection is dropped.
+#[cfg(unix)]
+type Stream = UnixStream;
+
+#[cfg(windows)]
+type Stream = std::net::TcpStream;
+
+/// Synchronous RPC client. Connects to the daemon socket (Unix) or
+/// named pipe (Windows), sends one request, reads one response.
 #[derive(Debug)]
 pub struct DaemonClient {
     socket_path: std::path::PathBuf,
-    stream: UnixStream,
+    stream: Stream,
 }
 
 impl DaemonClient {
@@ -29,8 +36,23 @@ impl DaemonClient {
         })
     }
 
-    fn open_stream(socket_path: &Path) -> Result<UnixStream, RpcError> {
+    #[cfg(unix)]
+    fn open_stream(socket_path: &Path) -> Result<Stream, RpcError> {
         let stream = UnixStream::connect(socket_path).map_err(|source| {
+            RpcError::ConnectionFailed {
+                path: socket_path.to_path_buf(),
+                source,
+            }
+        })?;
+        stream.set_read_timeout(Some(Duration::from_secs(120)))?;
+        stream.set_write_timeout(Some(Duration::from_secs(30)))?;
+        Ok(stream)
+    }
+
+    #[cfg(windows)]
+    fn open_stream(socket_path: &Path) -> Result<Stream, RpcError> {
+        // On Windows, connect via TCP loopback to the daemon's named pipe bridge.
+        let stream = std::net::TcpStream::connect("127.0.0.1:17283").map_err(|source| {
             RpcError::ConnectionFailed {
                 path: socket_path.to_path_buf(),
                 source,

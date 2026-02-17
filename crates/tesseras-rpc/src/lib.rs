@@ -15,14 +15,16 @@ pub use protocol::{
 pub use tesseras_core::NodeInfo;
 
 /// Well-known socket path for system-level daemon (systemd RuntimeDirectory).
+#[cfg(unix)]
 const SYSTEM_SOCKET: &str = "/run/tesseras/daemon.sock";
 
 /// Default daemon socket path. Shared by client and server.
 ///
-/// Resolution order:
+/// Resolution order (Unix):
 /// 1. `$XDG_RUNTIME_DIR/tesseras/daemon.sock` (user session)
 /// 2. `/run/tesseras/daemon.sock` (system service via RuntimeDirectory)
 /// 3. `$XDG_DATA_HOME/tesseras/daemon.sock` (fallback)
+#[cfg(unix)]
 pub fn default_socket_path() -> Result<PathBuf, RpcError> {
     if let Some(runtime) = dirs::runtime_dir() {
         let user_path = runtime.join("tesseras/daemon.sock");
@@ -44,4 +46,10 @@ pub fn default_socket_path() -> Result<PathBuf, RpcError> {
     } else {
         Err(RpcError::NoSocketPath)
     }
+}
+
+/// Default daemon socket path on Windows (named pipe).
+#[cfg(windows)]
+pub fn default_socket_path() -> Result<PathBuf, RpcError> {
+    Ok(PathBuf::from(r"\\.\pipe\tesseras-daemon"))
 }
