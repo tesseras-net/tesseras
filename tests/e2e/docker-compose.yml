@@ -18,8 +18,8 @@ services:
     build:
       context: ../..
       dockerfile: tests/e2e/Dockerfile
-    command: ["sleep", "infinity"]
     entrypoint: ["/bin/sh", "-c"]
+    command: ["sleep 86400"]
     volumes:
       - alice-data:/data
     environment:
@@ -32,8 +32,8 @@ services:
     build:
       context: ../..
       dockerfile: tests/e2e/Dockerfile
-    command: ["sleep", "infinity"]
     entrypoint: ["/bin/sh", "-c"]
+    command: ["sleep 86400"]
     volumes:
       - bob-data:/data
     environment:
@@ -46,8 +46,8 @@ services:
     build:
       context: ../..
       dockerfile: tests/e2e/Dockerfile
-    command: ["sleep", "infinity"]
     entrypoint: ["/bin/sh", "-c"]
+    command: ["sleep 86400"]
     volumes:
       - charlie-data:/data
     environment:
