@@ -455,8 +455,28 @@ impl DhtEngine {
                 None
             }
 
-            // Handled in Task 5
-            Message::FetchFragment { .. } | Message::FetchFragmentResponse { .. } => None,
+            Message::FetchFragment {
+                tessera_hash,
+                fragment_index,
+            } => {
+                let handler = self.replication_handler.lock().unwrap().clone();
+                if let Some(handler) = handler {
+                    match handler
+                        .handle_fetch_fragment(tessera_hash, *fragment_index)
+                        .await
+                    {
+                        Ok(envelope) => Some(Message::FetchFragmentResponse { envelope }),
+                        Err(e) => {
+                            tracing::warn!(error = %e, "FETCH_FRAGMENT handler failed");
+                            Some(Message::FetchFragmentResponse { envelope: None })
+                        }
+                    }
+                } else {
+                    tracing::debug!("received FETCH_FRAGMENT but no handler set");
+                    None
+                }
+            }
+            Message::FetchFragmentResponse { .. } => None,
 
             // Search messages are handled at the application layer, not the DHT engine.
             Message::Search { .. } | Message::SearchResult { .. } => None,
@@ -568,6 +588,32 @@ impl DhtEngine {
                 "expected AttestResponse, got {other:?}"
             ))),
             None => Err(DhtError::RpcFailed("no response to ATTEST_REQUEST".into())),
+        }
+    }
+
+    /// Send a FETCH_FRAGMENT request to a target node.
+    pub async fn fetch_fragment(
+        &self,
+        target: &NodeInfo,
+        tessera_hash: &ContentHash,
+        fragment_index: u16,
+    ) -> Result<Option<FragmentEnvelope>, DhtError> {
+        let peer = PeerAddr {
+            node_id: Some(target.identity.node_id),
+            addr: target.addr,
+        };
+        let msg = Message::FetchFragment {
+            tessera_hash: *tessera_hash,
+            fragment_index,
+        };
+        match self.rpc(&peer, &msg).await? {
+            Some(Message::FetchFragmentResponse { envelope }) => Ok(envelope),
+            Some(other) => Err(DhtError::RpcFailed(format!(
+                "expected FetchFragmentResponse, got {other:?}"
+            ))),
+            None => Err(DhtError::RpcFailed(
+                "no response to FETCH_FRAGMENT".into(),
+            )),
         }
     }
 
@@ -1587,6 +1633,47 @@ mod tests {
         let response = engine.handle_message(&msg, &peer).await;
         assert!(response.is_none());
         assert!(handler.relay_close_called.load(Ordering::SeqCst));
+    }
+
+    #[tokio::test]
+    async fn fetch_fragment_handler_dispatches() {
+        let net = SimNetwork::new();
+        let engine = create_engine(&net, 980).await;
+        engine.set_replication_handler(Arc::new(MockHandler));
+
+        let msg = Message::FetchFragment {
+            tessera_hash: ContentHash::new([0xaa; 32]),
+            fragment_index: 0,
+        };
+        let peer = PeerAddr {
+            node_id: Some(NodeId::new([0x01; 20])),
+            addr: addr(981),
+        };
+
+        let response = engine.handle_message(&msg, &peer).await;
+        assert!(matches!(
+            response,
+            Some(Message::FetchFragmentResponse { .. })
+        ));
+    }
+
+    #[tokio::test]
+    async fn fetch_fragment_without_handler_returns_none() {
+        let net = SimNetwork::new();
+        let engine = create_engine(&net, 990).await;
+        // No handler set
+
+        let msg = Message::FetchFragment {
+            tessera_hash: ContentHash::new([0xaa; 32]),
+            fragment_index: 0,
+        };
+        let peer = PeerAddr {
+            node_id: Some(NodeId::new([0x01; 20])),
+            addr: addr(991),
+        };
+
+        let response = engine.handle_message(&msg, &peer).await;
+        assert!(response.is_none());
     }
 
     #[tokio::test]
