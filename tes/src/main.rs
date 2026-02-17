@@ -71,6 +71,15 @@ fn make_node(
     )?)
 }
 
+/// Check if the daemon is running (socket exists and connectable).
+fn daemon_running(data_dir: &tesseras::config::DataDir) -> bool {
+    let rt = match tokio::runtime::Runtime::new() {
+        Ok(rt) => rt,
+        Err(_) => return false,
+    };
+    rt.block_on(tesseras::rpc::daemon_is_running(data_dir.root()))
+}
+
 fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
@@ -90,18 +99,30 @@ fn main() -> Result<()> {
             commands::get::run(&data_dir, args)
         }
         Commands::Rm(args) => {
-            let identity = ensure_identity(&data_dir)?;
-            let node = make_node(&data_dir, identity)?;
-            commands::rm::run_with_node(&node, args)
+            if daemon_running(&data_dir) {
+                commands::rm::run_via_rpc(data_dir.root(), args)
+            } else {
+                let identity = ensure_identity(&data_dir)?;
+                let node = make_node(&data_dir, identity)?;
+                commands::rm::run_with_node(&node, args)
+            }
         }
         Commands::Ls => {
-            let identity = ensure_identity(&data_dir)?;
-            let node = make_node(&data_dir, identity)?;
-            commands::ls::run_with_node(&node)
+            if daemon_running(&data_dir) {
+                commands::ls::run_via_rpc(data_dir.root())
+            } else {
+                let identity = ensure_identity(&data_dir)?;
+                let node = make_node(&data_dir, identity)?;
+                commands::ls::run_with_node(&node)
+            }
         }
         Commands::Cat(args) => {
-            let _identity = ensure_identity(&data_dir)?;
-            commands::cat::run(&data_dir, args)
+            if daemon_running(&data_dir) {
+                commands::cat::run_via_rpc(data_dir.root(), args)
+            } else {
+                let _identity = ensure_identity(&data_dir)?;
+                commands::cat::run(&data_dir, args)
+            }
         }
         Commands::Export(args) => {
             let _identity = ensure_identity(&data_dir)?;

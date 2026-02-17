@@ -690,6 +690,11 @@ impl Node {
         Ok(missing)
     }
 
+    /// Get a receiver for the shutdown signal (for passing to RPC server, etc).
+    pub fn shutdown_rx(&self) -> Option<watch::Receiver<bool>> {
+        self.shutdown_tx.as_ref().map(|tx| tx.subscribe())
+    }
+
     /// Close the transport and signal background tasks to stop.
     pub fn shutdown(&self) {
         if let Some(tx) = &self.shutdown_tx {
