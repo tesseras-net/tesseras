@@ -69,6 +69,16 @@ pub enum Message {
     ReplicateAck {
         ack: ReplicateAck,
     },
+
+    /// Request a specific fragment from a peer.
+    FetchFragment {
+        tessera_hash: ContentHash,
+        fragment_index: u16,
+    },
+    /// Response with the requested fragment (None if not held).
+    FetchFragmentResponse {
+        envelope: Option<FragmentEnvelope>,
+    },
     AttestRequest {
         tessera_hash: ContentHash,
     },
@@ -399,6 +409,61 @@ mod tests {
             decoded,
             Message::FindValueResponse {
                 result: FindValueResult::Nodes(_)
+            }
+        ));
+    }
+
+    #[test]
+    fn fetch_fragment_serde_roundtrip() {
+        let msg = Message::FetchFragment {
+            tessera_hash: ContentHash::new([0xaa; 32]),
+            fragment_index: 3,
+        };
+        let bytes = encode(&msg).unwrap();
+        let decoded = decode(&bytes).unwrap();
+        assert!(matches!(
+            decoded,
+            Message::FetchFragment {
+                fragment_index: 3,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn fetch_fragment_response_none_roundtrip() {
+        let msg = Message::FetchFragmentResponse { envelope: None };
+        let bytes = encode(&msg).unwrap();
+        let decoded = decode(&bytes).unwrap();
+        assert!(matches!(
+            decoded,
+            Message::FetchFragmentResponse { envelope: None }
+        ));
+    }
+
+    #[test]
+    fn fetch_fragment_response_some_roundtrip() {
+        let envelope = FragmentEnvelope {
+            id: FragmentId::new(
+                ContentHash::new([0x01; 32]),
+                0,
+                16,
+                ContentHash::new([0xcc; 32]),
+            ),
+            plan: FragmentPlan::new(ContentHash::new([0x01; 32]), 100_000_000).unwrap(),
+            original_tessera_size: 100_000_000,
+            fragment_size: 100_000_000 / 16,
+            data: vec![0xaa; 64],
+        };
+        let msg = Message::FetchFragmentResponse {
+            envelope: Some(envelope),
+        };
+        let bytes = encode(&msg).unwrap();
+        let decoded = decode(&bytes).unwrap();
+        assert!(matches!(
+            decoded,
+            Message::FetchFragmentResponse {
+                envelope: Some(_)
             }
         ));
     }

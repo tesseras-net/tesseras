@@ -455,6 +455,9 @@ impl DhtEngine {
                 None
             }
 
+            // Handled in Task 5
+            Message::FetchFragment { .. } | Message::FetchFragmentResponse { .. } => None,
+
             // Search messages are handled at the application layer, not the DHT engine.
             Message::Search { .. } | Message::SearchResult { .. } => None,
         }
