@@ -36,6 +36,7 @@ hickory-resolver = { workspace = true }
 qr_code = { workspace = true }
 image = { version = "0.25", default-features = false, features = ["png", "bmp"] }
 owo-colors = { workspace = true }
+libc = "0.2.182"
 
 [features]
 default = []

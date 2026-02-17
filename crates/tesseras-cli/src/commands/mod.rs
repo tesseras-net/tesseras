@@ -1,4 +1,5 @@
 pub mod create;
+pub mod daemon;
 pub mod export;
 pub mod fetch;
 pub mod heir;

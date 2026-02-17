@@ -115,6 +115,12 @@ enum Commands {
         dest: String,
     },
 
+    /// Daemon management (start, stop, status)
+    Daemon {
+        #[command(subcommand)]
+        command: DaemonCommands,
+    },
+
     /// Network operations (publish, fetch, status)
     Net {
         #[command(subcommand)]
@@ -134,6 +140,16 @@ enum Commands {
         #[arg(value_enum)]
         shell: Shell,
     },
+}
+
+#[derive(Subcommand)]
+enum DaemonCommands {
+    /// Start the daemon in the background
+    Start,
+    /// Stop the running daemon
+    Stop,
+    /// Show daemon status
+    Status,
 }
 
 #[derive(Subcommand)]
@@ -228,6 +244,11 @@ async fn main() -> Result<()> {
 
     match cli.command {
         Commands::Create(ref args) => commands::create::run(args, &cli.data_dir).await,
+        Commands::Daemon { command } => match command {
+            DaemonCommands::Start => commands::daemon::run_start(&cli.data_dir).await,
+            DaemonCommands::Stop => commands::daemon::run_stop(&cli.data_dir).await,
+            DaemonCommands::Status => commands::daemon::run_status(&cli.data_dir).await,
+        },
         Commands::Show { ref hash, json } => {
             use std::io::IsTerminal;
             let color = match cli.color {
