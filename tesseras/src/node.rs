@@ -568,6 +568,244 @@ impl Node {
             .map_err(|e| NodeError::Storage(e.to_string()))
     }
 
+    /// Fetch a tessera from the network when not available locally.
+    /// Queries DHT for providers, fetches tessera metadata, then fetches
+    /// all blobs (or reconstructs from fragments), and caches everything locally.
+    pub async fn fetch_tessera_from_network(
+        &self,
+        hash: &ContentHash,
+    ) -> Result<Option<Tessera>, NodeError> {
+        // 1. Try local first
+        if let Some(t) = self.get_tessera(hash)? {
+            return Ok(Some(t));
+        }
+
+        let transport = self
+            .transport
+            .as_ref()
+            .ok_or_else(|| NodeError::Network("transport not started".into()))?;
+
+        // 2. Find providers via DHT
+        let providers = self.find_providers(hash).await?;
+        if providers.is_empty() {
+            info!("no providers found for tessera {hash}");
+            return Ok(None);
+        }
+
+        // 3. Try to fetch tessera metadata from each provider
+        let mut tessera: Option<Tessera> = None;
+        let mut source_addr = None;
+        for provider in &providers {
+            match self
+                .fetch_tessera_metadata(transport, provider.addr, hash)
+                .await
+            {
+                Ok(Some(t)) => {
+                    tessera = Some(t);
+                    source_addr = Some(provider.addr);
+                    break;
+                }
+                Ok(None) => continue,
+                Err(e) => {
+                    debug!("fetch tessera metadata from {} failed: {e}", provider.addr);
+                    continue;
+                }
+            }
+        }
+
+        let tessera = match tessera {
+            Some(t) => t,
+            None => {
+                info!("no provider had tessera metadata for {hash}");
+                return Ok(None);
+            }
+        };
+
+        // 4. Fetch each blob
+        for memory in &tessera.memories {
+            // Skip if we already have this blob
+            {
+                let storage = self.storage.lock().unwrap();
+                if storage.has_blob(&memory.blob_hash) {
+                    continue;
+                }
+            }
+
+            // Try to fetch full blob from the source provider first
+            let mut got_blob = false;
+            if let Some(addr) = source_addr {
+                if let Ok(Some(data)) = self.fetch_blob(addr, &memory.blob_hash).await {
+                    let actual_hash = crate::crypto::hash_bytes(&data);
+                    if actual_hash == memory.blob_hash {
+                        let storage = self.storage.lock().unwrap();
+                        let _ = storage.store_blob_bytes(&data);
+                        got_blob = true;
+                    }
+                }
+            }
+
+            // If that failed, try fetching fragments and reconstructing
+            if !got_blob {
+                self.fetch_and_reconstruct_blob(&memory.blob_hash, &providers)
+                    .await?;
+            }
+        }
+
+        // 5. Cache tessera metadata locally
+        {
+            let storage = self.storage.lock().unwrap();
+            storage
+                .store_tessera(&tessera)
+                .map_err(|e| NodeError::Storage(e.to_string()))?;
+        }
+
+        info!("fetched tessera {hash} from network");
+        Ok(Some(tessera))
+    }
+
+    /// Fetch tessera metadata from a remote peer.
+    async fn fetch_tessera_metadata(
+        &self,
+        transport: &QuicTransport,
+        addr: SocketAddr,
+        hash: &ContentHash,
+    ) -> Result<Option<Tessera>, NodeError> {
+        let node_id = self.identity.node_id();
+        let msg = DhtMessage::FetchTessera {
+            sender: node_id,
+            hash: *hash,
+        };
+
+        let result = tokio::time::timeout(RPC_TIMEOUT, async {
+            let conn = transport
+                .connect(addr)
+                .await
+                .map_err(|e| NodeError::Network(e.to_string()))?;
+            let (mut send, mut recv) = conn
+                .open_bi()
+                .await
+                .map_err(|e| NodeError::Network(e.to_string()))?;
+            net::send_message(&mut send, &msg)
+                .await
+                .map_err(|e| NodeError::Network(e.to_string()))?;
+            send.finish()
+                .map_err(|e| NodeError::Network(e.to_string()))?;
+
+            let response = net::receive_message(&mut recv)
+                .await
+                .map_err(|e| NodeError::Network(e.to_string()))?;
+
+            if let DhtMessage::FetchTesseraResponse { tessera, .. } = response {
+                Ok(tessera)
+            } else {
+                Ok(None)
+            }
+        })
+        .await;
+
+        match result {
+            Ok(inner) => inner,
+            Err(_) => {
+                debug!("fetch_tessera_metadata from {addr} timed out");
+                Ok(None)
+            }
+        }
+    }
+
+    /// Fetch fragments for a blob from DHT peers and reconstruct.
+    async fn fetch_and_reconstruct_blob(
+        &self,
+        blob_hash: &ContentHash,
+        providers: &[PeerInfo],
+    ) -> Result<bool, NodeError> {
+        // First check if we have fragment metadata locally
+        let fragment_metas = {
+            let storage = self.storage.lock().unwrap();
+            storage
+                .find_fragments(blob_hash)
+                .map_err(|e| NodeError::Storage(e.to_string()))?
+        };
+
+        if fragment_metas.is_empty() {
+            debug!("no fragment metadata for blob {blob_hash}, cannot reconstruct");
+            return Ok(false);
+        }
+
+        let data_shards = fragment_metas[0].data_shards;
+        let parity_shards = fragment_metas[0].parity_shards;
+        let original_size = fragment_metas[0].original_size;
+        let total_shards = data_shards + parity_shards;
+
+        // Collect available fragments, fetch missing ones from providers
+        let mut shards: Vec<Option<Vec<u8>>> = vec![None; total_shards];
+
+        for meta in &fragment_metas {
+            // Check local first
+            {
+                let storage = self.storage.lock().unwrap();
+                if let Ok(data) = storage.read_blob_bytes(&meta.fragment_hash) {
+                    if meta.fragment_index < total_shards {
+                        shards[meta.fragment_index] = Some(data);
+                        continue;
+                    }
+                }
+            }
+
+            // Try to fetch from providers
+            for provider in providers {
+                if let Ok(Some(data)) = self.fetch_blob(provider.addr, &meta.fragment_hash).await {
+                    let actual_hash = crate::crypto::hash_bytes(&data);
+                    if actual_hash == meta.fragment_hash {
+                        // Cache the fragment locally
+                        let storage = self.storage.lock().unwrap();
+                        let _ = storage.store_blob_bytes(&data);
+                        drop(storage);
+                        if meta.fragment_index < total_shards {
+                            shards[meta.fragment_index] = Some(data);
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        let present = shards.iter().filter(|s| s.is_some()).count();
+        if present < data_shards {
+            debug!(
+                "only {present}/{data_shards} fragments available for blob {blob_hash}, cannot reconstruct"
+            );
+            return Ok(false);
+        }
+
+        // Reconstruct
+        let decode_frags: Vec<replication::Fragment> = shards
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, data)| data.map(|d| replication::Fragment { index: i, data: d }))
+            .collect();
+
+        let reconstructed =
+            replication::decode_fragments(&decode_frags, data_shards, parity_shards, original_size)
+                .map_err(|e| NodeError::Replication(e.to_string()))?;
+
+        // Verify hash
+        let actual_hash = crate::crypto::hash_bytes(&reconstructed);
+        if actual_hash != *blob_hash {
+            return Err(NodeError::Replication(format!(
+                "reconstructed blob hash mismatch: expected {blob_hash}, got {actual_hash}"
+            )));
+        }
+
+        // Store the reconstructed blob
+        let storage = self.storage.lock().unwrap();
+        storage
+            .store_blob_bytes(&reconstructed)
+            .map_err(|e| NodeError::Storage(e.to_string()))?;
+
+        info!("reconstructed blob {blob_hash} from fragments");
+        Ok(true)
+    }
+
     /// Remove a tessera, its blobs, and fragment data.
     pub fn remove_tessera(&self, hash: &ContentHash) -> Result<(), NodeError> {
         let storage = self.storage.lock().unwrap();
@@ -737,6 +975,32 @@ async fn handle_connection(
                     return;
                 }
             };
+
+            // Handle FetchTessera — return tessera metadata from local storage
+            if let DhtMessage::FetchTessera { sender, hash } = &msg {
+                {
+                    let mut dht = dht.lock().unwrap();
+                    dht.routing_table.insert(PeerInfo {
+                        node_id: *sender,
+                        addr: remote_addr,
+                    });
+                }
+
+                let tessera = {
+                    let storage = storage.lock().unwrap();
+                    storage.find_tessera(hash).ok().flatten()
+                };
+
+                let resp = DhtMessage::FetchTesseraResponse {
+                    sender: local_node_id,
+                    tessera,
+                };
+                if let Err(e) = net::send_message(&mut send, &resp).await {
+                    debug!("send FetchTesseraResponse error to {remote_addr}: {e}");
+                }
+                let _ = send.finish();
+                return;
+            }
 
             // Handle FetchBlob specially — needs storage access and blob streaming
             if let DhtMessage::FetchBlob { sender, hash } = &msg {
@@ -1391,5 +1655,58 @@ mod tests {
         assert_eq!(missing[0].0, blob_hash);
         assert_eq!(missing[0].1, lost_frag.fragment_index);
         assert_eq!(missing[0].2, lost_frag.fragment_hash);
+    }
+
+    #[tokio::test]
+    async fn fetch_tessera_from_network() {
+        // Set up two nodes with B bootstrapping from A
+        let (tmp_a, mut node_a) = test_node();
+        node_a.config.listen = "127.0.0.1:0".parse().unwrap();
+        let addr_a = node_a.start().await.unwrap();
+
+        let tmp_b = tempfile::tempdir().unwrap();
+        let data_dir_b = DataDir::open(tmp_b.path()).unwrap();
+        let identity_b = Identity::generate();
+        let mut config_b = NodeConfig::default();
+        config_b.listen = "127.0.0.1:0".parse().unwrap();
+        config_b.bootstrap = vec![addr_a.to_string()];
+        let mut node_b = Node::new(data_dir_b, identity_b, config_b).unwrap();
+        let _addr_b = node_b.start().await.unwrap();
+        node_b.bootstrap().await.unwrap();
+
+        // Node A creates and announces a tessera (after bootstrap so A knows B)
+        let test_file = tmp_a.path().join("memory.txt");
+        std::fs::write(&test_file, b"a precious memory to fetch").unwrap();
+        let tessera = node_a
+            .add_tessera(&[test_file], Some("Fetchable".into()), Visibility::Public)
+            .unwrap();
+
+        let stored = node_a.announce_tessera(&tessera.hash).await.unwrap();
+        assert!(stored > 0);
+
+        // Node B should NOT have the tessera locally
+        assert!(node_b.get_tessera(&tessera.hash).unwrap().is_none());
+
+        // Fetch from network
+        let fetched = node_b
+            .fetch_tessera_from_network(&tessera.hash)
+            .await
+            .unwrap();
+        assert!(fetched.is_some());
+        let fetched = fetched.unwrap();
+        assert_eq!(fetched.hash, tessera.hash);
+        assert_eq!(fetched.name, Some("Fetchable".into()));
+        assert_eq!(fetched.memories.len(), 1);
+
+        // Now it should be cached locally
+        let local = node_b.get_tessera(&tessera.hash).unwrap();
+        assert!(local.is_some());
+
+        // The blob should also be available locally
+        let storage_b = node_b.storage.lock().unwrap();
+        assert!(storage_b.has_blob(&fetched.memories[0].blob_hash));
+
+        node_a.shutdown();
+        node_b.shutdown();
     }
 }

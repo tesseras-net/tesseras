@@ -95,8 +95,11 @@ fn main() -> Result<()> {
             commands::add::run_with_node(&node, args)
         }
         Commands::Get(args) => {
-            let _identity = ensure_identity(&data_dir)?;
-            commands::get::run(&data_dir, args)
+            if daemon_running(&data_dir) {
+                commands::get::run_via_rpc(data_dir.root(), args)
+            } else {
+                commands::get::run_standalone(&data_dir, args)
+            }
         }
         Commands::Rm(args) => {
             if daemon_running(&data_dir) {

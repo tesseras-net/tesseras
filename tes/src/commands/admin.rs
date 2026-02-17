@@ -286,20 +286,18 @@ async fn run_daemon_async(data_dir: &DataDir) -> Result<()> {
         .shutdown_rx()
         .ok_or_else(|| anyhow::anyhow!("node not started"))?;
 
-    // Clone what the RPC handler needs
-    let node_storage = node.storage.clone();
-    let node_dht = node.dht.clone();
-    let node_id = node.node_id();
     let listen_addr = addr.to_string();
+    let node = std::sync::Arc::new(node);
 
+    let rpc_node = node.clone();
     let rpc_handle = tokio::spawn(async move {
+        let listen_addr = listen_addr;
         rpc_server
             .serve(
                 move |req| {
-                    let storage = node_storage.clone();
-                    let dht = node_dht.clone();
+                    let node = rpc_node.clone();
                     let listen_addr = listen_addr.clone();
-                    async move { handle_rpc_request(req, &storage, &dht, node_id, &listen_addr) }
+                    async move { handle_rpc_request(req, &node, &listen_addr).await }
                 },
                 shutdown_rx,
             )
@@ -336,29 +334,25 @@ async fn run_daemon_async(data_dir: &DataDir) -> Result<()> {
     Ok(())
 }
 
-/// Handle an RPC request using the node's shared state.
-fn handle_rpc_request(
-    request: RpcRequest,
-    storage: &std::sync::Arc<std::sync::Mutex<tesseras::storage::Storage>>,
-    dht: &std::sync::Arc<std::sync::Mutex<tesseras::dht::Dht>>,
-    node_id: tesseras::types::NodeId,
-    listen_addr: &str,
-) -> RpcResponse {
+/// Handle an RPC request using the node.
+async fn handle_rpc_request(request: RpcRequest, node: &Node, listen_addr: &str) -> RpcResponse {
+    let node_id = node.node_id();
+
     match request {
         RpcRequest::Ping => RpcResponse::Pong {
             node_id: node_id.to_string(),
-            peer_count: dht.lock().unwrap().routing_table.len(),
+            peer_count: node.dht.lock().unwrap().routing_table.len(),
             listen_addr: listen_addr.to_string(),
         },
         RpcRequest::ListTesseras => {
-            let storage = storage.lock().unwrap();
+            let storage = node.storage.lock().unwrap();
             match storage.list_tesseras() {
                 Ok(list) => RpcResponse::TesseraList(list),
                 Err(e) => RpcResponse::Error(e.to_string()),
             }
         }
         RpcRequest::GetTessera { hash } => {
-            let storage = storage.lock().unwrap();
+            let storage = node.storage.lock().unwrap();
             match storage.find_tessera(&hash) {
                 Ok(Some(t)) => RpcResponse::Tessera(t),
                 Ok(None) => RpcResponse::Error(format!("tessera not found: {hash}")),
@@ -366,60 +360,64 @@ fn handle_rpc_request(
             }
         }
         RpcRequest::AddTessera { .. } => {
-            // We need a full Node to add tessera (it signs, erasure-codes, etc).
-            // For now, do it directly via storage (without signing/replication).
-            // A proper implementation would pass the Node, but that requires
-            // restructuring how the handler closure captures state.
-            // TODO: pass Node reference to RPC handler for full add_tessera support
+            // TODO: add_tessera via RPC requires passing file data — not yet supported
             RpcResponse::Error("add via RPC not yet supported — use tes add directly".into())
         }
         RpcRequest::RemoveTessera { hash } => {
-            let storage = storage.lock().unwrap();
+            let storage = node.storage.lock().unwrap();
             match storage.delete_tessera(&hash) {
                 Ok(()) => RpcResponse::Ok,
                 Err(e) => RpcResponse::Error(e.to_string()),
             }
         }
         RpcRequest::NodeStatus => {
-            let storage = storage.lock().unwrap();
+            let storage = node.storage.lock().unwrap();
             let tessera_count = storage.list_tesseras().map(|t| t.len()).unwrap_or(0);
             RpcResponse::Status {
                 node_id: node_id.to_string(),
-                peer_count: dht.lock().unwrap().routing_table.len(),
+                peer_count: node.dht.lock().unwrap().routing_table.len(),
                 tessera_count,
                 listen_addr: listen_addr.to_string(),
             }
         }
-        RpcRequest::CheckFragments => {
-            let storage = storage.lock().unwrap();
-            let tesseras = match storage.list_tesseras() {
-                Ok(t) => t,
-                Err(e) => return RpcResponse::Error(e.to_string()),
-            };
-
-            let mut total_ok = 0usize;
-            let mut missing = Vec::new();
-            for tessera in &tesseras {
-                for memory in &tessera.memories {
-                    let fragments = match storage.find_fragments(&memory.blob_hash) {
-                        Ok(f) => f,
-                        Err(_) => continue,
+        RpcRequest::CheckFragments => match node.check_fragments() {
+            Ok(missing_list) => {
+                let total_ok = {
+                    let storage = node.storage.lock().unwrap();
+                    let tesseras = match storage.list_tesseras() {
+                        Ok(t) => t,
+                        Err(e) => return RpcResponse::Error(e.to_string()),
                     };
-                    for meta in &fragments {
-                        if storage.has_blob(&meta.fragment_hash) {
-                            total_ok += 1;
-                        } else {
-                            missing.push((
-                                memory.blob_hash.to_string(),
-                                meta.fragment_index,
-                                meta.fragment_hash.to_string(),
-                            ));
+                    let mut ok = 0usize;
+                    for tessera in &tesseras {
+                        for memory in &tessera.memories {
+                            let fragments = match storage.find_fragments(&memory.blob_hash) {
+                                Ok(f) => f,
+                                Err(_) => continue,
+                            };
+                            for meta in &fragments {
+                                if storage.has_blob(&meta.fragment_hash) {
+                                    ok += 1;
+                                }
+                            }
                         }
                     }
-                }
+                    ok
+                };
+                let missing = missing_list
+                    .into_iter()
+                    .map(|(bh, idx, fh)| (bh.to_string(), idx, fh.to_string()))
+                    .collect();
+                RpcResponse::FragmentHealth { total_ok, missing }
             }
-
-            RpcResponse::FragmentHealth { total_ok, missing }
+            Err(e) => RpcResponse::Error(e.to_string()),
+        },
+        RpcRequest::FetchTesseraFromNetwork { hash } => {
+            match node.fetch_tessera_from_network(&hash).await {
+                Ok(Some(t)) => RpcResponse::Tessera(t),
+                Ok(None) => RpcResponse::Error(format!("tessera not found on network: {hash}")),
+                Err(e) => RpcResponse::Error(e.to_string()),
+            }
         }
     }
 }

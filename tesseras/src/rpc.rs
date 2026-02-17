@@ -39,6 +39,8 @@ pub enum RpcRequest {
     NodeStatus,
     /// Check fragment health.
     CheckFragments,
+    /// Fetch a tessera from the network (DHT lookup + fragment reconstruction).
+    FetchTesseraFromNetwork { hash: ContentHash },
 }
 
 /// RPC response from daemon to CLI.

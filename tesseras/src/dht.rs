@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 
 use serde::{Deserialize, Serialize};
 
-use crate::types::{ContentHash, NodeId};
+use crate::types::{ContentHash, NodeId, Tessera};
 
 /// Kademlia replication factor.
 const K: usize = 20;
@@ -73,6 +73,16 @@ pub enum DhtMessage {
         sender: NodeId,
         found: bool,
         size: u64,
+    },
+    /// Request tessera metadata by content hash.
+    FetchTessera {
+        sender: NodeId,
+        hash: ContentHash,
+    },
+    /// Response to FetchTessera.
+    FetchTesseraResponse {
+        sender: NodeId,
+        tessera: Option<Tessera>,
     },
 }
 
@@ -371,15 +381,11 @@ impl Dht {
                 });
                 None
             }
-            // FetchBlob is handled at the connection level, not by the DHT.
-            DhtMessage::FetchBlob { sender, .. } => {
-                self.routing_table.insert(PeerInfo {
-                    node_id: sender,
-                    addr: from_addr,
-                });
-                None
-            }
-            DhtMessage::FetchBlobResponse { sender, .. } => {
+            // FetchBlob/FetchTessera are handled at the connection level, not by the DHT.
+            DhtMessage::FetchBlob { sender, .. }
+            | DhtMessage::FetchBlobResponse { sender, .. }
+            | DhtMessage::FetchTessera { sender, .. }
+            | DhtMessage::FetchTesseraResponse { sender, .. } => {
                 self.routing_table.insert(PeerInfo {
                     node_id: sender,
                     addr: from_addr,
