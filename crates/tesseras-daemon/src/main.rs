@@ -6,6 +6,7 @@ mod config;
 mod dht_adapter;
 mod institutional;
 mod metrics;
+mod queue;
 
 use tesseras_daemon::rpc;
 
@@ -305,7 +306,18 @@ async fn main() -> Result<()> {
 
     // 9c. Spawn RPC listener
     let rpc_shutdown = shutdown_tx.subscribe();
-    let rpc_handle = tokio::spawn(rpc::run_listener(socket_path, rpc_handler, rpc_shutdown));
+    let rpc_handle = tokio::spawn(rpc::run_listener(
+        socket_path,
+        Arc::clone(&rpc_handler),
+        rpc_shutdown,
+    ));
+
+    // 9d. Spawn queue processor
+    let queue_shutdown = shutdown_tx.subscribe();
+    let queue_handle = tokio::spawn(queue::run_queue_processor(
+        rpc_handler,
+        queue_shutdown,
+    ));
 
     // 10. Bootstrap (SRV discovery with CLI override)
     let bootstrap_addrs: Vec<SocketAddr> = if let Some(ref addrs) = cli.bootstrap {
@@ -373,6 +385,7 @@ async fn main() -> Result<()> {
     let _ = tokio::time::timeout(std::time::Duration::from_secs(5), engine_handle).await;
     let _ = tokio::time::timeout(std::time::Duration::from_secs(2), repl_handle).await;
     let _ = tokio::time::timeout(std::time::Duration::from_secs(2), rpc_handle).await;
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(2), queue_handle).await;
 
     tracing::info!("goodbye");
     Ok(())
