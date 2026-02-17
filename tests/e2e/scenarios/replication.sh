@@ -106,10 +106,9 @@ echo "--- Phase 2: Alice creates and publishes a tessera ---"
 $COMPOSE exec -T alice sh -c 'echo "Memory from Alice: the sky was orange at sunset." > /tmp/memory.txt'
 
 # Add the tessera (auto-announces to DHT when daemon is running)
-ADD_OUT=$($COMPOSE exec -T alice tes --identity=/data add /tmp/memory.txt --name "Sunset" 2>&1)
-HASH_A=$(echo "$ADD_OUT" | head -1 | tr -d '\r\n')
+HASH_A=$($COMPOSE exec -T alice tes --identity=/data add /tmp/memory.txt --name "Sunset" 2>/dev/null)
+HASH_A=$(echo "$HASH_A" | tr -d '\r\n')
 echo "Alice added tessera: $HASH_A"
-echo "Add output: $ADD_OUT"
 
 if [ -z "$HASH_A" ]; then
     echo "FAIL: No hash returned from add"
@@ -123,13 +122,6 @@ if echo "$LS_ALICE" | grep -q "Sunset"; then
 else
     echo "FAIL: Tessera not visible locally: $LS_ALICE"
     exit 1
-fi
-
-# Verify add auto-announced to DHT
-if echo "$ADD_OUT" | grep -qi "Published to"; then
-    echo "PASS: Tessera auto-announced to network"
-else
-    echo "WARN: Auto-announce output not detected (may still work): $ADD_OUT"
 fi
 
 # Give DHT time to propagate
@@ -265,13 +257,13 @@ echo "--- Phase 7: Multiple tesseras from different nodes ---"
 
 # Bob creates a tessera (auto-announces via daemon)
 $COMPOSE exec -T bob sh -c 'echo "Memory from Bob: the rain sounded like music." > /tmp/bob_memory.txt'
-HASH_B=$($COMPOSE exec -T bob tes --identity=/data add /tmp/bob_memory.txt --name "Rain" 2>&1 | head -1)
+HASH_B=$($COMPOSE exec -T bob tes --identity=/data add /tmp/bob_memory.txt --name "Rain" 2>/dev/null)
 HASH_B=$(echo "$HASH_B" | tr -d '\r\n')
 echo "Bob added tessera: $HASH_B"
 
 # Charlie creates a tessera (auto-announces via daemon)
 $COMPOSE exec -T charlie sh -c 'echo "Memory from Charlie: we laughed until we cried." > /tmp/charlie_memory.txt'
-HASH_C=$($COMPOSE exec -T charlie tes --identity=/data add /tmp/charlie_memory.txt --name "Laughter" 2>&1 | head -1)
+HASH_C=$($COMPOSE exec -T charlie tes --identity=/data add /tmp/charlie_memory.txt --name "Laughter" 2>/dev/null)
 HASH_C=$(echo "$HASH_C" | tr -d '\r\n')
 echo "Charlie added tessera: $HASH_C"
 sleep 2
