@@ -106,6 +106,7 @@ async fn handle_connection(
 ) -> Result<(), tesseras_rpc::RpcError> {
     // Convert tokio UnixStream to std for sync frame read/write
     let std_stream = stream.into_std()?;
+    std_stream.set_nonblocking(false)?;
     let mut reader = std::io::BufReader::new(std_stream.try_clone()?);
     let mut writer = std_stream;
 

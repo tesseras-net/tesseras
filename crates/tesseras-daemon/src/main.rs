@@ -125,6 +125,7 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_target(true)
+        .with_ansi(false)
         .init();
 
     let effective_addrs = config.node.effective_addrs();

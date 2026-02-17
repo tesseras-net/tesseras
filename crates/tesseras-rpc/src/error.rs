@@ -34,6 +34,7 @@ impl RpcError {
                     | std::io::ErrorKind::ConnectionReset
                     | std::io::ErrorKind::ConnectionAborted
                     | std::io::ErrorKind::TimedOut
+                    | std::io::ErrorKind::WouldBlock
             ),
             _ => false,
         }
