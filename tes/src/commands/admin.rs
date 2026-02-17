@@ -419,6 +419,32 @@ async fn handle_rpc_request(request: RpcRequest, node: &Node, listen_addr: &str)
                 Err(e) => RpcResponse::Error(e.to_string()),
             }
         }
+        RpcRequest::AnnounceTessera { hash } => match node.announce_tessera(&hash).await {
+            Ok(stored) => RpcResponse::Pong {
+                node_id: node_id.to_string(),
+                peer_count: stored,
+                listen_addr: listen_addr.to_string(),
+            },
+            Err(e) => RpcResponse::Error(e.to_string()),
+        },
+        RpcRequest::DistributeFragments { hash } => {
+            let tessera = {
+                let storage = node.storage.lock().unwrap();
+                match storage.find_tessera(&hash) {
+                    Ok(Some(t)) => t,
+                    Ok(None) => return RpcResponse::Error(format!("tessera not found: {hash}")),
+                    Err(e) => return RpcResponse::Error(e.to_string()),
+                }
+            };
+            match node.distribute_fragments(&tessera).await {
+                Ok(count) => RpcResponse::Pong {
+                    node_id: node_id.to_string(),
+                    peer_count: count,
+                    listen_addr: listen_addr.to_string(),
+                },
+                Err(e) => RpcResponse::Error(e.to_string()),
+            }
+        }
     }
 }
 

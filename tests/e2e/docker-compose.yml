@@ -1,29 +1,48 @@
 services:
-  # Bootstrap node — runs the daemon
+  # Bootstrap node — runs the daemon, serves as the DHT entry point
   bootstrap1:
     build:
       context: ../..
       dockerfile: tests/e2e/Dockerfile
-    command: ["admin", "daemon", "start", "--foreground"]
+    command: ["tes", "--identity=/data", "admin", "daemon", "start", "--foreground"]
     volumes:
       - bootstrap1-data:/data
     environment:
       - TES_IDENTITY=/data
+      - TES_LISTEN=10.10.0.10:4433
+      - TES_BOOTSTRAP=
     networks:
       tesseras-net:
         ipv4_address: 10.10.0.10
+
+  # Second bootstrap for redundancy testing
+  bootstrap2:
+    build:
+      context: ../..
+      dockerfile: tests/e2e/Dockerfile
+    command: ["tes", "--identity=/data", "admin", "daemon", "start", "--foreground"]
+    volumes:
+      - bootstrap2-data:/data
+    environment:
+      - TES_IDENTITY=/data
+      - TES_LISTEN=10.10.0.11:4433
+      - TES_BOOTSTRAP=10.10.0.10:4433
+    networks:
+      tesseras-net:
+        ipv4_address: 10.10.0.11
 
   # Client nodes — run ad-hoc commands, bootstrap from bootstrap1
   alice:
     build:
       context: ../..
       dockerfile: tests/e2e/Dockerfile
-    entrypoint: ["/bin/sh", "-c"]
-    command: ["sleep 86400"]
+    command: ["sleep", "86400"]
     volumes:
       - alice-data:/data
     environment:
       - TES_IDENTITY=/data
+      - TES_LISTEN=10.10.1.10:4433
+      - TES_BOOTSTRAP=10.10.0.10:4433
     networks:
       tesseras-net:
         ipv4_address: 10.10.1.10
@@ -32,12 +51,13 @@ services:
     build:
       context: ../..
       dockerfile: tests/e2e/Dockerfile
-    entrypoint: ["/bin/sh", "-c"]
-    command: ["sleep 86400"]
+    command: ["sleep", "86400"]
     volumes:
       - bob-data:/data
     environment:
       - TES_IDENTITY=/data
+      - TES_LISTEN=10.10.1.11:4433
+      - TES_BOOTSTRAP=10.10.0.10:4433
     networks:
       tesseras-net:
         ipv4_address: 10.10.1.11
@@ -46,15 +66,46 @@ services:
     build:
       context: ../..
       dockerfile: tests/e2e/Dockerfile
-    entrypoint: ["/bin/sh", "-c"]
-    command: ["sleep 86400"]
+    command: ["sleep", "86400"]
     volumes:
       - charlie-data:/data
     environment:
       - TES_IDENTITY=/data
+      - TES_LISTEN=10.10.1.12:4433
+      - TES_BOOTSTRAP=10.10.0.10:4433
     networks:
       tesseras-net:
         ipv4_address: 10.10.1.12
+
+  dave:
+    build:
+      context: ../..
+      dockerfile: tests/e2e/Dockerfile
+    command: ["sleep", "86400"]
+    volumes:
+      - dave-data:/data
+    environment:
+      - TES_IDENTITY=/data
+      - TES_LISTEN=10.10.1.13:4433
+      - TES_BOOTSTRAP=10.10.0.10:4433
+    networks:
+      tesseras-net:
+        ipv4_address: 10.10.1.13
+
+  eve:
+    build:
+      context: ../..
+      dockerfile: tests/e2e/Dockerfile
+    command: ["sleep", "86400"]
+    volumes:
+      - eve-data:/data
+    environment:
+      - TES_IDENTITY=/data
+      - TES_LISTEN=10.10.1.14:4433
+      - TES_BOOTSTRAP=10.10.0.10:4433
+    networks:
+      tesseras-net:
+        ipv4_address: 10.10.1.14
 
 networks:
   tesseras-net:
@@ -65,6 +116,9 @@ networks:
 
 volumes:
   bootstrap1-data:
+  bootstrap2-data:
   alice-data:
   bob-data:
   charlie-data:
+  dave-data:
+  eve-data:

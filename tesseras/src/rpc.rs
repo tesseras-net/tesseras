@@ -41,6 +41,10 @@ pub enum RpcRequest {
     CheckFragments,
     /// Fetch a tessera from the network (DHT lookup + fragment reconstruction).
     FetchTesseraFromNetwork { hash: ContentHash },
+    /// Announce a tessera to the DHT (make it discoverable by peers).
+    AnnounceTessera { hash: ContentHash },
+    /// Distribute fragments of a tessera's blobs to DHT peers.
+    DistributeFragments { hash: ContentHash },
 }
 
 /// RPC response from daemon to CLI.

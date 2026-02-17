@@ -195,6 +195,8 @@ proptest! {
             arb_content_hash().prop_map(|hash| RpcRequest::GetTessera { hash }),
             arb_content_hash().prop_map(|hash| RpcRequest::RemoveTessera { hash }),
             arb_content_hash().prop_map(|hash| RpcRequest::FetchTesseraFromNetwork { hash }),
+            arb_content_hash().prop_map(|hash| RpcRequest::AnnounceTessera { hash }),
+            arb_content_hash().prop_map(|hash| RpcRequest::DistributeFragments { hash }),
         ]
     ) {
         let bytes = rmp_serde::to_vec(&variant).unwrap();

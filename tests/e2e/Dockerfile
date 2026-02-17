@@ -13,5 +13,7 @@ RUN cargo build --release -p tes
 FROM alpine:3.21
 
 COPY --from=builder /build/target/release/tes /usr/local/bin/tes
+COPY tests/e2e/entrypoint.sh /usr/local/bin/entrypoint.sh
 
-ENTRYPOINT ["tes"]
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["tes"]

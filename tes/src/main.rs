@@ -28,6 +28,8 @@ enum Commands {
     Ls,
     /// Show tessera content and metadata
     Cat(commands::cat::CatArgs),
+    /// Publish a tessera to the network (announce to DHT + distribute fragments)
+    Publish(commands::publish::PublishArgs),
     /// Export tessera files to a local directory
     Export(commands::export::ExportArgs),
     /// Admin commands (bootstrap, daemon)
@@ -126,6 +128,15 @@ fn main() -> Result<()> {
                 let _identity = ensure_identity(&data_dir)?;
                 commands::cat::run(&data_dir, args)
             }
+        }
+        Commands::Publish(args) => {
+            if !daemon_running(&data_dir) {
+                anyhow::bail!(
+                    "Daemon is not running. Start it with: tes admin daemon start\n\
+                     Publish requires a running daemon to announce to the DHT network."
+                );
+            }
+            commands::publish::run(data_dir.root(), args)
         }
         Commands::Export(args) => {
             let _identity = ensure_identity(&data_dir)?;
