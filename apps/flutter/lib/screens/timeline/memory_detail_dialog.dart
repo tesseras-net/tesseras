@@ -1,5 +1,7 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
+
 import 'package:flutter/services.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/memory.dart';
 import '../../models/visibility.dart' as v;
@@ -23,6 +25,8 @@ class MemoryDetailDialog extends StatefulWidget {
 
 class _MemoryDetailDialogState extends State<MemoryDetailDialog> {
   late int _currentIndex;
+  bool _verified = false;
+  Timer? _verifyTimer;
 
   @override
   void initState() {
@@ -30,23 +34,35 @@ class _MemoryDetailDialogState extends State<MemoryDetailDialog> {
     _currentIndex = widget.initialIndex;
   }
 
+  @override
+  void dispose() {
+    _verifyTimer?.cancel();
+    super.dispose();
+  }
+
   Memory get _memory => widget.memories[_currentIndex];
 
   void _previous() {
     if (_currentIndex > 0) {
-      setState(() => _currentIndex--);
+      setState(() {
+        _currentIndex--;
+        _verified = false;
+      });
     }
   }
 
   void _next() {
     if (_currentIndex < widget.memories.length - 1) {
-      setState(() => _currentIndex++);
+      setState(() {
+        _currentIndex++;
+        _verified = false;
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
     final memory = _memory;
     final isText = memory.mediaType == 'txt';
     final isAudio = memory.mediaType == 'wav' || memory.mediaType == 'webm';
@@ -71,261 +87,199 @@ class _MemoryDetailDialogState extends State<MemoryDetailDialog> {
         },
         child: Focus(
           autofocus: true,
-          child: Dialog(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 800, maxHeight: 700),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
+          child: AlertDialog(
+            title: Text(memory.context != null && memory.context!.isNotEmpty
+                ? memory.context!.length > 40
+                    ? '${memory.context!.substring(0, 40)}...'
+                    : memory.context!
+                : '${memory.type.label(l)} — ${_formatDate(memory.createdAt)}'),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('${_currentIndex + 1} / ${widget.memories.length}')
+                    .small
+                    .muted,
+                const SizedBox(width: 8),
+                Button(
+                  style:
+                      const ButtonStyle.ghost(density: ButtonDensity.icon),
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Icon(Icons.close, size: 16),
+                ),
+              ],
+            ),
+            content: ConstrainedBox(
+              constraints:
+                  const BoxConstraints(maxWidth: 800, maxHeight: 550),
+              child: SingleChildScrollView(
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Header
-                    Row(
-                      children: [
-                        Text(l.memoryDetailTitle,
-                            style: Theme.of(context).textTheme.titleLarge),
-                        const Spacer(),
-                        Text(
-                          '${_currentIndex + 1} / ${widget.memories.length}',
-                          style: Theme.of(context).textTheme.bodySmall,
+                    // Media preview
+                    if (isText)
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.muted,
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => Navigator.of(context).pop(),
+                        child: Text(
+                          memory.context ?? '',
+                          style: const TextStyle(
+                            fontStyle: FontStyle.italic,
+                            height: 1.6,
+                          ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    // Scrollable content
-                    Flexible(
-                      child: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                      )
+                    else if (isAudio)
+                      Container(
+                        height: 80,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.muted,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            // Media preview
-                            if (isText)
-                              Container(
-                                padding: const EdgeInsets.all(20),
-                                decoration: BoxDecoration(
-                                  color: colorScheme.surfaceContainerHighest,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  memory.context ?? '',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodyLarge
-                                      ?.copyWith(
-                                        fontStyle: FontStyle.italic,
-                                        height: 1.6,
-                                      ),
-                                ),
-                              )
-                            else if (isAudio)
-                              Container(
-                                height: 80,
-                                decoration: BoxDecoration(
-                                  color: colorScheme.surfaceContainerHighest,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.play_arrow,
-                                          size: 36),
-                                      onPressed: () {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          SnackBar(
-                                              content: Text(
-                                                  l.memoryDetailAudioUnavailable)),
-                                        );
-                                      },
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Container(
-                                        height: 32,
-                                        margin:
-                                            const EdgeInsets.only(right: 20),
-                                        decoration: BoxDecoration(
-                                          color: colorScheme.primary
-                                              .withValues(alpha: 0.2),
-                                          borderRadius:
-                                              BorderRadius.circular(4),
-                                        ),
+                            Button(
+                              style: const ButtonStyle.ghost(
+                                  density: ButtonDensity.icon),
+                              onPressed: () {
+                                showToast(
+                                  context: context,
+                                  builder: (context, overlay) => SurfaceCard(
+                                    child: Basic(
+                                      title: Text(
+                                          l.memoryDetailAudioUnavailable),
+                                      trailing: Button(
+                                        style: const ButtonStyle.ghost(
+                                            density: ButtonDensity.icon),
+                                        onPressed: overlay.close,
+                                        child: const Icon(Icons.close,
+                                            size: 16),
                                       ),
                                     ),
-                                  ],
-                                ),
-                              )
-                            else
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: PlaceholderImage(
-                                  hash: memory.hash,
-                                  mediaType: memory.mediaType,
-                                  height: 300,
-                                ),
-                              ),
-                            const SizedBox(height: 16),
-                            // Context (for non-text media)
-                            if (!isText && memory.context != null) ...[
-                              Text(l.memoryDetailContextLabel,
-                                  style:
-                                      Theme.of(context).textTheme.titleSmall),
-                              const SizedBox(height: 4),
-                              Text(memory.context!,
-                                  style:
-                                      Theme.of(context).textTheme.bodyMedium),
-                              const SizedBox(height: 16),
-                            ],
-                            // Metadata grid
-                            Wrap(
-                              spacing: 12,
-                              runSpacing: 8,
-                              children: [
-                                _MetadataChip(
-                                    label: l.memoryDetailTypeLabel,
-                                    value: memory.type.label(l)),
-                                StatusBadge.visibility(memory.visibility, l),
-                                _MetadataChip(
-                                    label: l.memoryDetailCreatedLabel,
-                                    value: _formatDate(memory.createdAt)),
-                                _MetadataChip(
-                                    label: l.memoryDetailLanguageLabel,
-                                    value: memory.language.toUpperCase()),
-                                _MetadataChip(
-                                    label: l.memoryDetailMediaLabel,
-                                    value: memory.mediaType.toUpperCase()),
-                              ],
-                            ),
-                            // Sealed/PublicAfterDeath details
-                            if (memory.visibility == v.Visibility.sealed_ &&
-                                memory.sealedOpenAfter != null) ...[
-                              const SizedBox(height: 8),
-                              Text(
-                                l.memoryDetailOpensAfter(
-                                    _formatDateTime(memory.sealedOpenAfter!)),
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(color: Colors.orange),
-                              ),
-                            ],
-                            if (memory.visibility ==
-                                    v.Visibility.publicAfterDeath &&
-                                memory.publicAfterDeathYears != null) ...[
-                              const SizedBox(height: 8),
-                              Text(
-                                l.memoryDetailPublicAfterDeath(
-                                    memory.publicAfterDeathYears!),
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(color: Colors.orange),
-                              ),
-                            ],
-                            // Tags
-                            if (memory.tags.isNotEmpty) ...[
-                              const SizedBox(height: 12),
-                              Wrap(
-                                spacing: 6,
-                                runSpacing: 4,
-                                children: memory.tags
-                                    .map((tag) => Chip(
-                                          label: Text(tag),
-                                          visualDensity: VisualDensity.compact,
-                                        ))
-                                    .toList(),
-                              ),
-                            ],
-                            // Location
-                            if (memory.location != null) ...[
-                              const SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  Icon(Icons.location_on,
-                                      size: 16,
-                                      color: colorScheme.onSurfaceVariant),
-                                  const SizedBox(width: 4),
-                                  Text(memory.location!),
-                                ],
-                              ),
-                            ],
-                            // People
-                            if (memory.people.isNotEmpty) ...[
-                              const SizedBox(height: 8),
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Icon(Icons.people,
-                                      size: 16,
-                                      color: colorScheme.onSurfaceVariant),
-                                  const SizedBox(width: 4),
-                                  Expanded(
-                                      child:
-                                          Text(memory.people.join(', '))),
-                                ],
-                              ),
-                            ],
-                            // Tessera hash
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Text(l.memoryDetailTesseraLabel,
-                                    style:
-                                        Theme.of(context).textTheme.bodySmall),
-                                Expanded(
-                                  child: Text(
-                                    memory.tesseraHash,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall
-                                        ?.copyWith(fontFamily: 'monospace'),
-                                    overflow: TextOverflow.ellipsis,
                                   ),
+                                  showDuration: const Duration(seconds: 2),
+                                );
+                              },
+                              child:
+                                  const Icon(Icons.play_arrow, size: 36),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Container(
+                                height: 32,
+                                margin: const EdgeInsets.only(right: 20),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.primary
+                                      .withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(4),
                                 ),
-                              ],
+                              ),
                             ),
                           ],
                         ),
+                      )
+                    else
+                      PlaceholderImage(
+                        hash: memory.hash,
+                        mediaType: memory.mediaType,
+                        mediaPath: memory.mediaPath,
+                        tesseraHash: memory.tesseraHash,
+                        height: 300,
                       ),
-                    ),
                     const SizedBox(height: 16),
-                    // Actions
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
+                    // Context (for non-text media)
+                    if (!isText && memory.context != null) ...[
+                      Text(l.memoryDetailContextLabel).small.semiBold,
+                      const SizedBox(height: 4),
+                      Text(memory.context!),
+                      const SizedBox(height: 16),
+                    ],
+                    // Metadata grid
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
                       children: [
-                        OutlinedButton.icon(
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                  content:
-                                      Text(l.memoryDetailExported)),
-                            );
-                          },
-                          icon: const Icon(Icons.download, size: 18),
-                          label: Text(l.memoryDetailExport),
-                        ),
-                        const SizedBox(width: 8),
-                        OutlinedButton.icon(
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                  content: Text(l.memoryDetailVerified)),
-                            );
-                          },
-                          icon: const Icon(Icons.verified, size: 18),
-                          label: Text(l.memoryDetailVerify),
-                        ),
-                        const SizedBox(width: 8),
-                        FilledButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: Text(l.memoryDetailClose),
+                        _MetadataChip(
+                            label: l.memoryDetailTypeLabel,
+                            value: memory.type.label(l)),
+                        StatusBadge.visibility(memory.visibility, l),
+                        _MetadataChip(
+                            label: l.memoryDetailCreatedLabel,
+                            value: _formatDate(memory.createdAt)),
+                        _MetadataChip(
+                            label: l.memoryDetailLanguageLabel,
+                            value: memory.language.toUpperCase()),
+                        _MetadataChip(
+                            label: l.memoryDetailMediaLabel,
+                            value: memory.mediaType.toUpperCase()),
+                        _StatusChip(label: 'Status', value: 'Published'),
+                      ],
+                    ),
+                    // Sealed/PublicAfterDeath details
+                    if (memory.visibility == v.Visibility.sealed_ &&
+                        memory.sealedOpenAfter != null) ...[
+                      const SizedBox(height: 8),
+                      Text(l.memoryDetailOpensAfter(
+                              _formatDateTime(memory.sealedOpenAfter!)))
+                          .small,
+                    ],
+                    if (memory.visibility ==
+                            v.Visibility.publicAfterDeath &&
+                        memory.publicAfterDeathYears != null) ...[
+                      const SizedBox(height: 8),
+                      Text(l.memoryDetailPublicAfterDeath(
+                              memory.publicAfterDeathYears!))
+                          .small,
+                    ],
+                    // Tags
+                    if (memory.tags.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: memory.tags
+                            .map((tag) => Chip(child: Text(tag)))
+                            .toList(),
+                      ),
+                    ],
+                    // Location
+                    if (memory.location != null) ...[
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Icon(Icons.location_on,
+                              size: 16,
+                              color: theme.colorScheme.mutedForeground),
+                          const SizedBox(width: 4),
+                          Text(memory.location!),
+                        ],
+                      ),
+                    ],
+                    // People
+                    if (memory.people.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.people,
+                              size: 16,
+                              color: theme.colorScheme.mutedForeground),
+                          const SizedBox(width: 4),
+                          Expanded(
+                              child: Text(memory.people.join(', '))),
+                        ],
+                      ),
+                    ],
+                    // Tessera hash
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Text(l.memoryDetailTesseraLabel).small,
+                        Expanded(
+                          child: Text(memory.tesseraHash).small.mono.muted,
                         ),
                       ],
                     ),
@@ -333,6 +287,56 @@ class _MemoryDetailDialogState extends State<MemoryDetailDialog> {
                 ),
               ),
             ),
+            actions: [
+              Button.outline(
+                onPressed: () {
+                  showToast(
+                    context: context,
+                    builder: (context, overlay) => SurfaceCard(
+                      child: Basic(
+                        title: Text(l.memoryDetailExported),
+                        trailing: Button(
+                          style: const ButtonStyle.ghost(
+                              density: ButtonDensity.icon),
+                          onPressed: overlay.close,
+                          child: const Icon(Icons.close, size: 16),
+                        ),
+                      ),
+                    ),
+                    showDuration: const Duration(seconds: 2),
+                  );
+                },
+                leading: const Icon(Icons.download, size: 18),
+                child: Text(l.memoryDetailExport),
+              ),
+              const SizedBox(width: 8),
+              _verified
+                  ? Button.outline(
+                      onPressed: null,
+                      leading: const Icon(Icons.check_circle,
+                          size: 18, color: Color(0xFF4CAF50)),
+                      child: Text(l.memoryDetailVerified),
+                    )
+                  : Button.outline(
+                      onPressed: () {
+                        setState(() => _verified = true);
+                        _verifyTimer?.cancel();
+                        _verifyTimer = Timer(
+                          const Duration(seconds: 3),
+                          () {
+                            if (mounted) setState(() => _verified = false);
+                          },
+                        );
+                      },
+                      leading: const Icon(Icons.verified, size: 18),
+                      child: Text(l.memoryDetailVerify),
+                    ),
+              const SizedBox(width: 8),
+              Button.primary(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text(l.memoryDetailClose),
+              ),
+            ],
           ),
         ),
       ),
@@ -358,14 +362,49 @@ class _MetadataChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        color: theme.colorScheme.muted,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text('$label: $value',
-          style: Theme.of(context).textTheme.bodySmall),
+      child: Text('$label: $value').small,
+    );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _StatusChip({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF4CAF50).withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+            color: const Color(0xFF4CAF50).withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              color: Color(0xFF4CAF50),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text('$label: $value').small,
+        ],
+      ),
     );
   }
 }

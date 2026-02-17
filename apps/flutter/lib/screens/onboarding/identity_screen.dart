@@ -5,8 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 import '../../l10n/app_localizations.dart';
-import '../../providers/mock_data.dart';
-import '../../providers/mock_identity_provider.dart';
+import '../../providers/identity_provider.dart';
 import '../../widgets/camera_capture_dialog.dart';
 
 class IdentityScreen extends ConsumerStatefulWidget {
@@ -41,21 +40,41 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
     super.dispose();
   }
 
-  void _continue() {
+  Future<void> _continue() async {
     final name = _nameController.text.trim();
+    stderr.writeln('[identity] _continue called, name="$name"');
     if (name.isEmpty) return;
 
-    ref.read(mockIdentityProvider.notifier).set(MockIdentity(
-      name: name,
-      nodeIdHex: mockIdentity.nodeIdHex,
-      ed25519PublicKeyHex: mockIdentity.ed25519PublicKeyHex,
-      mldsaPublicKeyHex: mockIdentity.mldsaPublicKeyHex,
-      createdAt: mockIdentity.createdAt,
-      avatarColor: _avatarColors[_colorIndex],
-      avatarImagePath: _avatarImagePath,
-    ));
-
-    widget.onNext();
+    try {
+      stderr.writeln('[identity] calling createIdentity...');
+      await ref.read(identityProvider.notifier).createIdentity(
+            name,
+            avatarPath: _avatarImagePath,
+          );
+      stderr.writeln('[identity] createIdentity succeeded, calling onNext');
+      if (mounted) {
+        widget.onNext();
+      }
+    } catch (e, st) {
+      stderr.writeln('[identity] ERROR: $e');
+      stderr.writeln(st.toString());
+      if (mounted) {
+        showToast(
+          context: context,
+          builder: (context, overlay) => SurfaceCard(
+            child: Basic(
+              title: Text('Error creating identity: $e'),
+              trailing: GhostButton(
+                density: ButtonDensity.icon,
+                onPressed: overlay.close,
+                child: const Icon(Icons.close, size: 16),
+              ),
+            ),
+          ),
+          showDuration: const Duration(seconds: 5),
+        );
+      }
+    }
   }
 
   void _showAvatarPicker() {
@@ -147,16 +166,13 @@ class _IdentityScreenState extends ConsumerState<IdentityScreen> {
       return;
     }
 
-    ref.read(mockIdentityProvider.notifier).set(MockIdentity(
-      name: 'Imported User',
-      nodeIdHex: 'b4e9c3d2f8a51b7e3c2d4f6a8b9c0d1e2f3a4b56',
-      ed25519PublicKeyHex:
-          '1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b',
-      mldsaPublicKeyHex:
-          '2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c',
-      createdAt: DateTime.now().toUtc().toIso8601String(),
-      avatarColor: const Color(0xFF5C6BC0),
-    ));
+    // TODO: Implement real identity import from file
+    // For now, create a new identity as placeholder
+    try {
+      await ref.read(identityProvider.notifier).createIdentity('Imported User');
+    } catch (_) {
+      return;
+    }
 
     if (mounted) {
       showToast(

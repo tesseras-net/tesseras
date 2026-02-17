@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart';
 import '../providers/theme_provider.dart';
 import '../widgets/sidebar.dart';
 import 'timeline/timeline_screen.dart';
@@ -83,7 +83,7 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
         child: Focus(
           autofocus: true,
           child: Scaffold(
-            body: Row(
+            child: Row(
               children: [
                 Sidebar(
                   selectedIndex: _currentIndex,
@@ -91,7 +91,6 @@ class _DesktopShellState extends ConsumerState<DesktopShell> {
                       setState(() => _currentIndex = index),
                   onCreateMemory: _showCreateMemoryDialog,
                 ),
-                const VerticalDivider(width: 1),
                 Expanded(child: screens[_currentIndex]),
               ],
             ),

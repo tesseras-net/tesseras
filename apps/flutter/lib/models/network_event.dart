@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart';
 import '../l10n/app_localizations.dart';
 
 /// Display model for network events.
@@ -23,11 +23,11 @@ enum NetworkEventType {
       };
 
   Color color(ColorScheme scheme) => switch (this) {
-        peerConnected => Colors.green,
-        peerDisconnected => Colors.orange,
+        peerConnected => const Color(0xFF4CAF50),
+        peerDisconnected => const Color(0xFFFF9800),
         attestationReceived => scheme.primary,
-        replicationComplete => Colors.green,
-        repairTriggered => Colors.orange,
+        replicationComplete => const Color(0xFF4CAF50),
+        repairTriggered => const Color(0xFFFF9800),
         bootstrapComplete => scheme.primary,
       };
 }

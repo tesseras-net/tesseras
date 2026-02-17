@@ -1052,8 +1052,8 @@ impl DhtEngine {
             return;
         }
 
-        // Scale: check 1 node on small networks, up to routing_table_size/10
-        let check_count = (peer_count / 10).clamp(1, 5);
+        // Scale: check ~1/5 of routing table per cycle, minimum 2
+        let check_count = (peer_count / 5).clamp(2, 10);
 
         let target = {
             use rand::Rng;

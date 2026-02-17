@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/memory.dart';
 import '../../models/visibility.dart' as v;
@@ -28,7 +28,7 @@ class _MemoryTileState extends State<MemoryTile> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
     final memory = widget.memory;
     final l = AppLocalizations.of(context);
 
@@ -39,91 +39,112 @@ class _MemoryTileState extends State<MemoryTile> {
         onTap: widget.onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          child: Card(
-            elevation: _hovering ? 4 : 1,
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Thumbnail with badges
-                Expanded(
-                  flex: 3,
-                  child: Stack(
-                    fit: StackFit.expand,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: theme.colorScheme.border),
+            color: theme.colorScheme.card,
+            boxShadow: _hovering
+                ? [
+                    BoxShadow(
+                      color: theme.colorScheme.border.withValues(alpha: 0.5),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Thumbnail with badges
+              Expanded(
+                flex: 3,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    PlaceholderImage(
+                      hash: memory.hash,
+                      mediaType: memory.mediaType,
+                      mediaPath: memory.mediaPath,
+                      tesseraHash: memory.tesseraHash,
+                    ),
+                    // Type badge (top-left)
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0x88000000),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          memory.type.label(l),
+                          style: const TextStyle(
+                              color: Color(0xFFFFFFFF), fontSize: 11),
+                        ),
+                      ),
+                    ),
+                    // Status dot (bottom-right) — green = stored locally
+                    Positioned(
+                      bottom: 8,
+                      right: 8,
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF4CAF50),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                              color: const Color(0xFFFFFFFF), width: 1.5),
+                        ),
+                      ),
+                    ),
+                    // Visibility icon (top-right)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: const Color(0x88000000),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          _visibilityIcon(memory.visibility),
+                          size: 16,
+                          color: const Color(0xFFFFFFFF),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Content area
+              Expanded(
+                flex: 2,
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      PlaceholderImage(
-                        hash: memory.hash,
-                        mediaType: memory.mediaType,
-                      ),
-                      // Type badge (top-left)
-                      Positioned(
-                        top: 8,
-                        left: 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: Colors.black54,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
+                      if (memory.context != null)
+                        Expanded(
                           child: Text(
-                            memory.type.label(l),
-                            style: const TextStyle(
-                                color: Colors.white, fontSize: 11),
-                          ),
+                            memory.context!,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ).small,
                         ),
-                      ),
-                      // Visibility icon (top-right)
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Colors.black54,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Icon(
-                            _visibilityIcon(memory.visibility),
-                            size: 16,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
+                      const SizedBox(height: 4),
+                      Text(_formatDate(memory.createdAt)).small.muted,
                     ],
                   ),
                 ),
-                // Content area
-                Expanded(
-                  flex: 2,
-                  child: Padding(
-                    padding: const EdgeInsets.all(10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (memory.context != null)
-                          Expanded(
-                            child: Text(
-                              memory.context!,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ),
-                        const SizedBox(height: 4),
-                        Text(
-                          _formatDate(memory.createdAt),
-                          style:
-                              Theme.of(context).textTheme.labelSmall?.copyWith(
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

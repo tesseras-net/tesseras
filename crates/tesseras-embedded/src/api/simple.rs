@@ -6,7 +6,8 @@ use std::sync::Mutex;
 use crate::error::TesserasError;
 use crate::node::EmbeddedNode;
 use crate::types::{
-    CreateMemoryRequest, IdentityInfo, MemoryInfo, NetworkStats, ReplicationStatus,
+    CreateMemoryRequest, IdentityInfo, MemoryInfo, NetworkStats, PeerInfo, ReplicationStatus,
+    StorageStats,
 };
 
 static NODE: Mutex<Option<EmbeddedNode>> = Mutex::new(None);
@@ -82,9 +83,11 @@ pub fn create_memory(
     location_lon: Option<f64>,
     tags: Vec<String>,
     people: Vec<String>,
+    sealed_open_after: Option<String>,
+    inactive_years: Option<u32>,
 ) -> Result<MemoryInfo, String> {
     let memory_type = parse_memory_type(&memory_type)?;
-    let visibility = parse_visibility(&visibility)?;
+    let visibility = parse_visibility(&visibility, sealed_open_after, inactive_years)?;
 
     let request = CreateMemoryRequest {
         media_path,
@@ -125,6 +128,29 @@ pub fn get_replication_status() -> Result<ReplicationStatus, String> {
     with_node(|node| node.get_replication_status()).map_err(|e| e.to_string())
 }
 
+/// Get list of connected peers.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_connected_peers() -> Result<Vec<PeerInfo>, String> {
+    with_node(|node| node.get_connected_peers()).map_err(|e| e.to_string())
+}
+
+/// Get storage statistics.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_storage_stats() -> Result<StorageStats, String> {
+    with_node(|node| node.get_storage_stats()).map_err(|e| e.to_string())
+}
+
+/// Read a media blob by tessera hash, memory hash, and file name.
+#[flutter_rust_bridge::frb(sync)]
+pub fn get_media_blob(
+    tessera_hash: String,
+    memory_hash: String,
+    name: String,
+) -> Result<Vec<u8>, String> {
+    with_node(|node| node.get_media_blob(tessera_hash.clone(), memory_hash.clone(), name.clone()))
+        .map_err(|e| e.to_string())
+}
+
 fn parse_memory_type(s: &str) -> Result<tesseras_core::enums::MemoryType, String> {
     match s.to_lowercase().as_str() {
         "moment" => Ok(tesseras_core::enums::MemoryType::Moment),
@@ -136,7 +162,11 @@ fn parse_memory_type(s: &str) -> Result<tesseras_core::enums::MemoryType, String
     }
 }
 
-fn parse_visibility(s: &str) -> Result<tesseras_core::enums::Visibility, String> {
+fn parse_visibility(
+    s: &str,
+    sealed_open_after: Option<String>,
+    inactive_years: Option<u32>,
+) -> Result<tesseras_core::enums::Visibility, String> {
     let lower = s.to_lowercase();
     match lower.as_str() {
         "private" => Ok(tesseras_core::enums::Visibility::Private),
@@ -147,6 +177,19 @@ fn parse_visibility(s: &str) -> Result<tesseras_core::enums::Visibility, String>
         _ if lower.starts_with("circle:") => Ok(tesseras_core::enums::Visibility::Circle {
             circle: lower.strip_prefix("circle:").unwrap().to_string(),
         }),
+        "sealed" => {
+            let open_after = sealed_open_after
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(&s).ok())
+                .map(|dt| dt.with_timezone(&chrono::Utc))
+                .unwrap_or_else(|| chrono::Utc::now() + chrono::Duration::days(365));
+            Ok(tesseras_core::enums::Visibility::Sealed { open_after })
+        }
+        "publicafterdeath" => {
+            let years = inactive_years.unwrap_or(5);
+            Ok(tesseras_core::enums::Visibility::PublicAfterDeath {
+                inactive_years: years,
+            })
+        }
         _ => Err(format!("unknown visibility: {s}")),
     }
 }

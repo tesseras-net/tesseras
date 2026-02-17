@@ -1,11 +1,14 @@
-import 'dart:math';
-import 'package:flutter/material.dart';
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart';
 import '../../l10n/app_localizations.dart';
-import '../../models/memory.dart';
 import '../../models/memory_type.dart';
 import '../../models/visibility.dart' as v;
-import '../../providers/mock_timeline_provider.dart';
+import '../../providers/timeline_provider.dart';
+import '../../src/rust/api/simple.dart' as rust;
 
 class CreateMemoryDialog extends ConsumerStatefulWidget {
   const CreateMemoryDialog({super.key});
@@ -18,6 +21,7 @@ class CreateMemoryDialog extends ConsumerStatefulWidget {
 class _CreateMemoryDialogState extends ConsumerState<CreateMemoryDialog> {
   bool _fileSelected = false;
   String _selectedFileName = '';
+  String _selectedFilePath = '';
   String _selectedMediaType = 'jpeg';
   int _selectedFileCount = 1;
   bool _creating = false;
@@ -46,39 +50,67 @@ class _CreateMemoryDialogState extends ConsumerState<CreateMemoryDialog> {
     super.dispose();
   }
 
-  void _mockSelectFile() {
-    setState(() {
-      _fileSelected = true;
-      _selectedFileName = 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      _selectedMediaType = 'jpeg';
-      _selectedFileCount = 1;
-    });
+  Future<void> _selectFile() async {
+    stderr.writeln('[file_picker] _selectFile called');
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'wav', 'webm', 'txt'],
+      );
+      stderr.writeln('[file_picker] _selectFile result: $result');
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        setState(() {
+          _fileSelected = true;
+          _selectedFileName = file.name;
+          _selectedFilePath = file.path ?? '';
+          _selectedMediaType = _guessMediaType(file.name);
+          _selectedFileCount = 1;
+        });
+      }
+    } catch (e, st) {
+      stderr.writeln('[file_picker] _selectFile error: $e\n$st');
+    }
   }
 
-  void _mockSelectFolder() {
-    setState(() {
-      _fileSelected = true;
-      _selectedFileName = 'vacation_2026/';
-      _selectedMediaType = 'jpeg';
-      _selectedFileCount = 7;
-    });
+  Future<void> _selectFolder() async {
+    stderr.writeln('[file_picker] _selectFolder called');
+    try {
+      final dirPath = await FilePicker.platform.getDirectoryPath();
+      stderr.writeln('[file_picker] _selectFolder result: $dirPath');
+      if (dirPath != null) {
+        setState(() {
+          _fileSelected = true;
+          _selectedFileName = dirPath.split('/').last;
+          _selectedFilePath = dirPath;
+          _selectedMediaType = 'jpeg';
+          _selectedFileCount = 1;
+        });
+      }
+    } catch (e, st) {
+      stderr.writeln('[file_picker] _selectFolder error: $e\n$st');
+    }
+  }
+
+  String _guessMediaType(String name) {
+    final lower = name.toLowerCase();
+    if (lower.endsWith('.png')) return 'png';
+    if (lower.endsWith('.wav')) return 'wav';
+    if (lower.endsWith('.webm')) return 'webm';
+    if (lower.endsWith('.txt')) return 'txt';
+    return 'jpeg';
   }
 
   void _removeFile() {
     setState(() {
       _fileSelected = false;
       _selectedFileName = '';
+      _selectedFilePath = '';
     });
   }
 
   Future<void> _createMemory() async {
     setState(() => _creating = true);
-
-    // Mock delay
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    final hash = List.generate(
-        64, (_) => Random().nextInt(16).toRadixString(16)).join();
 
     final tags = _tagsController.text
         .split(',')
@@ -92,347 +124,344 @@ class _CreateMemoryDialogState extends ConsumerState<CreateMemoryDialog> {
         .where((p) => p.isNotEmpty)
         .toList();
 
-    final memory = Memory(
-      hash: hash,
-      tesseraHash: 'a3f8b2c1e7d49f6a2b1c3d4e5f6a7b8c9d0e1f23',
-      type: _memoryType,
-      visibility: _visibility,
-      context:
-          _contextController.text.isNotEmpty ? _contextController.text : null,
-      createdAt: DateTime.now().toIso8601String(),
-      tags: tags,
-      location: _locationController.text.isNotEmpty
-          ? _locationController.text
-          : null,
-      people: people,
-      language: _language,
-      mediaType: _selectedMediaType,
-      sealedOpenAfter:
-          _visibility == v.Visibility.sealed_ ? _sealedOpenAfter : null,
-      publicAfterDeathYears: _visibility == v.Visibility.publicAfterDeath
-          ? int.tryParse(_inactiveYearsController.text)
-          : null,
-    );
+    final visibilityStr = switch (_visibility) {
+      v.Visibility.private => 'private',
+      v.Visibility.circle => 'circle',
+      v.Visibility.public => 'public',
+      v.Visibility.publicAfterDeath => 'publicafterdeath',
+      v.Visibility.sealed_ => 'sealed',
+    };
 
-    ref.read(mockTimelineProvider.notifier).addMemory(memory);
+    try {
+      rust.createMemory(
+        mediaPath: _selectedFilePath,
+        contextText: _contextController.text.isNotEmpty
+            ? _contextController.text
+            : null,
+        memoryType: _memoryType.name,
+        visibility: visibilityStr,
+        locationDescription: _locationController.text.isNotEmpty
+            ? _locationController.text
+            : null,
+        tags: tags,
+        people: people,
+        sealedOpenAfter: _visibility == v.Visibility.sealed_ &&
+                _sealedOpenAfter != null
+            ? _sealedOpenAfter!.toUtc().toIso8601String()
+            : null,
+        inactiveYears: _visibility == v.Visibility.publicAfterDeath
+            ? int.tryParse(_inactiveYearsController.text)
+            : null,
+      );
 
-    if (mounted) {
-      Navigator.of(context).pop(true);
+      // Refresh the timeline to show the new memory
+      ref.read(timelineProvider.notifier).refresh();
+
+      if (mounted) {
+        Navigator.of(context).pop(true);
+      }
+    } catch (e) {
+      setState(() => _creating = false);
+      if (mounted) {
+        showToast(
+          context: context,
+          builder: (context, overlay) => SurfaceCard(
+            child: Basic(
+              title: Text('Error: $e'),
+              trailing: Button(
+                style: const ButtonStyle.ghost(density: ButtonDensity.icon),
+                onPressed: overlay.close,
+                child: const Icon(Icons.close, size: 16),
+              ),
+            ),
+          ),
+          showDuration: const Duration(seconds: 5),
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
     final l = AppLocalizations.of(context);
 
-    return Dialog(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 700),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
+    return AlertDialog(
+      title: Text(l.createMemoryTitle),
+      trailing: Button(
+        style: const ButtonStyle.ghost(density: ButtonDensity.icon),
+        onPressed: () => Navigator.of(context).pop(),
+        child: const Icon(Icons.close, size: 16),
+      ),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 550),
+        child: SingleChildScrollView(
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Header
+              // File drop zone
+              if (!_fileSelected)
+                GestureDetector(
+                  onTap: _selectFile,
+                  child: Container(
+                    height: 140,
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: theme.colorScheme.border,
+                        width: 1.5,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.cloud_upload_outlined,
+                            size: 36,
+                            color: theme.colorScheme.mutedForeground),
+                        const SizedBox(height: 8),
+                        Text(l.createMemoryDropZone),
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Button.primary(
+                              onPressed: _selectFile,
+                              child: Text(l.createMemoryBrowseFiles),
+                            ),
+                            const SizedBox(width: 8),
+                            Button.outline(
+                              onPressed: _selectFolder,
+                              leading: const Icon(Icons.folder_open, size: 18),
+                              child: Text(l.createMemoryOpenFolder),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(l.createMemorySupportedFormats).small.muted,
+                      ],
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.muted,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        _selectedFileCount > 1
+                            ? Icons.folder
+                            : Icons.insert_drive_file,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(_selectedFileName),
+                            if (_selectedFileCount > 1)
+                              Text(l.createMemoryFilesFound(
+                                      _selectedFileCount))
+                                  .small
+                                  .muted,
+                          ],
+                        ),
+                      ),
+                      Button(
+                        style: const ButtonStyle.ghost(
+                            density: ButtonDensity.icon),
+                        onPressed: _removeFile,
+                        child: const Icon(Icons.close, size: 18),
+                      ),
+                    ],
+                  ),
+                ),
+              const SizedBox(height: 16),
+              // Context
+              TextField(
+                controller: _contextController,
+                maxLines: 3,
+                placeholder: Text(l.createMemoryContextHint),
+              ),
+              const SizedBox(height: 8),
+              Text(l.createMemoryContextLabel).small.muted,
+              const SizedBox(height: 16),
+              // Type + Visibility side by side
               Row(
                 children: [
-                  Text(l.createMemoryTitle,
-                      style: Theme.of(context).textTheme.titleLarge),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.of(context).pop(),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(l.createMemoryTypeLabel).small.muted,
+                        const SizedBox(height: 4),
+                        Select<MemoryType>(
+                          value: _memoryType,
+                          onChanged: (val) {
+                            if (val != null) setState(() => _memoryType = val);
+                          },
+                          itemBuilder: (context, value) =>
+                              Text(value.label(l)),
+                          popup: (context) => SelectPopup(
+                            items: SelectItemList(
+                              children: MemoryType.values
+                                  .map((t) => SelectItemButton(
+                                      value: t, child: Text(t.label(l))))
+                                  .toList(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(l.createMemoryVisibilityLabel).small.muted,
+                        const SizedBox(height: 4),
+                        Select<v.Visibility>(
+                          value: _visibility,
+                          onChanged: (val) {
+                            if (val != null) setState(() => _visibility = val);
+                          },
+                          itemBuilder: (context, value) =>
+                              Text(value.label(l)),
+                          popup: (context) => SelectPopup(
+                            items: SelectItemList(
+                              children: v.Visibility.values
+                                  .map((vis) => SelectItemButton(
+                                      value: vis, child: Text(vis.label(l))))
+                                  .toList(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
+              // Conditional fields
+              if (_visibility == v.Visibility.sealed_) ...[
+                const SizedBox(height: 12),
+                Text(l.createMemoryOpenAfterDate).small.muted,
+                const SizedBox(height: 4),
+                DatePicker(
+                  value: _sealedOpenAfter,
+                  onChanged: (date) => setState(() => _sealedOpenAfter = date),
+                  placeholder: const Text('Select date'),
+                ),
+              ],
+              if (_visibility == v.Visibility.publicAfterDeath) ...[
+                const SizedBox(height: 12),
+                Text(l.createMemoryInactiveYears).small.muted,
+                const SizedBox(height: 4),
+                TextField(
+                  controller: _inactiveYearsController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                ),
+              ],
+              if (_visibility == v.Visibility.circle) ...[
+                const SizedBox(height: 12),
+                Text(l.createMemoryCircleNote).small.muted,
+              ],
               const SizedBox(height: 16),
-              // Scrollable content
-              Flexible(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+              // Language
+              Text(l.createMemoryLanguageLabel).small.muted,
+              const SizedBox(height: 4),
+              Select<String>(
+                value: _language,
+                onChanged: (val) {
+                  if (val != null) setState(() => _language = val);
+                },
+                itemBuilder: (context, value) => Text(_langLabel(value, l)),
+                popup: (context) => SelectPopup(
+                  items: SelectItemList(
                     children: [
-                      // File drop zone
-                      if (!_fileSelected)
-                        InkWell(
-                          onTap: _mockSelectFile,
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            height: 140,
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                  color: colorScheme.outline, width: 1.5),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.cloud_upload_outlined,
-                                    size: 36,
-                                    color: colorScheme.onSurfaceVariant),
-                                const SizedBox(height: 8),
-                                Text(l.createMemoryDropZone),
-                                const SizedBox(height: 8),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    FilledButton.tonal(
-                                      onPressed: _mockSelectFile,
-                                      child: Text(l.createMemoryBrowseFiles),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    OutlinedButton.icon(
-                                      onPressed: _mockSelectFolder,
-                                      icon: const Icon(Icons.folder_open,
-                                          size: 18),
-                                      label: Text(l.createMemoryOpenFolder),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  l.createMemorySupportedFormats,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.copyWith(
-                                          color:
-                                              colorScheme.onSurfaceVariant),
-                                ),
-                              ],
-                            ),
-                          ),
-                        )
-                      else
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: colorScheme.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                _selectedFileCount > 1
-                                    ? Icons.folder
-                                    : Icons.insert_drive_file,
-                                color: colorScheme.primary,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Text(_selectedFileName),
-                                    if (_selectedFileCount > 1)
-                                      Text(
-                                        l.createMemoryFilesFound(
-                                            _selectedFileCount),
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall
-                                            ?.copyWith(
-                                                color: colorScheme
-                                                    .onSurfaceVariant),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.close, size: 18),
-                                onPressed: _removeFile,
-                              ),
-                            ],
-                          ),
-                        ),
-                      const SizedBox(height: 16),
-                      // Context
-                      TextField(
-                        controller: _contextController,
-                        maxLines: 3,
-                        decoration: InputDecoration(
-                          labelText: l.createMemoryContextLabel,
-                          hintText: l.createMemoryContextHint,
-                          border: const OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      // Type + Visibility side by side
-                      Row(
-                        children: [
-                          Expanded(
-                            child: DropdownButtonFormField<MemoryType>(
-                              initialValue: _memoryType,
-                              decoration: InputDecoration(
-                                labelText: l.createMemoryTypeLabel,
-                                border: const OutlineInputBorder(),
-                              ),
-                              items: MemoryType.values
-                                  .map((t) => DropdownMenuItem(
-                                      value: t, child: Text(t.label(l))))
-                                  .toList(),
-                              onChanged: (val) {
-                                if (val != null) {
-                                  setState(() => _memoryType = val);
-                                }
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: DropdownButtonFormField<v.Visibility>(
-                              initialValue: _visibility,
-                              decoration: InputDecoration(
-                                labelText: l.createMemoryVisibilityLabel,
-                                border: const OutlineInputBorder(),
-                              ),
-                              items: v.Visibility.values
-                                  .map((vis) => DropdownMenuItem(
-                                      value: vis, child: Text(vis.label(l))))
-                                  .toList(),
-                              onChanged: (val) {
-                                if (val != null) {
-                                  setState(() => _visibility = val);
-                                }
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                      // Conditional fields
-                      if (_visibility == v.Visibility.sealed_) ...[
-                        const SizedBox(height: 12),
-                        InputDatePickerFormField(
-                          firstDate: DateTime.now(),
-                          lastDate: DateTime(2100),
-                          initialDate:
-                              _sealedOpenAfter ?? DateTime(2030, 1, 1),
-                          fieldLabelText: l.createMemoryOpenAfterDate,
-                          onDateSaved: (date) => _sealedOpenAfter = date,
-                          onDateSubmitted: (date) =>
-                              _sealedOpenAfter = date,
-                        ),
-                      ],
-                      if (_visibility == v.Visibility.publicAfterDeath) ...[
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _inactiveYearsController,
-                          keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
-                            labelText: l.createMemoryInactiveYears,
-                            border: const OutlineInputBorder(),
-                          ),
-                        ),
-                      ],
-                      if (_visibility == v.Visibility.circle) ...[
-                        const SizedBox(height: 12),
-                        Text(
-                          l.createMemoryCircleNote,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(
-                                  color: colorScheme.onSurfaceVariant),
-                        ),
-                      ],
-                      const SizedBox(height: 16),
-                      // Language
-                      DropdownButtonFormField<String>(
-                        initialValue: _language,
-                        decoration: InputDecoration(
-                          labelText: l.createMemoryLanguageLabel,
-                          border: const OutlineInputBorder(),
-                        ),
-                        items: [
-                          DropdownMenuItem(
-                              value: 'en',
-                              child: Text(l.createMemoryLangEnglish)),
-                          DropdownMenuItem(
-                              value: 'pt',
-                              child: Text(l.createMemoryLangPortuguese)),
-                          DropdownMenuItem(
-                              value: 'es',
-                              child: Text(l.createMemoryLangSpanish)),
-                          DropdownMenuItem(
-                              value: 'fr',
-                              child: Text(l.createMemoryLangFrench)),
-                          DropdownMenuItem(
-                              value: 'de',
-                              child: Text(l.createMemoryLangGerman)),
-                          DropdownMenuItem(
-                              value: 'ja',
-                              child: Text(l.createMemoryLangJapanese)),
-                        ],
-                        onChanged: (val) {
-                          if (val != null) setState(() => _language = val);
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      // Tags
-                      TextField(
-                        controller: _tagsController,
-                        decoration: InputDecoration(
-                          labelText: l.createMemoryTagsLabel,
-                          hintText: l.createMemoryTagsHint,
-                          border: const OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      // Location
-                      TextField(
-                        controller: _locationController,
-                        decoration: InputDecoration(
-                          labelText: l.createMemoryLocationLabel,
-                          hintText: l.createMemoryLocationHint,
-                          border: const OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      // People
-                      TextField(
-                        controller: _peopleController,
-                        maxLines: 3,
-                        decoration: InputDecoration(
-                          labelText: l.createMemoryPeopleLabel,
-                          hintText: l.createMemoryPeopleHint,
-                          border: const OutlineInputBorder(),
-                        ),
-                      ),
+                      SelectItemButton(
+                          value: 'en',
+                          child: Text(l.createMemoryLangEnglish)),
+                      SelectItemButton(
+                          value: 'pt',
+                          child: Text(l.createMemoryLangPortuguese)),
+                      SelectItemButton(
+                          value: 'es',
+                          child: Text(l.createMemoryLangSpanish)),
+                      SelectItemButton(
+                          value: 'fr',
+                          child: Text(l.createMemoryLangFrench)),
+                      SelectItemButton(
+                          value: 'de',
+                          child: Text(l.createMemoryLangGerman)),
+                      SelectItemButton(
+                          value: 'ja',
+                          child: Text(l.createMemoryLangJapanese)),
                     ],
                   ),
                 ),
               ),
               const SizedBox(height: 16),
-              // Actions
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: Text(l.createMemoryCancel),
-                  ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: _fileSelected && !_creating
-                        ? _createMemory
-                        : null,
-                    child: _creating
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Text(l.createMemoryCreate),
-                  ),
-                ],
+              // Tags
+              Text(l.createMemoryTagsLabel).small.muted,
+              const SizedBox(height: 4),
+              TextField(
+                controller: _tagsController,
+                placeholder: Text(l.createMemoryTagsHint),
+              ),
+              const SizedBox(height: 16),
+              // Location
+              Text(l.createMemoryLocationLabel).small.muted,
+              const SizedBox(height: 4),
+              TextField(
+                controller: _locationController,
+                placeholder: Text(l.createMemoryLocationHint),
+              ),
+              const SizedBox(height: 16),
+              // People
+              Text(l.createMemoryPeopleLabel).small.muted,
+              const SizedBox(height: 4),
+              TextField(
+                controller: _peopleController,
+                maxLines: 3,
+                placeholder: Text(l.createMemoryPeopleHint),
               ),
             ],
           ),
         ),
       ),
+      actions: [
+        Button.outline(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l.createMemoryCancel),
+        ),
+        const SizedBox(width: 8),
+        Button.primary(
+          onPressed: _fileSelected && !_creating ? _createMemory : null,
+          child: _creating
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Text(l.createMemoryCreate),
+        ),
+      ],
     );
   }
+
+  String _langLabel(String code, AppLocalizations l) => switch (code) {
+        'en' => l.createMemoryLangEnglish,
+        'pt' => l.createMemoryLangPortuguese,
+        'es' => l.createMemoryLangSpanish,
+        'fr' => l.createMemoryLangFrench,
+        'de' => l.createMemoryLangGerman,
+        'ja' => l.createMemoryLangJapanese,
+        _ => code,
+      };
 }

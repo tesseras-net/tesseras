@@ -38,6 +38,12 @@ pub struct MemoryInfo {
     pub visibility: String,
     pub created_at: String, // ISO 8601
     pub tags: Vec<String>,
+    pub location: Option<String>,
+    pub people: Vec<String>,
+    pub language: String,
+    pub media_type: String,
+    pub sealed_open_after: Option<String>,          // ISO 8601 or empty
+    pub public_after_death_years: Option<u32>,
 }
 
 /// Network statistics (flat for FFI).
@@ -47,6 +53,8 @@ pub struct NetworkStats {
     pub dht_size: u32,
     pub is_bootstrapped: bool,
     pub uptime_secs: u64,
+    pub bytes_tx: u64,
+    pub bytes_rx: u64,
 }
 
 /// Replication status (flat for FFI).
@@ -56,6 +64,21 @@ pub struct ReplicationStatus {
     pub healthy_fragments: u32,
     pub repairing_fragments: u32,
     pub replication_factor: u32,
+}
+
+/// Connected peer information (flat for FFI).
+#[derive(Debug, Clone)]
+pub struct PeerInfo {
+    pub node_id: String,
+    pub addr: String,
+}
+
+/// Storage statistics (flat for FFI).
+#[derive(Debug, Clone)]
+pub struct StorageStats {
+    pub total_bytes: u64,
+    pub tessera_count: u32,
+    pub fragment_count: u32,
 }
 
 /// Network event for the live stream.

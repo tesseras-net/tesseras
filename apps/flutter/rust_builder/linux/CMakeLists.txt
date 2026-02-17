@@ -12,7 +12,12 @@ apply_cargokit(${PROJECT_NAME} ../../../../crates/tesseras-embedded tesseras_emb
 
 # Workaround: cargokit build tool may not copy the .so to the output dir.
 # Explicitly copy from the cargo target dir if the expected output is missing.
-set(CARGOKIT_BUILT_LIB "${CMAKE_CURRENT_BINARY_DIR}/cargokit_build/x86_64-unknown-linux-gnu/debug/libtesseras_embedded.so")
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+  set(CARGOKIT_CARGO_PROFILE "release")
+else()
+  set(CARGOKIT_CARGO_PROFILE "debug")
+endif()
+set(CARGOKIT_BUILT_LIB "${CMAKE_CURRENT_BINARY_DIR}/cargokit_build/x86_64-unknown-linux-gnu/${CARGOKIT_CARGO_PROFILE}/libtesseras_embedded.so")
 add_custom_command(
   TARGET "${PROJECT_NAME}_cargokit" POST_BUILD
   COMMAND ${CMAKE_COMMAND} -E copy_if_different

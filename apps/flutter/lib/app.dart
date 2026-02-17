@@ -2,9 +2,9 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 import 'l10n/app_localizations.dart';
+import 'providers/identity_provider.dart';
 import 'providers/locale_provider.dart';
 import 'providers/theme_provider.dart';
-import 'providers/mock_identity_provider.dart';
 import 'screens/onboarding/onboarding_flow.dart';
 import 'screens/desktop_shell.dart';
 
@@ -14,8 +14,11 @@ class TesserasApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeProvider);
-    final identity = ref.watch(mockIdentityProvider);
+    final identityAsync = ref.watch(identityProvider);
     final localeOverride = ref.watch(localeProvider);
+
+    // While loading, show nothing (node starting + identity fetch)
+    final identity = identityAsync.value;
 
     return ShadcnApp(
       title: 'Tesseras',

@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::net::IpAddr;
 
 use tesseras_core::{NodeId, NodeInfo};
 
@@ -7,6 +8,11 @@ use crate::distance;
 /// Kademlia routing table: 160 k-buckets, each holding up to K entries.
 pub const K: usize = 20;
 pub const NUM_BUCKETS: usize = 160;
+
+/// Maximum number of nodes from the same IP address allowed in the routing table.
+/// Defends against Sybil/flooding from a single host (e.g. app restart loops).
+/// Set high enough for university/corporate NATs but low enough to limit flooding.
+const MAX_PER_IP: usize = 8;
 
 /// Entry in the routing table, wrapping NodeInfo with failure tracking.
 #[derive(Debug, Clone)]
@@ -151,6 +157,17 @@ impl RoutingTable {
             Some(i) => i,
             None => return InsertResult::Updated,
         };
+
+        // Per-IP limit: reject new nodes from IPs that already have MAX_PER_IP entries,
+        // unless this node is already in the table (allow updates).
+        let already_in_table = self.buckets[idx]
+            .entries
+            .iter()
+            .any(|e| e.info.identity.node_id == node.identity.node_id);
+        if !already_in_table && self.count_by_ip(node.addr.ip()) >= MAX_PER_IP {
+            return InsertResult::Updated; // silently reject
+        }
+
         self.buckets[idx].update(node)
     }
 
@@ -160,6 +177,24 @@ impl RoutingTable {
             Some(i) => i,
             None => return false,
         };
+        // Check per-IP limit for the replacement node (the evicted node frees a slot
+        // only if it had the same IP, so we need to account for that).
+        let evicted_same_ip = self.buckets[idx]
+            .entries
+            .iter()
+            .find(|e| e.info.identity.node_id == *old_id)
+            .is_some_and(|e| e.info.addr.ip() == new_node.addr.ip());
+        let current_count = self.count_by_ip(new_node.addr.ip());
+        let effective_count = if evicted_same_ip {
+            current_count.saturating_sub(1)
+        } else {
+            current_count
+        };
+        if effective_count >= MAX_PER_IP {
+            // Just evict the old node without replacing
+            self.buckets[idx].remove(old_id);
+            return false;
+        }
         self.buckets[idx].evict_and_replace(old_id, new_node)
     }
 
@@ -190,6 +225,15 @@ impl RoutingTable {
             da.cmp(&db)
         });
         all.into_iter().take(count).cloned().collect()
+    }
+
+    /// Count how many entries share a given IP address across all buckets.
+    fn count_by_ip(&self, ip: IpAddr) -> usize {
+        self.buckets
+            .iter()
+            .flat_map(|b| b.entries.iter())
+            .filter(|e| e.info.addr.ip() == ip)
+            .count()
     }
 
     /// Total number of entries across all buckets.
@@ -256,7 +300,8 @@ mod tests {
                 public_key: [id_byte; 32],
                 nonce: 0,
             },
-            addr: SocketAddr::from(([127, 0, 0, 1], 4433)),
+            // Each node gets a unique IP to avoid per-IP limits in tests
+            addr: SocketAddr::from(([10, 0, id_byte, id_byte], 4433)),
             alt_addrs: vec![],
             capabilities: Capabilities::phase1_default(),
         }
@@ -309,7 +354,8 @@ mod tests {
                     public_key: [i as u8; 32],
                     nonce: 0,
                 },
-                addr: SocketAddr::from(([127, 0, 0, 1], 4433)),
+                // Unique IP per node to avoid per-IP limit
+                addr: SocketAddr::from(([10, 0, 0, i as u8 + 1], 4433)),
                 alt_addrs: vec![],
                 capabilities: Capabilities::phase1_default(),
             });
@@ -329,7 +375,7 @@ mod tests {
                 public_key: [0xff; 32],
                 nonce: 0,
             },
-            addr: SocketAddr::from(([127, 0, 0, 1], 4433)),
+            addr: SocketAddr::from(([10, 0, 0, 200], 4433)),
             alt_addrs: vec![],
             capabilities: Capabilities::phase1_default(),
         };
@@ -357,7 +403,7 @@ mod tests {
                 public_key: [0x01; 32],
                 nonce: 0,
             },
-            addr: SocketAddr::from(([127, 0, 0, 1], 4433)),
+            addr: SocketAddr::from(([10, 0, 0, 1], 4433)),
             alt_addrs: vec![],
             capabilities: Capabilities::phase1_default(),
         };
@@ -371,7 +417,7 @@ mod tests {
                 public_key: [0x02; 32],
                 nonce: 0,
             },
-            addr: SocketAddr::from(([127, 0, 0, 1], 4433)),
+            addr: SocketAddr::from(([10, 0, 0, 2], 4433)),
             alt_addrs: vec![],
             capabilities: Capabilities::phase1_default(),
         };
@@ -389,7 +435,7 @@ mod tests {
         let local = make_node_id(0x00);
         let mut rt = RoutingTable::new(local);
 
-        // Insert nodes at varying distances
+        // Insert nodes at varying distances (unique IPs to avoid per-IP limit)
         for i in 1..=5u8 {
             let mut id = [0x00u8; 20];
             id[19] = i;
@@ -399,7 +445,7 @@ mod tests {
                     public_key: [i; 32],
                     nonce: 0,
                 },
-                addr: SocketAddr::from(([127, 0, 0, 1], 4433)),
+                addr: SocketAddr::from(([10, 0, 0, i], 4433)),
                 alt_addrs: vec![],
                 capabilities: Capabilities::phase1_default(),
             });
@@ -454,5 +500,65 @@ mod tests {
     fn increment_failures_on_unknown_returns_zero() {
         let mut rt = RoutingTable::new(make_node_id(0x00));
         assert_eq!(rt.increment_failures(&make_node_id(0x99)), 0);
+    }
+
+    fn make_node_with_ip(id_byte: u8, ip_last: u8, port: u16) -> NodeInfo {
+        NodeInfo {
+            identity: NodeIdentity {
+                node_id: NodeId::new([id_byte; 20]),
+                public_key: [id_byte; 32],
+                nonce: 0,
+            },
+            addr: SocketAddr::from(([10, 0, 0, ip_last], port)),
+            alt_addrs: vec![],
+            capabilities: Capabilities::phase1_default(),
+        }
+    }
+
+    #[test]
+    fn per_ip_limit_rejects_beyond_max() {
+        let mut rt = RoutingTable::new(make_node_id(0x00));
+
+        // Insert MAX_PER_IP nodes from same IP — all should be accepted
+        for i in 1..=MAX_PER_IP as u8 {
+            let node = make_node_with_ip(i, 42, 3000 + i as u16);
+            assert!(matches!(rt.update(node), InsertResult::Inserted));
+        }
+        assert_eq!(rt.len(), MAX_PER_IP);
+
+        // One more from same IP should be silently rejected
+        let extra = make_node_with_ip(MAX_PER_IP as u8 + 1, 42, 3099);
+        assert!(matches!(rt.update(extra), InsertResult::Updated));
+        assert_eq!(rt.len(), MAX_PER_IP);
+    }
+
+    #[test]
+    fn per_ip_limit_allows_different_ips() {
+        let mut rt = RoutingTable::new(make_node_id(0x00));
+
+        let n1 = make_node_with_ip(0x01, 42, 3001);
+        let n2 = make_node_with_ip(0x02, 43, 3002);
+        let n3 = make_node_with_ip(0x03, 44, 3003);
+
+        assert!(matches!(rt.update(n1), InsertResult::Inserted));
+        assert!(matches!(rt.update(n2), InsertResult::Inserted));
+        assert!(matches!(rt.update(n3), InsertResult::Inserted));
+        assert_eq!(rt.len(), 3);
+    }
+
+    #[test]
+    fn per_ip_limit_allows_update_of_existing_node() {
+        let mut rt = RoutingTable::new(make_node_id(0x00));
+
+        let n1 = make_node_with_ip(0x01, 42, 3001);
+        let n2 = make_node_with_ip(0x02, 42, 3002);
+
+        rt.update(n1.clone());
+        rt.update(n2);
+        // Updating n1 (same node_id) should still work even though IP has 2 entries
+        let mut n1_updated = n1;
+        n1_updated.addr = SocketAddr::from(([10, 0, 0, 42], 3099));
+        assert!(matches!(rt.update(n1_updated), InsertResult::Updated));
+        assert_eq!(rt.len(), 2);
     }
 }

@@ -52,6 +52,12 @@ class MemoryInfo {
   final String visibility;
   final String createdAt;
   final List<String> tags;
+  final String? location;
+  final List<String> people;
+  final String language;
+  final String mediaType;
+  final String? sealedOpenAfter;
+  final int? publicAfterDeathYears;
 
   const MemoryInfo({
     required this.hash,
@@ -62,6 +68,12 @@ class MemoryInfo {
     required this.visibility,
     required this.createdAt,
     required this.tags,
+    this.location,
+    required this.people,
+    required this.language,
+    required this.mediaType,
+    this.sealedOpenAfter,
+    this.publicAfterDeathYears,
   });
 
   @override
@@ -73,7 +85,13 @@ class MemoryInfo {
       memoryType.hashCode ^
       visibility.hashCode ^
       createdAt.hashCode ^
-      tags.hashCode;
+      tags.hashCode ^
+      location.hashCode ^
+      people.hashCode ^
+      language.hashCode ^
+      mediaType.hashCode ^
+      sealedOpenAfter.hashCode ^
+      publicAfterDeathYears.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -87,7 +105,13 @@ class MemoryInfo {
           memoryType == other.memoryType &&
           visibility == other.visibility &&
           createdAt == other.createdAt &&
-          tags == other.tags;
+          tags == other.tags &&
+          location == other.location &&
+          people == other.people &&
+          language == other.language &&
+          mediaType == other.mediaType &&
+          sealedOpenAfter == other.sealedOpenAfter &&
+          publicAfterDeathYears == other.publicAfterDeathYears;
 }
 
 /// Network statistics (flat for FFI).
@@ -96,12 +120,16 @@ class NetworkStats {
   final int dhtSize;
   final bool isBootstrapped;
   final BigInt uptimeSecs;
+  final BigInt bytesTx;
+  final BigInt bytesRx;
 
   const NetworkStats({
     required this.peerCount,
     required this.dhtSize,
     required this.isBootstrapped,
     required this.uptimeSecs,
+    required this.bytesTx,
+    required this.bytesRx,
   });
 
   @override
@@ -109,7 +137,9 @@ class NetworkStats {
       peerCount.hashCode ^
       dhtSize.hashCode ^
       isBootstrapped.hashCode ^
-      uptimeSecs.hashCode;
+      uptimeSecs.hashCode ^
+      bytesTx.hashCode ^
+      bytesRx.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -119,7 +149,28 @@ class NetworkStats {
           peerCount == other.peerCount &&
           dhtSize == other.dhtSize &&
           isBootstrapped == other.isBootstrapped &&
-          uptimeSecs == other.uptimeSecs;
+          uptimeSecs == other.uptimeSecs &&
+          bytesTx == other.bytesTx &&
+          bytesRx == other.bytesRx;
+}
+
+/// Connected peer information (flat for FFI).
+class PeerInfo {
+  final String nodeId;
+  final String addr;
+
+  const PeerInfo({required this.nodeId, required this.addr});
+
+  @override
+  int get hashCode => nodeId.hashCode ^ addr.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PeerInfo &&
+          runtimeType == other.runtimeType &&
+          nodeId == other.nodeId &&
+          addr == other.addr;
 }
 
 /// Replication status (flat for FFI).
@@ -152,4 +203,30 @@ class ReplicationStatus {
           healthyFragments == other.healthyFragments &&
           repairingFragments == other.repairingFragments &&
           replicationFactor == other.replicationFactor;
+}
+
+/// Storage statistics (flat for FFI).
+class StorageStats {
+  final BigInt totalBytes;
+  final int tesseraCount;
+  final int fragmentCount;
+
+  const StorageStats({
+    required this.totalBytes,
+    required this.tesseraCount,
+    required this.fragmentCount,
+  });
+
+  @override
+  int get hashCode =>
+      totalBytes.hashCode ^ tesseraCount.hashCode ^ fragmentCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is StorageStats &&
+          runtimeType == other.runtimeType &&
+          totalBytes == other.totalBytes &&
+          tesseraCount == other.tesseraCount &&
+          fragmentCount == other.fragmentCount;
 }

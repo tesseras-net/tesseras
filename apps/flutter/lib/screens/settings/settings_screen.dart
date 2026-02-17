@@ -1,12 +1,13 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart' hide ThemeMode;
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shadcn_flutter/shadcn_flutter.dart' show ThemeMode;
+import 'package:shadcn_flutter/shadcn_flutter.dart';
 import '../../l10n/app_localizations.dart';
+import '../../providers/identity_provider.dart';
 import '../../providers/locale_provider.dart';
-import '../../providers/mock_data.dart';
-import '../../providers/mock_identity_provider.dart';
+import '../../providers/network_provider.dart';
+import '../../providers/storage_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../widgets/copy_button.dart';
 import '../../widgets/node_qr_code.dart';
@@ -17,19 +18,28 @@ class SettingsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final identity = ref.watch(mockIdentityProvider) ?? mockIdentity;
+    final identityAsync = ref.watch(identityProvider);
+    final storageAsync = ref.watch(storageProvider);
+    final networkAsync = ref.watch(networkProvider);
     final themeMode = ref.watch(themeProvider);
     final localeOverride = ref.watch(localeProvider);
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
     final l = AppLocalizations.of(context);
+
+    final identity = identityAsync.value;
+    final storage = storageAsync.value;
+    final network = networkAsync.value;
+
+    if (identity == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(l.settingsTitle,
-              style: Theme.of(context).textTheme.headlineSmall),
+          Text(l.settingsTitle).h3.semiBold,
           const SizedBox(height: 16),
           Expanded(
             child: Center(
@@ -38,35 +48,43 @@ class SettingsScreen extends ConsumerWidget {
                 child: ListView(
                   children: [
                     // 1. Identity
-                    Card(
+                    SurfaceCard(
                       child: Padding(
                         padding: const EdgeInsets.all(16),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(l.settingsIdentity,
-                                style:
-                                    Theme.of(context).textTheme.titleMedium),
+                            Text(l.settingsIdentity).semiBold,
                             const SizedBox(height: 12),
                             Row(
                               children: [
-                                CircleAvatar(
-                                  radius: 28,
-                                  backgroundColor: identity.avatarImagePath == null
-                                      ? identity.avatarColor
-                                      : null,
-                                  backgroundImage: identity.avatarImagePath != null
-                                      ? FileImage(File(identity.avatarImagePath!))
-                                      : null,
-                                  child: identity.avatarImagePath == null
-                                      ? Text(
-                                          identity.name.isNotEmpty
-                                              ? identity.name[0].toUpperCase()
-                                              : '?',
-                                          style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 24,
-                                              fontWeight: FontWeight.bold),
+                                Container(
+                                  width: 56,
+                                  height: 56,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: identity.avatarPath == null
+                                        ? const Color(0xFF3F51B5)
+                                        : null,
+                                    image: identity.avatarPath != null
+                                        ? DecorationImage(
+                                            image: FileImage(
+                                                File(identity.avatarPath!)),
+                                            fit: BoxFit.cover,
+                                          )
+                                        : null,
+                                  ),
+                                  child: identity.avatarPath == null
+                                      ? Center(
+                                          child: Text(
+                                            identity.name.isNotEmpty
+                                                ? identity.name[0].toUpperCase()
+                                                : '?',
+                                            style: const TextStyle(
+                                                color: Color(0xFFFFFFFF),
+                                                fontSize: 24,
+                                                fontWeight: FontWeight.bold),
+                                          ),
                                         )
                                       : null,
                                 ),
@@ -76,20 +94,13 @@ class SettingsScreen extends ConsumerWidget {
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      Text(identity.name,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleLarge),
-                                      Text(
-                                        l.settingsNodePrefix(
-                                            identity.nodeIdHex
-                                                .substring(0, 16)),
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall
-                                            ?.copyWith(
-                                                fontFamily: 'monospace'),
-                                      ),
+                                      Text(identity.name).large.semiBold,
+                                      Text(l.settingsNodePrefix(
+                                              identity.nodeIdHex
+                                                  .substring(0, 16)))
+                                          .small
+                                          .mono
+                                          .muted,
                                     ],
                                   ),
                                 ),
@@ -98,36 +109,22 @@ class SettingsScreen extends ConsumerWidget {
                             const SizedBox(height: 12),
                             _KeyRow(
                               label: 'Ed25519',
-                              value: identity.ed25519PublicKeyHex,
-                            ),
-                            _KeyRow(
-                              label: 'ML-DSA',
-                              value: identity.mldsaPublicKeyHex,
+                              value: identity.publicKeyHex,
                             ),
                             const SizedBox(height: 8),
-                            Text(
-                              l.settingsCreatedPrefix(
-                                  _formatDate(identity.createdAt)),
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                            const SizedBox(height: 8),
+                            Text(l.settingsCreatedPrefix(
+                                    _formatDate(identity.createdAt)))
+                                .small
+                                .muted,
                             const SizedBox(height: 12),
-                            // QR-like pattern for easy peer connection
+                            // QR-like pattern
                             Center(
                               child: Column(
                                 children: [
                                   NodeQrCode(
                                       hexData: identity.nodeIdHex),
                                   const SizedBox(height: 8),
-                                  Text(
-                                    l.settingsScanToConnect,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall
-                                        ?.copyWith(
-                                            color: colorScheme
-                                                .onSurfaceVariant),
-                                  ),
+                                  Text(l.settingsScanToConnect).small.muted,
                                 ],
                               ),
                             ),
@@ -136,7 +133,7 @@ class SettingsScreen extends ConsumerWidget {
                               mainAxisAlignment: MainAxisAlignment.end,
                               children: [
                                 CopyButton(
-                                  text: identity.ed25519PublicKeyHex,
+                                  text: identity.publicKeyHex,
                                   tooltip: l.settingsCopyEd25519,
                                 ),
                               ],
@@ -148,42 +145,49 @@ class SettingsScreen extends ConsumerWidget {
                     const SizedBox(height: 12),
 
                     // 2. Appearance
-                    Card(
+                    SurfaceCard(
                       child: Padding(
                         padding: const EdgeInsets.all(16),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(l.settingsAppearance,
-                                style:
-                                    Theme.of(context).textTheme.titleMedium),
+                            Text(l.settingsAppearance).semiBold,
                             const SizedBox(height: 12),
                             Row(
                               children: [
                                 Text(l.settingsTheme),
                                 const SizedBox(width: 16),
-                                SegmentedButton<ThemeMode>(
-                                  segments: [
-                                    ButtonSegment(
-                                        value: ThemeMode.light,
-                                        label: Text(l.settingsThemeLight),
-                                        icon: const Icon(Icons.light_mode)),
-                                    ButtonSegment(
-                                        value: ThemeMode.dark,
-                                        label: Text(l.settingsThemeDark),
-                                        icon: const Icon(Icons.dark_mode)),
-                                    ButtonSegment(
-                                        value: ThemeMode.system,
-                                        label: Text(l.settingsThemeSystem),
-                                        icon: const Icon(
-                                            Icons.settings_suggest)),
-                                  ],
-                                  selected: {themeMode},
-                                  onSelectionChanged: (selected) {
-                                    ref
-                                        .read(themeProvider.notifier)
-                                        .setTheme(selected.first);
-                                  },
+                                Expanded(
+                                  child: Row(
+                                    children: [
+                                      _ThemeButton(
+                                        label: l.settingsThemeLight,
+                                        icon: Icons.light_mode,
+                                        selected: themeMode == ThemeMode.light,
+                                        onTap: () => ref
+                                            .read(themeProvider.notifier)
+                                            .setTheme(ThemeMode.light),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      _ThemeButton(
+                                        label: l.settingsThemeDark,
+                                        icon: Icons.dark_mode,
+                                        selected: themeMode == ThemeMode.dark,
+                                        onTap: () => ref
+                                            .read(themeProvider.notifier)
+                                            .setTheme(ThemeMode.dark),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      _ThemeButton(
+                                        label: l.settingsThemeSystem,
+                                        icon: Icons.settings_suggest,
+                                        selected: themeMode == ThemeMode.system,
+                                        onTap: () => ref
+                                            .read(themeProvider.notifier)
+                                            .setTheme(ThemeMode.system),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ],
                             ),
@@ -192,29 +196,37 @@ class SettingsScreen extends ConsumerWidget {
                               children: [
                                 Text(l.settingsLanguage),
                                 const SizedBox(width: 16),
-                                SegmentedButton<Locale?>(
-                                  segments: [
-                                    ButtonSegment(
-                                        value: const Locale('en'),
-                                        label:
-                                            Text(l.settingsLangEnglish)),
-                                    ButtonSegment(
-                                        value: const Locale('pt'),
-                                        label:
-                                            Text(l.settingsLangPortuguese)),
-                                    ButtonSegment(
-                                        value: null,
-                                        label:
-                                            Text(l.settingsLangSystem),
-                                        icon: const Icon(
-                                            Icons.settings_suggest)),
-                                  ],
-                                  selected: {localeOverride},
-                                  onSelectionChanged: (selected) {
-                                    ref
-                                        .read(localeProvider.notifier)
-                                        .setLocale(selected.first);
-                                  },
+                                Expanded(
+                                  child: Row(
+                                    children: [
+                                      _ThemeButton(
+                                        label: l.settingsLangEnglish,
+                                        selected: localeOverride ==
+                                            const Locale('en'),
+                                        onTap: () => ref
+                                            .read(localeProvider.notifier)
+                                            .setLocale(const Locale('en')),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      _ThemeButton(
+                                        label: l.settingsLangPortuguese,
+                                        selected: localeOverride ==
+                                            const Locale('pt'),
+                                        onTap: () => ref
+                                            .read(localeProvider.notifier)
+                                            .setLocale(const Locale('pt')),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      _ThemeButton(
+                                        label: l.settingsLangSystem,
+                                        icon: Icons.settings_suggest,
+                                        selected: localeOverride == null,
+                                        onTap: () => ref
+                                            .read(localeProvider.notifier)
+                                            .setLocale(null),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ],
                             ),
@@ -225,40 +237,36 @@ class SettingsScreen extends ConsumerWidget {
                     const SizedBox(height: 12),
 
                     // 3. Storage
-                    Card(
+                    SurfaceCard(
                       child: Padding(
                         padding: const EdgeInsets.all(16),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(l.settingsStorage,
-                                style:
-                                    Theme.of(context).textTheme.titleMedium),
+                            Text(l.settingsStorage).semiBold,
                             const SizedBox(height: 12),
-                            const StorageBar(
-                                usedMB: 142, totalMB: 10 * 1024),
+                            StorageBar(
+                                usedMB: storage != null
+                                    ? (storage.totalBytes.toInt() /
+                                            (1024 * 1024))
+                                        .round()
+                                    : 0,
+                                totalMB: 10 * 1024),
                             const SizedBox(height: 12),
                             Row(
                               children: [
-                                Text(l.settingsMemories(47),
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall),
+                                Text(l.settingsMemories(
+                                        storage?.tesseraCount ?? 0))
+                                    .small,
                                 const SizedBox(width: 24),
-                                Text(l.settingsFragments(847),
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall),
+                                Text(l.settingsFragments(
+                                        network?.replication.totalFragments ??
+                                            0))
+                                    .small,
                               ],
                             ),
                             const SizedBox(height: 4),
-                            Text(
-                              l.settingsDataDir,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(fontFamily: 'monospace'),
-                            ),
+                            Text(l.settingsDataDir).small.mono.muted,
                           ],
                         ),
                       ),
@@ -266,37 +274,27 @@ class SettingsScreen extends ConsumerWidget {
                     const SizedBox(height: 12),
 
                     // 4. Network
-                    Card(
+                    SurfaceCard(
                       child: Padding(
                         padding: const EdgeInsets.all(16),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(l.settingsNetwork,
-                                style:
-                                    Theme.of(context).textTheme.titleMedium),
+                            Text(l.settingsNetwork).semiBold,
                             const SizedBox(height: 12),
-                            Text(l.settingsBootstrapNodes,
-                                style:
-                                    Theme.of(context).textTheme.bodySmall),
+                            Text(l.settingsBootstrapNodes).small,
                             const SizedBox(height: 4),
-                            Text('  boot1.tesseras.net:4433',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(fontFamily: 'monospace')),
-                            Text('  boot2.tesseras.net:4433',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(fontFamily: 'monospace')),
+                            const Text('  boot1.tesseras.net:4433')
+                                .small
+                                .mono
+                                .muted,
+                            const Text('  boot2.tesseras.net:4433')
+                                .small
+                                .mono
+                                .muted,
                             const SizedBox(height: 8),
-                            Text(l.settingsListenPort,
-                                style:
-                                    Theme.of(context).textTheme.bodySmall),
-                            Text(l.settingsMaxStorage,
-                                style:
-                                    Theme.of(context).textTheme.bodySmall),
+                            Text(l.settingsListenPort).small,
+                            Text(l.settingsMaxStorage).small,
                           ],
                         ),
                       ),
@@ -304,29 +302,33 @@ class SettingsScreen extends ConsumerWidget {
                     const SizedBox(height: 12),
 
                     // 5. Heirs
-                    Card(
+                    SurfaceCard(
                       child: Padding(
                         padding: const EdgeInsets.all(16),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(l.settingsHeirs,
-                                style:
-                                    Theme.of(context).textTheme.titleMedium),
+                            Text(l.settingsHeirs).semiBold,
                             const SizedBox(height: 12),
-                            Text(l.settingsNoHeirs,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                        color:
-                                            colorScheme.onSurfaceVariant)),
+                            Text(l.settingsNoHeirs).muted,
                             const SizedBox(height: 8),
-                            OutlinedButton(
+                            Button.outline(
                               onPressed: () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                      content: Text(l.settingsComingSoon)),
+                                showToast(
+                                  context: context,
+                                  builder: (context, overlay) => SurfaceCard(
+                                    child: Basic(
+                                      title: Text(l.settingsComingSoon),
+                                      trailing: Button(
+                                        style: const ButtonStyle.ghost(
+                                            density: ButtonDensity.icon),
+                                        onPressed: overlay.close,
+                                        child:
+                                            const Icon(Icons.close, size: 16),
+                                      ),
+                                    ),
+                                  ),
+                                  showDuration: const Duration(seconds: 2),
                                 );
                               },
                               child: Text(l.settingsConfigureHeirs),
@@ -338,34 +340,20 @@ class SettingsScreen extends ConsumerWidget {
                     const SizedBox(height: 12),
 
                     // 6. About
-                    Card(
+                    SurfaceCard(
                       child: Padding(
                         padding: const EdgeInsets.all(16),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(l.settingsAbout,
-                                style:
-                                    Theme.of(context).textTheme.titleMedium),
+                            Text(l.settingsAbout).semiBold,
                             const SizedBox(height: 12),
-                            Text(l.settingsVersion,
-                                style:
-                                    Theme.of(context).textTheme.bodyLarge),
+                            Text(l.settingsVersion).large,
                             const SizedBox(height: 4),
-                            Text(l.settingsDescription,
-                                style:
-                                    Theme.of(context).textTheme.bodyMedium),
+                            Text(l.settingsDescription),
                             const SizedBox(height: 8),
-                            Text(l.settingsWebsite,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(color: colorScheme.primary)),
-                            Text(l.settingsIrc,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(color: colorScheme.primary)),
+                            Text(l.settingsWebsite).small.muted,
+                            Text(l.settingsIrc).small.muted,
                           ],
                         ),
                       ),
@@ -388,6 +376,32 @@ class SettingsScreen extends ConsumerWidget {
   }
 }
 
+class _ThemeButton extends StatelessWidget {
+  final String label;
+  final IconData? icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ThemeButton({
+    required this.label,
+    this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Button(
+      style: ButtonStyle(
+        variance: selected ? ButtonVariance.secondary : ButtonVariance.outline,
+      ),
+      onPressed: onTap,
+      leading: icon != null ? Icon(icon!, size: 16) : null,
+      child: Text(label),
+    );
+  }
+}
+
 class _KeyRow extends StatelessWidget {
   final String label;
   final String value;
@@ -402,20 +416,10 @@ class _KeyRow extends StatelessWidget {
         children: [
           SizedBox(
             width: 60,
-            child: Text(label,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(fontWeight: FontWeight.bold)),
+            child: Text(label).small.semiBold,
           ),
           Expanded(
-            child: Text(
-              '${value.substring(0, 24)}...',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(fontFamily: 'monospace'),
-            ),
+            child: Text('${value.substring(0, 24)}...').small.mono.muted,
           ),
         ],
       ),

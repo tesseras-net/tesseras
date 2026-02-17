@@ -30,7 +30,7 @@ impl Default for DhtConfig {
             pointer_ttl: Duration::from_secs(86400),
             max_stored_pointers: 100_000,
             ping_failure_threshold: 3,
-            stale_check_interval: Duration::from_secs(900),
+            stale_check_interval: Duration::from_secs(60),
             re_bootstrap_interval: Duration::from_secs(30),
             capabilities: Capabilities::phase2_default(),
         }

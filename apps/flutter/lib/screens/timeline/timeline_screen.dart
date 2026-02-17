@@ -1,9 +1,9 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/memory.dart';
-import '../../providers/mock_timeline_provider.dart';
+import '../../providers/timeline_provider.dart';
 import 'empty_timeline.dart';
 import 'memory_tile.dart';
 import 'memory_detail_dialog.dart';
@@ -72,7 +72,8 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final allMemories = ref.watch(mockTimelineProvider);
+    final timelineAsync = ref.watch(timelineProvider);
+    final allMemories = timelineAsync.value ?? [];
     final memories = _filterAndSort(List.of(allMemories));
     final l = AppLocalizations.of(context);
 
@@ -83,8 +84,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
           // Toolbar
           Row(
             children: [
-              Text(l.timelineTitle,
-                  style: Theme.of(context).textTheme.headlineSmall),
+              Text(l.timelineTitle).h3.semiBold,
               const Spacer(),
               SizedBox(
                 width: 240,
@@ -92,49 +92,38 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
                   controller: _searchController,
                   focusNode: widget.searchFocusNode,
                   onChanged: _onSearchChanged,
-                  decoration: InputDecoration(
-                    hintText: l.timelineSearchHint,
-                    prefixIcon: const Icon(Icons.search, size: 20),
-                    suffixIcon: _searchQuery.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear, size: 18),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() => _searchQuery = '');
-                            },
-                          )
-                        : null,
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                  ),
+                  placeholder: Text(l.timelineSearchHint),
+                  features: [
+                    if (_searchQuery.isNotEmpty)
+                      const InputClearFeature(),
+                  ],
                 ),
               ),
               const SizedBox(width: 8),
-              PopupMenuButton<_SortMode>(
-                icon: const Icon(Icons.sort),
-                tooltip: l.timelineSortTooltip,
-                onSelected: (mode) => setState(() => _sortMode = mode),
-                itemBuilder: (_) => [
-                  CheckedPopupMenuItem(
-                    value: _SortMode.newestFirst,
-                    checked: _sortMode == _SortMode.newestFirst,
-                    child: Text(l.timelineSortNewest),
+              Select<_SortMode>(
+                value: _sortMode,
+                onChanged: (mode) {
+                  if (mode != null) setState(() => _sortMode = mode);
+                },
+                itemBuilder: (context, value) => Icon(Icons.sort, size: 18),
+                popup: (context) => SelectPopup(
+                  items: SelectItemList(
+                    children: [
+                      SelectItemButton(
+                        value: _SortMode.newestFirst,
+                        child: Text(l.timelineSortNewest),
+                      ),
+                      SelectItemButton(
+                        value: _SortMode.oldestFirst,
+                        child: Text(l.timelineSortOldest),
+                      ),
+                      SelectItemButton(
+                        value: _SortMode.byType,
+                        child: Text(l.timelineSortByType),
+                      ),
+                    ],
                   ),
-                  CheckedPopupMenuItem(
-                    value: _SortMode.oldestFirst,
-                    checked: _sortMode == _SortMode.oldestFirst,
-                    child: Text(l.timelineSortOldest),
-                  ),
-                  CheckedPopupMenuItem(
-                    value: _SortMode.byType,
-                    checked: _sortMode == _SortMode.byType,
-                    child: Text(l.timelineSortByType),
-                  ),
-                ],
+                ),
               ),
             ],
           ),

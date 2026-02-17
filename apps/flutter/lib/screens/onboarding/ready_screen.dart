@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 import '../../l10n/app_localizations.dart';
-import '../../providers/mock_identity_provider.dart';
+import '../../providers/identity_provider.dart';
 import '../../widgets/copy_button.dart';
 import '../desktop_shell.dart';
 
@@ -39,7 +39,8 @@ class _ReadyScreenState extends ConsumerState<ReadyScreen>
 
   @override
   Widget build(BuildContext context) {
-    final identity = ref.watch(mockIdentityProvider);
+    final identityAsync = ref.watch(identityProvider);
+    final identity = identityAsync.value;
     final name = identity?.name ?? 'User';
     final nodeId = identity?.nodeIdHex ?? '';
     final l = AppLocalizations.of(context);

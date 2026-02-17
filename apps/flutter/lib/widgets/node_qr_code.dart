@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart';
 
 /// Simple deterministic grid pattern generated from a hex string.
 /// Not a real QR code, but visually represents the node identity
@@ -12,9 +12,9 @@ class NodeQrCode extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final fg = isDark ? Colors.white : Colors.black;
-    final bg = isDark ? Colors.grey.shade900 : Colors.white;
+    final theme = Theme.of(context);
+    final fg = theme.colorScheme.foreground;
+    final bg = theme.colorScheme.card;
 
     // Generate a 9x9 grid from hex chars
     const gridSize = 9;
@@ -56,7 +56,7 @@ class NodeQrCode extends StatelessWidget {
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Theme.of(context).dividerColor),
+        border: Border.all(color: theme.colorScheme.border),
       ),
       child: CustomPaint(
         size: Size(size - 16, size - 16),

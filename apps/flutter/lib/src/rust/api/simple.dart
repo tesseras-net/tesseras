@@ -40,6 +40,8 @@ MemoryInfo createMemory({
   double? locationLon,
   required List<String> tags,
   required List<String> people,
+  String? sealedOpenAfter,
+  int? inactiveYears,
 }) => RustLib.instance.api.crateApiSimpleCreateMemory(
   mediaPath: mediaPath,
   contextText: contextText,
@@ -50,6 +52,8 @@ MemoryInfo createMemory({
   locationLon: locationLon,
   tags: tags,
   people: people,
+  sealedOpenAfter: sealedOpenAfter,
+  inactiveYears: inactiveYears,
 );
 
 /// Get timeline of memories with pagination.
@@ -70,3 +74,22 @@ NetworkStats getNetworkStats() =>
 /// Get current replication status.
 ReplicationStatus getReplicationStatus() =>
     RustLib.instance.api.crateApiSimpleGetReplicationStatus();
+
+/// Get list of connected peers.
+List<PeerInfo> getConnectedPeers() =>
+    RustLib.instance.api.crateApiSimpleGetConnectedPeers();
+
+/// Get storage statistics.
+StorageStats getStorageStats() =>
+    RustLib.instance.api.crateApiSimpleGetStorageStats();
+
+/// Read a media blob by tessera hash, memory hash, and file name.
+Uint8List getMediaBlob({
+  required String tesseraHash,
+  required String memoryHash,
+  required String name,
+}) => RustLib.instance.api.crateApiSimpleGetMediaBlob(
+  tesseraHash: tesseraHash,
+  memoryHash: memoryHash,
+  name: name,
+);

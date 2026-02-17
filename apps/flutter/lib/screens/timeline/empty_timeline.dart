@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:shadcn_flutter/shadcn_flutter.dart';
 import '../../l10n/app_localizations.dart';
 
 class EmptyTimeline extends StatelessWidget {
@@ -7,23 +7,19 @@ class EmptyTimeline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
+    final theme = Theme.of(context);
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(Icons.photo_library_outlined,
-              size: 80, color: Theme.of(context).colorScheme.onSurfaceVariant),
+              size: 80, color: theme.colorScheme.mutedForeground),
           const SizedBox(height: 16),
-          Text(l.emptyTimelineHeading,
-              style: Theme.of(context).textTheme.headlineSmall),
+          Text(l.emptyTimelineHeading).h3.semiBold,
           const SizedBox(height: 8),
-          Text(l.emptyTimelineSubtitle,
-              style: Theme.of(context).textTheme.bodyLarge),
+          Text(l.emptyTimelineSubtitle).large,
           const SizedBox(height: 4),
-          Text(l.emptyTimelineHint,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  )),
+          Text(l.emptyTimelineHint).small.muted,
         ],
       ),
     );

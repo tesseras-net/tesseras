@@ -26,7 +26,7 @@
 // Section: imports
 
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1544659011;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 264491873;
 
 // Section: executor
 
@@ -106,6 +106,8 @@ fn wire__crate__api__simple__create_memory_impl(
             let api_location_lon = <Option<f64>>::sse_decode(&mut deserializer);
             let api_tags = <Vec<String>>::sse_decode(&mut deserializer);
             let api_people = <Vec<String>>::sse_decode(&mut deserializer);
+            let api_sealed_open_after = <Option<String>>::sse_decode(&mut deserializer);
+            let api_inactive_years = <Option<u32>>::sse_decode(&mut deserializer);
             deserializer.end();
             transform_result_sse::<_, String>((move || {
                 let output_ok = crate::api::simple::create_memory(
@@ -118,7 +120,38 @@ fn wire__crate__api__simple__create_memory_impl(
                     api_location_lon,
                     api_tags,
                     api_people,
+                    api_sealed_open_after,
+                    api_inactive_years,
                 )?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__get_connected_peers_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "get_connected_peers",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            transform_result_sse::<_, String>((move || {
+                let output_ok = crate::api::simple::get_connected_peers()?;
                 Ok(output_ok)
             })())
         },
@@ -148,6 +181,42 @@ fn wire__crate__api__simple__get_identity_impl(
             deserializer.end();
             transform_result_sse::<_, String>((move || {
                 let output_ok = crate::api::simple::get_identity()?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__get_media_blob_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "get_media_blob",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_tessera_hash = <String>::sse_decode(&mut deserializer);
+            let api_memory_hash = <String>::sse_decode(&mut deserializer);
+            let api_name = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, String>((move || {
+                let output_ok = crate::api::simple::get_media_blob(
+                    api_tessera_hash,
+                    api_memory_hash,
+                    api_name,
+                )?;
                 Ok(output_ok)
             })())
         },
@@ -236,6 +305,35 @@ fn wire__crate__api__simple__get_replication_status_impl(
             deserializer.end();
             transform_result_sse::<_, String>((move || {
                 let output_ok = crate::api::simple::get_replication_status()?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__simple__get_storage_stats_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "get_storage_stats",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            transform_result_sse::<_, String>((move || {
+                let output_ok = crate::api::simple::get_storage_stats()?;
                 Ok(output_ok)
             })())
         },
@@ -461,6 +559,18 @@ impl SseDecode for Vec<crate::types::MemoryInfo> {
     }
 }
 
+impl SseDecode for Vec<crate::types::PeerInfo> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::types::PeerInfo>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<u8> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -484,6 +594,12 @@ impl SseDecode for crate::types::MemoryInfo {
         let mut var_visibility = <String>::sse_decode(deserializer);
         let mut var_createdAt = <String>::sse_decode(deserializer);
         let mut var_tags = <Vec<String>>::sse_decode(deserializer);
+        let mut var_location = <Option<String>>::sse_decode(deserializer);
+        let mut var_people = <Vec<String>>::sse_decode(deserializer);
+        let mut var_language = <String>::sse_decode(deserializer);
+        let mut var_mediaType = <String>::sse_decode(deserializer);
+        let mut var_sealedOpenAfter = <Option<String>>::sse_decode(deserializer);
+        let mut var_publicAfterDeathYears = <Option<u32>>::sse_decode(deserializer);
         return crate::types::MemoryInfo {
             hash: var_hash,
             tessera_hash: var_tesseraHash,
@@ -493,6 +609,12 @@ impl SseDecode for crate::types::MemoryInfo {
             visibility: var_visibility,
             created_at: var_createdAt,
             tags: var_tags,
+            location: var_location,
+            people: var_people,
+            language: var_language,
+            media_type: var_mediaType,
+            sealed_open_after: var_sealedOpenAfter,
+            public_after_death_years: var_publicAfterDeathYears,
         };
     }
 }
@@ -504,11 +626,15 @@ impl SseDecode for crate::types::NetworkStats {
         let mut var_dhtSize = <u32>::sse_decode(deserializer);
         let mut var_isBootstrapped = <bool>::sse_decode(deserializer);
         let mut var_uptimeSecs = <u64>::sse_decode(deserializer);
+        let mut var_bytesTx = <u64>::sse_decode(deserializer);
+        let mut var_bytesRx = <u64>::sse_decode(deserializer);
         return crate::types::NetworkStats {
             peer_count: var_peerCount,
             dht_size: var_dhtSize,
             is_bootstrapped: var_isBootstrapped,
             uptime_secs: var_uptimeSecs,
+            bytes_tx: var_bytesTx,
+            bytes_rx: var_bytesRx,
         };
     }
 }
@@ -546,6 +672,29 @@ impl SseDecode for Option<crate::types::IdentityInfo> {
     }
 }
 
+impl SseDecode for Option<u32> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<u32>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for crate::types::PeerInfo {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_nodeId = <String>::sse_decode(deserializer);
+        let mut var_addr = <String>::sse_decode(deserializer);
+        return crate::types::PeerInfo {
+            node_id: var_nodeId,
+            addr: var_addr,
+        };
+    }
+}
+
 impl SseDecode for crate::types::ReplicationStatus {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -558,6 +707,20 @@ impl SseDecode for crate::types::ReplicationStatus {
             healthy_fragments: var_healthyFragments,
             repairing_fragments: var_repairingFragments,
             replication_factor: var_replicationFactor,
+        };
+    }
+}
+
+impl SseDecode for crate::types::StorageStats {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_totalBytes = <u64>::sse_decode(deserializer);
+        let mut var_tesseraCount = <u32>::sse_decode(deserializer);
+        let mut var_fragmentCount = <u32>::sse_decode(deserializer);
+        return crate::types::StorageStats {
+            total_bytes: var_totalBytes,
+            tessera_count: var_tesseraCount,
+            fragment_count: var_fragmentCount,
         };
     }
 }
@@ -604,7 +767,7 @@ fn pde_ffi_dispatcher_primary_impl(
 ) {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        8 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__simple__init_app_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -619,14 +782,17 @@ fn pde_ffi_dispatcher_sync_impl(
     match func_id {
         1 => wire__crate__api__simple__create_identity_impl(ptr, rust_vec_len, data_len),
         2 => wire__crate__api__simple__create_memory_impl(ptr, rust_vec_len, data_len),
-        3 => wire__crate__api__simple__get_identity_impl(ptr, rust_vec_len, data_len),
-        4 => wire__crate__api__simple__get_memory_impl(ptr, rust_vec_len, data_len),
-        5 => wire__crate__api__simple__get_network_stats_impl(ptr, rust_vec_len, data_len),
-        6 => wire__crate__api__simple__get_replication_status_impl(ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__simple__get_timeline_impl(ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__simple__node_is_running_impl(ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__simple__node_start_impl(ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__simple__node_stop_impl(ptr, rust_vec_len, data_len),
+        3 => wire__crate__api__simple__get_connected_peers_impl(ptr, rust_vec_len, data_len),
+        4 => wire__crate__api__simple__get_identity_impl(ptr, rust_vec_len, data_len),
+        5 => wire__crate__api__simple__get_media_blob_impl(ptr, rust_vec_len, data_len),
+        6 => wire__crate__api__simple__get_memory_impl(ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__simple__get_network_stats_impl(ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__simple__get_replication_status_impl(ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__simple__get_storage_stats_impl(ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__simple__get_timeline_impl(ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__simple__node_is_running_impl(ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__simple__node_start_impl(ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__simple__node_stop_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -664,6 +830,12 @@ impl flutter_rust_bridge::IntoDart for crate::types::MemoryInfo {
             self.visibility.into_into_dart().into_dart(),
             self.created_at.into_into_dart().into_dart(),
             self.tags.into_into_dart().into_dart(),
+            self.location.into_into_dart().into_dart(),
+            self.people.into_into_dart().into_dart(),
+            self.language.into_into_dart().into_dart(),
+            self.media_type.into_into_dart().into_dart(),
+            self.sealed_open_after.into_into_dart().into_dart(),
+            self.public_after_death_years.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -682,6 +854,8 @@ impl flutter_rust_bridge::IntoDart for crate::types::NetworkStats {
             self.dht_size.into_into_dart().into_dart(),
             self.is_bootstrapped.into_into_dart().into_dart(),
             self.uptime_secs.into_into_dart().into_dart(),
+            self.bytes_tx.into_into_dart().into_dart(),
+            self.bytes_rx.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -689,6 +863,22 @@ impl flutter_rust_bridge::IntoDart for crate::types::NetworkStats {
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::types::NetworkStats {}
 impl flutter_rust_bridge::IntoIntoDart<crate::types::NetworkStats> for crate::types::NetworkStats {
     fn into_into_dart(self) -> crate::types::NetworkStats {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::types::PeerInfo {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.node_id.into_into_dart().into_dart(),
+            self.addr.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::types::PeerInfo {}
+impl flutter_rust_bridge::IntoIntoDart<crate::types::PeerInfo> for crate::types::PeerInfo {
+    fn into_into_dart(self) -> crate::types::PeerInfo {
         self
     }
 }
@@ -712,6 +902,23 @@ impl flutter_rust_bridge::IntoIntoDart<crate::types::ReplicationStatus>
     for crate::types::ReplicationStatus
 {
     fn into_into_dart(self) -> crate::types::ReplicationStatus {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::types::StorageStats {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.total_bytes.into_into_dart().into_dart(),
+            self.tessera_count.into_into_dart().into_dart(),
+            self.fragment_count.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::types::StorageStats {}
+impl flutter_rust_bridge::IntoIntoDart<crate::types::StorageStats> for crate::types::StorageStats {
+    fn into_into_dart(self) -> crate::types::StorageStats {
         self
     }
 }
@@ -768,6 +975,16 @@ impl SseEncode for Vec<crate::types::MemoryInfo> {
     }
 }
 
+impl SseEncode for Vec<crate::types::PeerInfo> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::types::PeerInfo>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<u8> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -789,6 +1006,12 @@ impl SseEncode for crate::types::MemoryInfo {
         <String>::sse_encode(self.visibility, serializer);
         <String>::sse_encode(self.created_at, serializer);
         <Vec<String>>::sse_encode(self.tags, serializer);
+        <Option<String>>::sse_encode(self.location, serializer);
+        <Vec<String>>::sse_encode(self.people, serializer);
+        <String>::sse_encode(self.language, serializer);
+        <String>::sse_encode(self.media_type, serializer);
+        <Option<String>>::sse_encode(self.sealed_open_after, serializer);
+        <Option<u32>>::sse_encode(self.public_after_death_years, serializer);
     }
 }
 
@@ -799,6 +1022,8 @@ impl SseEncode for crate::types::NetworkStats {
         <u32>::sse_encode(self.dht_size, serializer);
         <bool>::sse_encode(self.is_bootstrapped, serializer);
         <u64>::sse_encode(self.uptime_secs, serializer);
+        <u64>::sse_encode(self.bytes_tx, serializer);
+        <u64>::sse_encode(self.bytes_rx, serializer);
     }
 }
 
@@ -832,6 +1057,24 @@ impl SseEncode for Option<crate::types::IdentityInfo> {
     }
 }
 
+impl SseEncode for Option<u32> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <u32>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for crate::types::PeerInfo {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.node_id, serializer);
+        <String>::sse_encode(self.addr, serializer);
+    }
+}
+
 impl SseEncode for crate::types::ReplicationStatus {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -839,6 +1082,15 @@ impl SseEncode for crate::types::ReplicationStatus {
         <u32>::sse_encode(self.healthy_fragments, serializer);
         <u32>::sse_encode(self.repairing_fragments, serializer);
         <u32>::sse_encode(self.replication_factor, serializer);
+    }
+}
+
+impl SseEncode for crate::types::StorageStats {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u64>::sse_encode(self.total_bytes, serializer);
+        <u32>::sse_encode(self.tessera_count, serializer);
+        <u32>::sse_encode(self.fragment_count, serializer);
     }
 }
 
@@ -886,7 +1138,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
@@ -910,7 +1162,7 @@ mod web {
     };
     use flutter_rust_bridge::for_generated::wasm_bindgen;
     use flutter_rust_bridge::for_generated::wasm_bindgen::prelude::*;
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
