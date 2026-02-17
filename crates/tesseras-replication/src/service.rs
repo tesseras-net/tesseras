@@ -1,4 +1,4 @@
-use tesseras_core::ports::{BlobStore, DhtPort, FragmentStore, ReciprocityLedger};
+use tesseras_core::ports::{BlobStore, DhtPort, FragmentStore, ReciprocityLedger, TombstoneRepository};
 use tesseras_core::replication::{
     Attestation, AttestationEntry, FragmentEnvelope, FragmentId, FragmentationTier,
     MAX_TESSERA_SIZE, ReplicateAck,
@@ -48,6 +48,7 @@ pub struct ReplicationService {
     blobs: Box<dyn BlobStore>,
     config: ReplicationConfig,
     cas: Option<std::sync::Arc<tesseras_storage::CasStore>>,
+    tombstone_repo: Option<Box<dyn TombstoneRepository>>,
 }
 
 impl ReplicationService {
@@ -67,11 +68,17 @@ impl ReplicationService {
             blobs,
             config,
             cas: None,
+            tombstone_repo: None,
         }
     }
 
     pub fn with_cas(mut self, cas: std::sync::Arc<tesseras_storage::CasStore>) -> Self {
         self.cas = Some(cas);
+        self
+    }
+
+    pub fn with_tombstone_repo(mut self, repo: Box<dyn TombstoneRepository>) -> Self {
+        self.tombstone_repo = Some(repo);
         self
     }
 
@@ -416,6 +423,20 @@ impl ReplicationService {
         let mut checked = 0;
 
         for hash in &tessera_hashes {
+            // Skip tombstoned hashes
+            if let Some(ref tombstone_repo) = self.tombstone_repo {
+                match tombstone_repo.exists(hash) {
+                    Ok(true) => {
+                        tracing::debug!(tessera = %hash, "skipping tombstoned hash in repair");
+                        continue;
+                    }
+                    Err(e) => {
+                        tracing::warn!(tessera = %hash, error = %e, "tombstone check failed");
+                    }
+                    _ => {}
+                }
+            }
+
             checked += 1;
             let local_fragments = match self.fragments.list_fragments(hash) {
                 Ok(f) => f,
@@ -544,6 +565,16 @@ mod tests {
             fn best_peers_for_replication(&self, count: usize) -> Result<Vec<NodeId>, CoreError>;
             fn mark_institutional(&self, peer: &NodeId) -> Result<(), CoreError>;
             fn is_institutional(&self, peer: &NodeId) -> Result<bool, CoreError>;
+        }
+    }
+
+    mock! {
+        pub Tombstones {}
+        impl TombstoneRepository for Tombstones {
+            fn store(&self, tombstone: &tesseras_core::Tombstone) -> Result<(), CoreError>;
+            fn find(&self, hash: &ContentHash) -> Result<Option<tesseras_core::Tombstone>, CoreError>;
+            fn exists(&self, hash: &ContentHash) -> Result<bool, CoreError>;
+            fn list(&self) -> Result<Vec<tesseras_core::Tombstone>, CoreError>;
         }
     }
 
@@ -945,5 +976,52 @@ mod tests {
             result,
             Err(ReplicationError::NoFragmentsAvailable { .. })
         ));
+    }
+
+    #[tokio::test]
+    async fn repair_loop_skips_tombstoned_hash() {
+        let tombstoned_hash = hash(0xAA);
+
+        let mut fragments = MockFragments::new();
+        // list_tessera_hashes returns two hashes: one tombstoned, one not
+        let h1 = tombstoned_hash;
+        let h2 = hash(0xBB);
+        fragments
+            .expect_list_tessera_hashes()
+            .once()
+            .returning(move || Ok(vec![h1, h2]));
+
+        // list_fragments should only be called for the non-tombstoned hash
+        fragments
+            .expect_list_fragments()
+            .once()
+            .withf(move |h| *h == hash(0xBB))
+            .returning(|_| Ok(vec![]));
+
+        let mut tombstone_repo = MockTombstones::new();
+        tombstone_repo
+            .expect_exists()
+            .withf(move |h| *h == tombstoned_hash)
+            .returning(|_| Ok(true));
+        tombstone_repo
+            .expect_exists()
+            .withf(move |h| *h == hash(0xBB))
+            .returning(|_| Ok(false));
+
+        let service = ReplicationService::new(
+            NodeIdentity {
+                node_id: node(0xff),
+                public_key: [0; 32],
+                nonce: 0,
+            },
+            Box::new(MockDht::new()),
+            Box::new(fragments),
+            Box::new(MockLedger::new()),
+            Box::new(MockBlobs::new()),
+            ReplicationConfig::default(),
+        )
+        .with_tombstone_repo(Box::new(tombstone_repo));
+
+        service.run_repair_sweep().await;
     }
 }
