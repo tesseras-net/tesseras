@@ -1,0 +1,115 @@
+services:
+  # Bootstrap nodes
+  bootstrap1:
+    build:
+      context: ../..
+      dockerfile: tests/e2e/Dockerfile
+    command: ["admin", "daemon", "start"]
+    volumes:
+      - bootstrap1-data:/data
+    environment:
+      - TES_IDENTITY=/data
+    networks:
+      tesseras-net:
+        ipv4_address: 10.10.0.10
+
+  bootstrap2:
+    build:
+      context: ../..
+      dockerfile: tests/e2e/Dockerfile
+    command: ["admin", "daemon", "start"]
+    volumes:
+      - bootstrap2-data:/data
+    environment:
+      - TES_IDENTITY=/data
+    networks:
+      tesseras-net:
+        ipv4_address: 10.10.0.11
+
+  # Region A nodes
+  alice:
+    build:
+      context: ../..
+      dockerfile: tests/e2e/Dockerfile
+    command: ["sleep", "infinity"]
+    entrypoint: ["/bin/sh", "-c"]
+    volumes:
+      - alice-data:/data
+    environment:
+      - TES_IDENTITY=/data
+    networks:
+      tesseras-net:
+        ipv4_address: 10.10.1.10
+
+  bob:
+    build:
+      context: ../..
+      dockerfile: tests/e2e/Dockerfile
+    command: ["sleep", "infinity"]
+    entrypoint: ["/bin/sh", "-c"]
+    volumes:
+      - bob-data:/data
+    environment:
+      - TES_IDENTITY=/data
+    networks:
+      tesseras-net:
+        ipv4_address: 10.10.1.11
+
+  charlie:
+    build:
+      context: ../..
+      dockerfile: tests/e2e/Dockerfile
+    command: ["sleep", "infinity"]
+    entrypoint: ["/bin/sh", "-c"]
+    volumes:
+      - charlie-data:/data
+    environment:
+      - TES_IDENTITY=/data
+    networks:
+      tesseras-net:
+        ipv4_address: 10.10.1.12
+
+  # Region B nodes
+  diana:
+    build:
+      context: ../..
+      dockerfile: tests/e2e/Dockerfile
+    command: ["sleep", "infinity"]
+    entrypoint: ["/bin/sh", "-c"]
+    volumes:
+      - diana-data:/data
+    environment:
+      - TES_IDENTITY=/data
+    networks:
+      tesseras-net:
+        ipv4_address: 10.10.2.10
+
+  eve:
+    build:
+      context: ../..
+      dockerfile: tests/e2e/Dockerfile
+    command: ["sleep", "infinity"]
+    entrypoint: ["/bin/sh", "-c"]
+    volumes:
+      - eve-data:/data
+    environment:
+      - TES_IDENTITY=/data
+    networks:
+      tesseras-net:
+        ipv4_address: 10.10.2.11
+
+networks:
+  tesseras-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.10.0.0/16
+
+volumes:
+  bootstrap1-data:
+  bootstrap2-data:
+  alice-data:
+  bob-data:
+  charlie-data:
+  diana-data:
+  eve-data:
