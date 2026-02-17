@@ -24,6 +24,7 @@ dirs = { workspace = true }
 quinn = { workspace = true }
 rustls = { workspace = true }
 rcgen = { workspace = true }
+reed-solomon-erasure = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
