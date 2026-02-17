@@ -110,6 +110,10 @@ impl FragmentStore for CachedFragmentStore {
     fn verify_fragment(&self, id: &FragmentId) -> Result<bool, CoreError> {
         self.inner.verify_fragment(id)
     }
+
+    fn list_tessera_hashes(&self) -> Result<Vec<ContentHash>, CoreError> {
+        self.inner.list_tessera_hashes()
+    }
 }
 
 #[cfg(test)]
@@ -153,6 +157,9 @@ mod tests {
         }
         fn verify_fragment(&self, _id: &FragmentId) -> Result<bool, CoreError> {
             Ok(true)
+        }
+        fn list_tessera_hashes(&self) -> Result<Vec<ContentHash>, CoreError> {
+            Ok(vec![])
         }
     }
 

@@ -125,6 +125,8 @@ pub trait FragmentStore: Send + Sync {
     fn delete_fragment(&self, id: &FragmentId) -> Result<(), CoreError>;
     fn list_fragments(&self, tessera_hash: &ContentHash) -> Result<Vec<FragmentId>, CoreError>;
     fn verify_fragment(&self, id: &FragmentId) -> Result<bool, CoreError>;
+    /// List all tessera hashes that have local fragments.
+    fn list_tessera_hashes(&self) -> Result<Vec<ContentHash>, CoreError>;
 }
 
 /// Bilateral reciprocity tracking. Sync.

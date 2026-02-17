@@ -115,6 +115,7 @@ mod tests {
             fn delete_fragment(&self, id: &FragmentId) -> Result<(), CoreError>;
             fn list_fragments(&self, tessera_hash: &ContentHash) -> Result<Vec<FragmentId>, CoreError>;
             fn verify_fragment(&self, id: &FragmentId) -> Result<bool, CoreError>;
+            fn list_tessera_hashes(&self) -> Result<Vec<ContentHash>, CoreError>;
         }
     }
 

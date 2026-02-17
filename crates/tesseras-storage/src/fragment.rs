@@ -158,6 +158,29 @@ impl FragmentStore for FsFragmentStore {
             .map_err(|_| CoreError::Database(format!("invalid hash: {stored_hex}")))?;
         Ok(computed == stored)
     }
+
+    fn list_tessera_hashes(&self) -> Result<Vec<ContentHash>, CoreError> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn
+            .prepare("SELECT DISTINCT tessera_hash FROM fragment_refs ORDER BY tessera_hash")
+            .map_err(|e| CoreError::Database(e.to_string()))?;
+        let rows = stmt
+            .query_map([], |row| {
+                let hash_hex: String = row.get(0)?;
+                Ok(hash_hex)
+            })
+            .map_err(|e| CoreError::Database(e.to_string()))?;
+
+        let mut hashes = Vec::new();
+        for row in rows {
+            let hex = row.map_err(|e| CoreError::Database(e.to_string()))?;
+            let hash: ContentHash = hex
+                .parse()
+                .map_err(|_| CoreError::Database(format!("invalid hash: {hex}")))?;
+            hashes.push(hash);
+        }
+        Ok(hashes)
+    }
 }
 
 #[cfg(test)]
