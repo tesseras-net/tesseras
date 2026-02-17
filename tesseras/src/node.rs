@@ -103,7 +103,16 @@ impl Node {
     ) -> Result<Self, NodeError> {
         let storage = Storage::open(data_dir).map_err(|e| NodeError::Storage(e.to_string()))?;
         let node_id = identity.node_id();
-        let dht = Arc::new(Mutex::new(Dht::new(node_id)));
+        let mut dht = Dht::new(node_id);
+
+        // Restore persisted peers into the routing table
+        if let Ok(peers) = storage.load_peers() {
+            for peer in peers {
+                dht.routing_table.insert(peer);
+            }
+        }
+
+        let dht = Arc::new(Mutex::new(dht));
 
         Ok(Self {
             storage: Arc::new(Mutex::new(storage)),
@@ -1021,8 +1030,17 @@ impl Node {
         self.shutdown_tx.as_ref().map(|tx| tx.subscribe())
     }
 
-    /// Close the transport and signal background tasks to stop.
+    /// Close the transport, persist DHT peers, and signal background tasks to stop.
     pub fn shutdown(&self) {
+        // Persist routing table peers before shutting down
+        let peers = self.dht.lock().unwrap().routing_table.all_peers();
+        if !peers.is_empty() {
+            let storage = self.storage.lock().unwrap();
+            if let Err(e) = storage.save_peers(&peers) {
+                warn!("failed to persist peers on shutdown: {e}");
+            }
+        }
+
         if let Some(tx) = &self.shutdown_tx {
             let _ = tx.send(true);
         }
@@ -1193,10 +1211,11 @@ async fn handle_connection(
                 };
 
                 if let Some(data) = blob_data {
+                    let blob_size = data.len() as u64;
                     let resp = DhtMessage::FetchBlobResponse {
                         sender: local_node_id,
                         found: true,
-                        size: data.len() as u64,
+                        size: blob_size,
                     };
                     if let Err(e) = net::send_message(&mut send, &resp).await {
                         debug!("send FetchBlobResponse error to {remote_addr}: {e}");
@@ -1205,6 +1224,9 @@ async fn handle_connection(
                     if let Err(e) = net::stream_blob(&mut send, &data).await {
                         debug!("stream blob error to {remote_addr}: {e}");
                     }
+                    // Track reciprocity: we served bytes to this peer
+                    let storage = storage.lock().unwrap();
+                    let _ = storage.record_bytes_served(sender, blob_size);
                 } else {
                     let resp = DhtMessage::FetchBlobResponse {
                         sender: local_node_id,
@@ -1879,8 +1901,10 @@ mod tests {
         assert!(local.is_some());
 
         // The blob should also be available locally
-        let storage_b = node_b.storage.lock().unwrap();
-        assert!(storage_b.has_blob(&fetched.memories[0].blob_hash));
+        {
+            let storage_b = node_b.storage.lock().unwrap();
+            assert!(storage_b.has_blob(&fetched.memories[0].blob_hash));
+        }
 
         node_a.shutdown();
         node_b.shutdown();
@@ -1950,11 +1974,13 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
         // Verify C's routing table now knows about A (relay forwarded the message)
-        let c_dht = node_c.dht.lock().unwrap();
-        let known_peers = c_dht.routing_table.len();
-        // C should know at least B (from bootstrap) — relay adds no new routing info
-        // since the RelayedMessage has origin=A but comes from B's address
-        assert!(known_peers >= 1);
+        {
+            let c_dht = node_c.dht.lock().unwrap();
+            let known_peers = c_dht.routing_table.len();
+            // C should know at least B (from bootstrap) — relay adds no new routing info
+            // since the RelayedMessage has origin=A but comes from B's address
+            assert!(known_peers >= 1);
+        }
 
         node_a.shutdown();
         node_b.shutdown();
@@ -2058,5 +2084,40 @@ mod tests {
         assert!(!rl.check(ip1));
         // Different IP should still be allowed
         assert!(rl.check(ip2));
+    }
+
+    #[test]
+    fn peers_persist_across_restarts() {
+        let tmp = tempfile::tempdir().unwrap();
+        let data_dir = DataDir::open(tmp.path()).unwrap();
+
+        // Create first node, add a peer to routing table, shut down
+        let identity = Identity::generate();
+        let mut config = NodeConfig::default();
+        config.stun_servers = Vec::new();
+        let node1 = Node::new(data_dir.clone(), identity, config.clone()).unwrap();
+
+        let fake_peer = PeerInfo {
+            node_id: NodeId::new([7u8; 32]),
+            addr: "10.0.0.1:4433".parse().unwrap(),
+        };
+        node1
+            .dht
+            .lock()
+            .unwrap()
+            .routing_table
+            .insert(fake_peer.clone());
+        assert_eq!(node1.dht.lock().unwrap().routing_table.len(), 1);
+
+        // Shutdown persists peers
+        node1.shutdown();
+
+        // Create second node with same data dir — should restore peers
+        let identity2 = Identity::generate();
+        let node2 = Node::new(data_dir, identity2, config).unwrap();
+        let peers = node2.dht.lock().unwrap().routing_table.all_peers();
+        assert_eq!(peers.len(), 1);
+        assert_eq!(peers[0].node_id, fake_peer.node_id);
+        assert_eq!(peers[0].addr, fake_peer.addr);
     }
 }

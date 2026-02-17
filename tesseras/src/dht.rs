@@ -231,6 +231,14 @@ impl RoutingTable {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    /// Get all peers in the routing table.
+    pub fn all_peers(&self) -> Vec<PeerInfo> {
+        self.buckets
+            .iter()
+            .flat_map(|b| b.peers.iter().cloned())
+            .collect()
+    }
 }
 
 /// DHT pointer store: maps content hashes to provider peers.

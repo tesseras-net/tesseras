@@ -1,9 +1,14 @@
 use std::io::{self, Read, Write};
+use std::net::SocketAddr;
 
 use rusqlite::Connection;
 
 use crate::config::DataDir;
-use crate::types::{ContentHash, MediaType, Memory, Tessera};
+use crate::dht::PeerInfo;
+use crate::types::{ContentHash, MediaType, Memory, NodeId, Tessera};
+
+/// Current schema version.
+const SCHEMA_VERSION: u32 = 2;
 
 /// Storage engine: SQLite metadata + blob CAS on filesystem.
 pub struct Storage {
@@ -17,11 +22,49 @@ impl Storage {
         let db = Connection::open(data_dir.database_path())?;
         db.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
         let storage = Self { db, data_dir };
-        storage.migrate()?;
+        storage.run_migrations()?;
         Ok(storage)
     }
 
-    fn migrate(&self) -> Result<(), StorageError> {
+    /// Versioned migration system. Each version adds its DDL idempotently.
+    fn run_migrations(&self) -> Result<(), StorageError> {
+        // Ensure the meta table exists for tracking schema version
+        self.db.execute_batch(
+            "CREATE TABLE IF NOT EXISTS schema_meta (
+                key   TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );",
+        )?;
+
+        let current: u32 = self
+            .db
+            .query_row(
+                "SELECT value FROM schema_meta WHERE key = 'version'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
+
+        if current < 1 {
+            self.migrate_v1()?;
+        }
+        if current < 2 {
+            self.migrate_v2()?;
+        }
+
+        // Update stored version
+        self.db.execute(
+            "INSERT OR REPLACE INTO schema_meta (key, value) VALUES ('version', ?1)",
+            rusqlite::params![SCHEMA_VERSION.to_string()],
+        )?;
+
+        Ok(())
+    }
+
+    /// V1: Original schema — tesseras, memories, circles, peers, fragments.
+    fn migrate_v1(&self) -> Result<(), StorageError> {
         self.db.execute_batch(
             "CREATE TABLE IF NOT EXISTS tesseras (
                 hash        TEXT PRIMARY KEY,
@@ -50,7 +93,7 @@ impl Storage {
 
             CREATE TABLE IF NOT EXISTS peers (
                 node_id     TEXT PRIMARY KEY,
-                addresses   TEXT NOT NULL,
+                addr        TEXT NOT NULL,
                 last_seen   TEXT NOT NULL
             );
 
@@ -64,6 +107,19 @@ impl Storage {
                 data_shards     INTEGER NOT NULL,
                 parity_shards   INTEGER NOT NULL,
                 UNIQUE(blob_hash, fragment_index)
+            );",
+        )?;
+        Ok(())
+    }
+
+    /// V2: Add reciprocity ledger for bilateral storage accounting.
+    fn migrate_v2(&self) -> Result<(), StorageError> {
+        self.db.execute_batch(
+            "CREATE TABLE IF NOT EXISTS reciprocity_ledger (
+                peer_node_id    TEXT PRIMARY KEY,
+                bytes_stored    INTEGER NOT NULL DEFAULT 0,
+                bytes_served    INTEGER NOT NULL DEFAULT 0,
+                last_updated    TEXT NOT NULL
             );",
         )?;
         Ok(())
@@ -356,6 +412,113 @@ impl Storage {
         )?;
         Ok(())
     }
+
+    // --- Peer persistence ---
+
+    /// Save DHT routing table peers to the database.
+    pub fn save_peers(&self, peers: &[PeerInfo]) -> Result<(), StorageError> {
+        let now = chrono::Utc::now().to_rfc3339();
+        let tx = self.db.unchecked_transaction()?;
+        tx.execute("DELETE FROM peers", [])?;
+        for peer in peers {
+            tx.execute(
+                "INSERT INTO peers (node_id, addr, last_seen) VALUES (?1, ?2, ?3)",
+                rusqlite::params![peer.node_id.to_string(), peer.addr.to_string(), now],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Load persisted peers from the database.
+    pub fn load_peers(&self) -> Result<Vec<PeerInfo>, StorageError> {
+        let mut stmt = self.db.prepare("SELECT node_id, addr FROM peers")?;
+        let peers = stmt
+            .query_map([], |row| {
+                let node_id_str: String = row.get(0)?;
+                let addr_str: String = row.get(1)?;
+                Ok((node_id_str, addr_str))
+            })?
+            .filter_map(|r| {
+                let (nid_s, addr_s) = r.ok()?;
+                let node_id: NodeId = nid_s.parse().ok()?;
+                let addr: SocketAddr = addr_s.parse().ok()?;
+                Some(PeerInfo { node_id, addr })
+            })
+            .collect();
+        Ok(peers)
+    }
+
+    // --- Reciprocity ledger ---
+
+    /// Record bytes stored for a peer (we store their fragments).
+    pub fn record_bytes_stored(
+        &self,
+        peer_node_id: &NodeId,
+        bytes: u64,
+    ) -> Result<(), StorageError> {
+        let now = chrono::Utc::now().to_rfc3339();
+        self.db.execute(
+            "INSERT INTO reciprocity_ledger (peer_node_id, bytes_stored, bytes_served, last_updated)
+             VALUES (?1, ?2, 0, ?3)
+             ON CONFLICT(peer_node_id) DO UPDATE SET
+                bytes_stored = bytes_stored + excluded.bytes_stored,
+                last_updated = excluded.last_updated",
+            rusqlite::params![peer_node_id.to_string(), bytes as i64, now],
+        )?;
+        Ok(())
+    }
+
+    /// Record bytes served to a peer (they fetched our fragments).
+    pub fn record_bytes_served(
+        &self,
+        peer_node_id: &NodeId,
+        bytes: u64,
+    ) -> Result<(), StorageError> {
+        let now = chrono::Utc::now().to_rfc3339();
+        self.db.execute(
+            "INSERT INTO reciprocity_ledger (peer_node_id, bytes_stored, bytes_served, last_updated)
+             VALUES (?1, 0, ?2, ?3)
+             ON CONFLICT(peer_node_id) DO UPDATE SET
+                bytes_served = bytes_served + excluded.bytes_served,
+                last_updated = excluded.last_updated",
+            rusqlite::params![peer_node_id.to_string(), bytes as i64, now],
+        )?;
+        Ok(())
+    }
+
+    /// Get the reciprocity balance for a peer.
+    /// Positive means they owe us (we stored more for them than they served us).
+    pub fn get_reciprocity_balance(&self, peer_node_id: &NodeId) -> Result<i64, StorageError> {
+        let result = self.db.query_row(
+            "SELECT bytes_stored - bytes_served FROM reciprocity_ledger WHERE peer_node_id = ?1",
+            rusqlite::params![peer_node_id.to_string()],
+            |row| row.get(0),
+        );
+        match result {
+            Ok(balance) => Ok(balance),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(0),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// List all reciprocity ledger entries.
+    pub fn list_reciprocity(&self) -> Result<Vec<ReciprocityEntry>, StorageError> {
+        let mut stmt = self.db.prepare(
+            "SELECT peer_node_id, bytes_stored, bytes_served, last_updated FROM reciprocity_ledger",
+        )?;
+        let entries = stmt
+            .query_map([], |row| {
+                Ok(ReciprocityEntry {
+                    peer_node_id: row.get(0)?,
+                    bytes_stored: row.get::<_, i64>(1)? as u64,
+                    bytes_served: row.get::<_, i64>(2)? as u64,
+                    last_updated: row.get(3)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(entries)
+    }
 }
 
 /// Fragment metadata stored in SQLite.
@@ -367,6 +530,15 @@ pub struct FragmentMeta {
     pub original_size: usize,
     pub data_shards: usize,
     pub parity_shards: usize,
+}
+
+/// A reciprocity ledger entry showing bilateral storage balance with a peer.
+#[derive(Debug, Clone)]
+pub struct ReciprocityEntry {
+    pub peer_node_id: String,
+    pub bytes_stored: u64,
+    pub bytes_served: u64,
+    pub last_updated: String,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -566,5 +738,102 @@ mod tests {
         let hash = storage.store_blob_bytes(data).unwrap();
         let read_back = storage.read_blob_bytes(&hash).unwrap();
         assert_eq!(read_back, data);
+    }
+
+    #[test]
+    fn versioned_migration_idempotent() {
+        let tmp = tempfile::tempdir().unwrap();
+        let data_dir = DataDir::open(tmp.path()).unwrap();
+
+        // Open twice — second time should detect version and skip migrations
+        let _s1 = Storage::open(data_dir.clone()).unwrap();
+        drop(_s1);
+        let s2 = Storage::open(data_dir).unwrap();
+
+        // Verify schema is usable
+        s2.store_blob_bytes(b"works").unwrap();
+    }
+
+    #[test]
+    fn save_and_load_peers() {
+        let (_tmp, storage) = test_storage();
+        let peers = vec![
+            PeerInfo {
+                node_id: NodeId::new([1u8; 32]),
+                addr: "127.0.0.1:4433".parse().unwrap(),
+            },
+            PeerInfo {
+                node_id: NodeId::new([2u8; 32]),
+                addr: "192.168.1.1:5000".parse().unwrap(),
+            },
+        ];
+
+        storage.save_peers(&peers).unwrap();
+        let loaded = storage.load_peers().unwrap();
+        assert_eq!(loaded.len(), 2);
+
+        // Check that node IDs match (order may differ)
+        let ids: Vec<String> = loaded.iter().map(|p| p.node_id.to_string()).collect();
+        assert!(ids.contains(&peers[0].node_id.to_string()));
+        assert!(ids.contains(&peers[1].node_id.to_string()));
+    }
+
+    #[test]
+    fn save_peers_replaces_old() {
+        let (_tmp, storage) = test_storage();
+        let peers1 = vec![PeerInfo {
+            node_id: NodeId::new([1u8; 32]),
+            addr: "127.0.0.1:4433".parse().unwrap(),
+        }];
+        storage.save_peers(&peers1).unwrap();
+
+        let peers2 = vec![PeerInfo {
+            node_id: NodeId::new([2u8; 32]),
+            addr: "10.0.0.1:5000".parse().unwrap(),
+        }];
+        storage.save_peers(&peers2).unwrap();
+
+        let loaded = storage.load_peers().unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].node_id.to_string(), peers2[0].node_id.to_string());
+    }
+
+    #[test]
+    fn reciprocity_ledger_basic() {
+        let (_tmp, storage) = test_storage();
+        let peer = NodeId::new([42u8; 32]);
+
+        // Initially zero balance
+        assert_eq!(storage.get_reciprocity_balance(&peer).unwrap(), 0);
+
+        // Record bytes stored (we store for them)
+        storage.record_bytes_stored(&peer, 1000).unwrap();
+        assert_eq!(storage.get_reciprocity_balance(&peer).unwrap(), 1000);
+
+        // Record bytes served (they fetch from us)
+        storage.record_bytes_served(&peer, 400).unwrap();
+        assert_eq!(storage.get_reciprocity_balance(&peer).unwrap(), 600);
+
+        // Accumulates
+        storage.record_bytes_stored(&peer, 200).unwrap();
+        assert_eq!(storage.get_reciprocity_balance(&peer).unwrap(), 800);
+    }
+
+    #[test]
+    fn list_reciprocity_entries() {
+        let (_tmp, storage) = test_storage();
+        let peer1 = NodeId::new([1u8; 32]);
+        let peer2 = NodeId::new([2u8; 32]);
+
+        storage.record_bytes_stored(&peer1, 500).unwrap();
+        storage.record_bytes_served(&peer2, 300).unwrap();
+
+        let entries = storage.list_reciprocity().unwrap();
+        assert_eq!(entries.len(), 2);
+
+        let e1 = entries.iter().find(|e| e.bytes_stored == 500).unwrap();
+        assert_eq!(e1.bytes_served, 0);
+        let e2 = entries.iter().find(|e| e.bytes_served == 300).unwrap();
+        assert_eq!(e2.bytes_stored, 0);
     }
 }
