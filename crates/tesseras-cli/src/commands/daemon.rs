@@ -5,6 +5,14 @@ use anyhow::{Context, Result};
 
 use super::init::expand_tilde;
 
+/// Resolve the daemon socket path from an optional override or the platform default.
+pub fn resolve_socket(socket: &Option<PathBuf>) -> Result<PathBuf> {
+    match socket {
+        Some(p) => Ok(p.clone()),
+        None => tesseras_rpc::default_socket_path().map_err(|e| anyhow::anyhow!("{e}")),
+    }
+}
+
 fn pid_path(data_dir: &Path) -> PathBuf {
     data_dir.join("tesd.pid")
 }

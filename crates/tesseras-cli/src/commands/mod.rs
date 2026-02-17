@@ -1,6 +1,8 @@
+pub mod circle;
 pub mod contact;
 pub mod create;
 pub mod daemon;
+pub mod delete;
 pub mod export;
 pub mod fetch;
 pub mod heir;

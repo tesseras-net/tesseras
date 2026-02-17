@@ -112,6 +112,13 @@ enum Commands {
         hash: String,
     },
 
+    /// Delete a tessera and retract from the network
+    #[command(visible_alias = "rm")]
+    Delete {
+        /// Tessera hash or prefix
+        hash: String,
+    },
+
     /// Export tessera to a self-contained directory
     #[command(visible_alias = "e")]
     Export {
@@ -119,6 +126,13 @@ enum Commands {
         hash: String,
         /// Destination directory
         dest: String,
+    },
+
+    /// Manage circles (trusted groups)
+    #[command(visible_alias = "circle")]
+    Circles {
+        #[command(subcommand)]
+        command: commands::circle::CircleCommands,
     },
 
     /// Manage contacts (@aliases for public keys)
@@ -266,6 +280,10 @@ async fn main() -> Result<()> {
         }
         Commands::Create(ref args) => {
             commands::create::run(args, &cli.data_dir, &cli.socket).await
+        }
+        Commands::Delete { ref hash } => commands::delete::run(hash, &cli.socket).await,
+        Commands::Circles { ref command } => {
+            commands::circle::run(command, &cli.socket).await
         }
         Commands::Contact { ref command } => {
             commands::contact::run(command, &cli.data_dir).await
