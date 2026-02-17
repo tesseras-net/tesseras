@@ -145,6 +145,9 @@ enum Commands {
         command: IdentityCommands,
     },
 
+    /// Show daemon and network status
+    Status,
+
     /// Generate shell completions for your shell to stdout
     #[command(hide = true)]
     Completions {
@@ -337,6 +340,7 @@ async fn main() -> Result<()> {
                 }
             },
         },
+        Commands::Status => commands::daemon::run_status(&cli.data_dir).await,
         Commands::Completions { shell } => {
             let mut cmd = Cli::command();
             clap_complete::generate(shell, &mut cmd, "tes", &mut io::stdout());
