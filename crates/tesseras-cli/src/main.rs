@@ -82,6 +82,9 @@ pub(crate) struct OutputConfig {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Share memories on the network
+    Push(commands::push::PushArgs),
+
     /// Create a tessera from a directory of files
     #[command(visible_alias = "c")]
     Create(commands::create::CreateArgs),
@@ -243,6 +246,9 @@ async fn main() -> Result<()> {
     setup_logging(cli.verbose, cli.quiet);
 
     match cli.command {
+        Commands::Push(ref args) => {
+            commands::push::run(args, &cli.data_dir, &cli.socket).await
+        }
         Commands::Create(ref args) => {
             commands::create::run(args, &cli.data_dir, &cli.socket).await
         }
