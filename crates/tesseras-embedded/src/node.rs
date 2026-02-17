@@ -59,6 +59,16 @@ impl ReplicationHandler for ReplicationHandlerAdapter {
             .handle_attestation_request(tessera_hash)
             .map_err(|e| CoreError::Network(e.to_string()))
     }
+
+    async fn handle_fetch_fragment(
+        &self,
+        tessera_hash: &ContentHash,
+        fragment_index: u16,
+    ) -> Result<Option<FragmentEnvelope>, CoreError> {
+        self.service
+            .serve_fragment(tessera_hash, fragment_index)
+            .map_err(|e| CoreError::Network(e.to_string()))
+    }
 }
 
 pub struct EmbeddedNode {

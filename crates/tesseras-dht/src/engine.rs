@@ -1341,6 +1341,14 @@ mod tests {
                 signature: vec![0xde, 0xad],
             })
         }
+
+        async fn handle_fetch_fragment(
+            &self,
+            _tessera_hash: &ContentHash,
+            _fragment_index: u16,
+        ) -> Result<Option<FragmentEnvelope>, tesseras_core::CoreError> {
+            Ok(None)
+        }
     }
 
     #[tokio::test]

@@ -491,6 +491,40 @@ impl ReplicationService {
         }
     }
 
+    /// Serve a locally-held fragment to a requesting peer.
+    pub fn serve_fragment(
+        &self,
+        tessera_hash: &ContentHash,
+        fragment_index: u16,
+    ) -> Result<Option<FragmentEnvelope>, ReplicationError> {
+        let local = self.fragments.list_fragments(tessera_hash)?;
+        let frag_id = local.into_iter().find(|f| f.index == fragment_index);
+
+        let Some(frag_id) = frag_id else {
+            return Ok(None);
+        };
+
+        let data = self.fragments.read_fragment(&frag_id)?;
+        let fragment_size = data.len() as u64;
+
+        // Use a minimal Small tier plan — the receiver primarily cares about id + data.
+        let plan = tesseras_core::replication::FragmentPlan {
+            tier: FragmentationTier::Small {
+                replication_factor: 7,
+            },
+            tessera_hash: *tessera_hash,
+            tessera_size: fragment_size,
+        };
+
+        Ok(Some(FragmentEnvelope {
+            id: frag_id,
+            plan,
+            original_tessera_size: fragment_size,
+            fragment_size,
+            data,
+        }))
+    }
+
     pub fn identity(&self) -> &NodeIdentity {
         &self.identity
     }

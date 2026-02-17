@@ -264,6 +264,14 @@ impl ReplicationHandler for MockHandler {
             signature: vec![],
         })
     }
+
+    async fn handle_fetch_fragment(
+        &self,
+        _tessera_hash: &ContentHash,
+        _fragment_index: u16,
+    ) -> Result<Option<tesseras_core::replication::FragmentEnvelope>, CoreError> {
+        Ok(None)
+    }
 }
 
 #[tokio::test]
