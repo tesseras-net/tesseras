@@ -37,9 +37,12 @@ pub struct CreateArgs {
     /// Location description
     #[arg(long)]
     pub location: Option<String>,
+    /// Skip publishing to network (offline only)
+    #[arg(long)]
+    pub no_publish: bool,
 }
 
-pub async fn run(args: &CreateArgs, data_dir: &str) -> Result<()> {
+pub async fn run(args: &CreateArgs, data_dir: &str, socket: &Option<PathBuf>) -> Result<()> {
     let base = expand_tilde(data_dir);
 
     // Auto-initialize identity and database if needed
@@ -131,6 +134,48 @@ pub async fn run(args: &CreateArgs, data_dir: &str) -> Result<()> {
     let service = build_service(&base)?;
     let content_hash = service.create(input).await?;
     println!("Created tessera: {}", content_hash.to_base32());
+
+    // 6. Auto-publish to network (unless --no-publish)
+    if !args.no_publish {
+        let socket_path = match socket {
+            Some(p) => p.clone(),
+            None => tesseras_rpc::default_socket_path()
+                .map_err(|e| anyhow::anyhow!("{e}"))?,
+        };
+
+        // Auto-start daemon if not running
+        if !super::daemon::is_daemon_running(&base) {
+            eprintln!("Starting daemon...");
+            super::daemon::start_daemon(&base)?;
+        }
+
+        // Publish via RPC
+        match tesseras_rpc::DaemonClient::connect(&socket_path) {
+            Ok(mut client) => {
+                match client.call(&tesseras_rpc::Request::Publish { hash: content_hash }) {
+                    Ok(tesseras_rpc::Response::Published {
+                        fragments_created, ..
+                    }) => {
+                        println!("Published to network ({fragments_created} fragments)");
+                    }
+                    Ok(_) => {
+                        eprintln!("Warning: unexpected response from daemon");
+                    }
+                    Err(e) => {
+                        eprintln!("Warning: publish failed: {e}");
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("Warning: could not connect to daemon: {e}");
+                eprintln!(
+                    "Tessera saved locally. Publish later with: tes net publish {}",
+                    content_hash.to_base32_short(8)
+                );
+            }
+        }
+    }
+
     Ok(())
 }
 

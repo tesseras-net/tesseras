@@ -243,7 +243,9 @@ async fn main() -> Result<()> {
     setup_logging(cli.verbose, cli.quiet);
 
     match cli.command {
-        Commands::Create(ref args) => commands::create::run(args, &cli.data_dir).await,
+        Commands::Create(ref args) => {
+            commands::create::run(args, &cli.data_dir, &cli.socket).await
+        }
         Commands::Daemon { command } => match command {
             DaemonCommands::Start => commands::daemon::run_start(&cli.data_dir).await,
             DaemonCommands::Stop => commands::daemon::run_stop(&cli.data_dir).await,
