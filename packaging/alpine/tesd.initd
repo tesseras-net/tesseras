@@ -2,8 +2,8 @@
 
 description="Tesseras P2P Daemon"
 
-command="/usr/bin/tesd"
-command_args="${TESD_OPTS}"
+command="/usr/bin/tes"
+command_args="--identity=/var/lib/tesseras admin daemon start --foreground ${TESD_OPTS}"
 command_user="tesseras:tesseras"
 command_background=yes
 pidfile="/run/${RC_SVCNAME}.pid"

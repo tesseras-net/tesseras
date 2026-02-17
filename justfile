@@ -28,3 +28,23 @@ check: clippy fmt test
 # Install the CLI binary
 install:
     cargo install --path tes
+
+# Build Arch Linux package (run on Arch)
+arch:
+    cd packaging/archlinux && TESSERAS_ROOT="$(pwd)/../.." makepkg -sf
+
+# Build Alpine package (run on Alpine)
+alpine:
+    cd packaging/alpine && TESSERAS_ROOT="$(pwd)/../.." abuild -r
+
+# Build OpenBSD package (run on OpenBSD)
+openbsd:
+    sh packaging/openbsd/create-package.sh
+
+# Build OpenBSD package via QEMU/SSH
+openbsd-remote host="localhost" port="2222":
+    OPENBSD_HOST={{host}} OPENBSD_PORT={{port}} sh packaging/openbsd/qemu-build.sh
+
+# Build Windows binary and installer via SSH
+windows host user="$USER":
+    WIN_HOST={{host}} WIN_USER={{user}} sh packaging/windows/build.sh

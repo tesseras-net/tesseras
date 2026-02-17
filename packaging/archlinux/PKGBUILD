@@ -1,7 +1,7 @@
 # Maintainer: tesseras maintainers
 pkgname=tesseras
 pkgver=0.1.0
-pkgrel=1
+pkgrel=2
 pkgdesc="P2P network for preserving human memories across millennia"
 arch=('x86_64' 'aarch64')
 url="https://tesseras.net"
@@ -25,18 +25,17 @@ build() {
     export RUSTUP_TOOLCHAIN=stable
     export CARGO_TARGET_DIR="$srcdir/target"
     cd "$_root"
-    cargo build --frozen --release -p tesseras-daemon -p tesseras-cli
+    cargo build --frozen --release -p tes
 }
 
 package() {
-    # Binaries
-    install -Dm755 "$srcdir/target/release/tesd" "$pkgdir/usr/bin/tesd"
+    # Binary
     install -Dm755 "$srcdir/target/release/tes" "$pkgdir/usr/bin/tes"
 
-    # Config (reuse Debian default)
+    # Config
     install -Dm644 "$_root/packaging/debian/tesd.default.toml" "$pkgdir/etc/tesseras/config.toml"
 
-    # Systemd service (reuse Debian unit)
+    # Systemd service
     install -Dm644 "$_root/packaging/debian/tesd.service" "$pkgdir/usr/lib/systemd/system/tesd.service"
 
     # Systemd user service (desktop mode)
@@ -45,9 +44,4 @@ package() {
     # sysusers.d and tmpfiles.d
     install -Dm644 "$_root/packaging/archlinux/tesseras.sysusers" "$pkgdir/usr/lib/sysusers.d/tesseras.conf"
     install -Dm644 "$_root/packaging/archlinux/tesseras.tmpfiles" "$pkgdir/usr/lib/tmpfiles.d/tesseras.conf"
-
-    # Shell completions
-    "$srcdir/target/release/tes" completions bash | install -Dm644 /dev/stdin "$pkgdir/usr/share/bash-completion/completions/tes"
-    "$srcdir/target/release/tes" completions zsh  | install -Dm644 /dev/stdin "$pkgdir/usr/share/zsh/site-functions/_tes"
-    "$srcdir/target/release/tes" completions fish | install -Dm644 /dev/stdin "$pkgdir/usr/share/fish/vendor_completions.d/tes.fish"
 }

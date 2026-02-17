@@ -4,7 +4,7 @@ After=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/tesd
+ExecStart=/usr/bin/tes admin daemon start --foreground
 Restart=on-failure
 RestartSec=5
 LimitNOFILE=65536

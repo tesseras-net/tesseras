@@ -11,13 +11,13 @@ Compression=lzma2/ultra64
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-SetupIconFile=C:\tesseras\apps\flutter\windows\runner\resources\app_icon.ico
-UninstallDisplayIcon={app}\tesseras_app.exe
+UninstallDisplayIcon={app}\tes.exe
 WizardStyle=modern
 WizardImageFile=C:\tesseras\packaging\windows\wizard_image.bmp
 WizardSmallImageFile=C:\tesseras\packaging\windows\wizard_small_image.bmp
 LicenseFile=C:\tesseras\packaging\windows\LICENSE.txt
 PrivilegesRequired=lowest
+ChangesEnvironment=yes
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -35,17 +35,28 @@ portuguese.FinishedHeadingLabel=Tesseras esta pronto!
 portuguese.FinishedLabel=Tesseras foi instalado no seu computador.%n%nSuas memorias merecem durar para sempre. Bem-vindo a rede.%n%n%nDedicado a Aninha, meu grande amor — a razao pela qual eu acredito que algumas coisas devem durar para sempre.
 
 [Tasks]
-Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
+Name: "addtopath"; Description: "Add tes to PATH"; GroupDescription: "System integration:"
 
 [Files]
-Source: "C:\tesseras\apps\flutter\build\windows\x64\runner\Release\tesseras_app.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "C:\tesseras\apps\flutter\build\windows\x64\runner\Release\*.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "C:\tesseras\apps\flutter\build\windows\x64\runner\Release\data\*"; DestDir: "{app}\data"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "C:\tesseras\target\release\tes.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\Tesseras"; Filename: "{app}\tesseras_app.exe"
+Name: "{group}\Tesseras CLI"; Filename: "{cmd}"; Parameters: "/k ""{app}\tes.exe"" --help"; WorkingDir: "{userdocs}"
 Name: "{group}\{cm:UninstallProgram,Tesseras}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\Tesseras"; Filename: "{app}\tesseras_app.exe"; Tasks: desktopicon
 
-[Run]
-Filename: "{app}\tesseras_app.exe"; Description: "{cm:LaunchProgram,Tesseras}"; Flags: nowait postinstall skipifsilent
+[Registry]
+; Add to user PATH
+Root: HKCU; Subkey: "Environment"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}"; Tasks: addtopath; Check: NeedsAddPath(ExpandConstant('{app}'))
+
+[Code]
+function NeedsAddPath(Param: string): Boolean;
+var
+  OrigPath: string;
+begin
+  if not RegQueryStringValue(HKEY_CURRENT_USER, 'Environment', 'Path', OrigPath) then
+  begin
+    Result := True;
+    exit;
+  end;
+  Result := Pos(';' + Param + ';', ';' + OrigPath + ';') = 0;
+end;

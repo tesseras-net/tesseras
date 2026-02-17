@@ -8,7 +8,7 @@ Wants=network-online.target
 Type=simple
 User=tesseras
 Group=tesseras
-ExecStart=/usr/bin/tesd --config /etc/tesseras/config.toml
+ExecStart=/usr/bin/tes --identity=/var/lib/tesseras admin daemon start --foreground
 Restart=on-failure
 RestartSec=5
 RuntimeDirectory=tesseras
