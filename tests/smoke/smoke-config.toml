@@ -25,6 +25,9 @@ enable_mdns = false
 metrics_addr = "127.0.0.1:9190"
 log_format = "json"
 
+[rpc]
+socket_path = "/data/daemon.sock"
+
 [replication]
 repair_interval_secs = 5
 repair_jitter_secs = 1

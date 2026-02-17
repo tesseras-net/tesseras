@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # Smoke test: spin up a 3-node tesseras network in Docker, exercise the full
 # pipeline — create a tessera, verify it, and confirm replication is active.
+# Also validates daemon-first RPC operations: circles, status, delete.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
 TIMEOUT=30
+SOCKET=/data/daemon.sock
 
 cleanup() {
     echo "--- tearing down ---"
@@ -48,7 +50,7 @@ done
 
 # --- 4. Initialize identity on client node ---
 echo "--- initializing identity on client ---"
-docker compose exec -T client tes init --data-dir /data
+docker compose exec -T client tes identity init --data-dir /data
 pass "identity initialized on client"
 
 # --- 5. Create a sample tessera ---
@@ -56,10 +58,11 @@ echo "--- creating sample tessera ---"
 docker compose exec -T client mkdir -p /tmp/sample-tessera
 docker compose exec -T client sh -c 'echo "This is a test memory for the smoke test." > /tmp/sample-tessera/memory.txt'
 
-CREATE_OUTPUT=$(docker compose exec -T client tes create --data-dir /data -n /tmp/sample-tessera/ 2>&1)
+CREATE_OUTPUT=$(docker compose exec -T client tes create --data-dir /data --socket "$SOCKET" --no-publish -n /tmp/sample-tessera/ 2>&1) || true
 echo "$CREATE_OUTPUT"
 
-HASH=$(echo "$CREATE_OUTPUT" | grep -oP 'Created tessera: \K\S+')
+# Output format: "  Hash:  XXXXXXXX" — extract hash after "Hash:"
+HASH=$(echo "$CREATE_OUTPUT" | grep -oP 'Hash:\s+\K\S+')
 if [ -z "$HASH" ]; then
     fail "could not extract tessera hash from create output"
 fi
@@ -132,6 +135,87 @@ if docker compose logs client 2>&1 | grep -qi "routing.table\|peers\|bucket"; th
     pass "routing table activity detected"
 else
     info "no routing table entries in logs (may need more time)"
+fi
+
+# ============================================================
+# NEW: Daemon-first RPC operation tests
+# ============================================================
+
+echo ""
+echo "--- daemon-first RPC tests ---"
+
+# --- 10. Node status via RPC ---
+echo "--- node status via RPC ---"
+STATUS_OUTPUT=$(docker compose exec -T client tes status --socket "$SOCKET" 2>&1) || true
+echo "$STATUS_OUTPUT"
+
+if echo "$STATUS_OUTPUT" | grep -qi "running\|online\|peer\|PID"; then
+    pass "node status returned info"
+else
+    info "status output format may differ, got: $STATUS_OUTPUT"
+fi
+
+# --- 11. Circle CRUD via RPC ---
+echo "--- circle create ---"
+CIRCLE_CREATE=$(docker compose exec -T client tes circles create family --socket "$SOCKET" 2>&1) || true
+echo "$CIRCLE_CREATE"
+
+if echo "$CIRCLE_CREATE" | grep -qi "created\|family"; then
+    pass "circle 'family' created"
+else
+    fail "circle create failed: $CIRCLE_CREATE"
+fi
+
+echo "--- circle list ---"
+CIRCLE_LIST=$(docker compose exec -T client tes circles list --socket "$SOCKET" 2>&1) || true
+echo "$CIRCLE_LIST"
+
+if echo "$CIRCLE_LIST" | grep -q "family"; then
+    pass "circle appears in list"
+else
+    fail "circle not found in list: $CIRCLE_LIST"
+fi
+
+echo "--- circle add member ---"
+PUBKEY_HEX=$(printf 'aa%.0s' {1..32})
+MEMBER_ADD=$(docker compose exec -T client tes circles add family alice "$PUBKEY_HEX" --socket "$SOCKET" 2>&1) || true
+echo "$MEMBER_ADD"
+
+if echo "$MEMBER_ADD" | grep -qi "added\|alice"; then
+    pass "member alice added to circle"
+else
+    fail "circle add member failed: $MEMBER_ADD"
+fi
+
+echo "--- circle remove member ---"
+MEMBER_RM=$(docker compose exec -T client tes circles remove family alice --socket "$SOCKET" 2>&1) || true
+echo "$MEMBER_RM"
+
+if echo "$MEMBER_RM" | grep -qi "removed\|alice"; then
+    pass "member alice removed from circle"
+else
+    fail "circle remove member failed: $MEMBER_RM"
+fi
+
+echo "--- circle delete ---"
+CIRCLE_DEL=$(docker compose exec -T client tes circles delete family --socket "$SOCKET" 2>&1) || true
+echo "$CIRCLE_DEL"
+
+if echo "$CIRCLE_DEL" | grep -qi "deleted\|family"; then
+    pass "circle 'family' deleted"
+else
+    fail "circle delete failed: $CIRCLE_DEL"
+fi
+
+# --- 12. Delete tessera via RPC ---
+echo "--- delete tessera via RPC ---"
+DELETE_OUTPUT=$(docker compose exec -T client tes delete --socket "$SOCKET" "$HASH" 2>&1) || true
+echo "$DELETE_OUTPUT"
+
+if echo "$DELETE_OUTPUT" | grep -qi "deleted\|retract"; then
+    pass "tessera deleted via RPC"
+else
+    fail "tessera delete failed: $DELETE_OUTPUT"
 fi
 
 echo ""

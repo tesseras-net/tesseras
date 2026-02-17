@@ -465,28 +465,58 @@ impl RpcHandler {
     }
 }
 
-/// Resolve a user-provided hash string (full hex or prefix) to a ContentHash.
+/// Resolve a user-provided hash string (full hex, full base32, or prefix) to a ContentHash.
 fn resolve_hash(
     hash_str: &str,
     repo: &dyn TesseraRepository,
 ) -> Result<tesseras_core::ContentHash, Response> {
-    match hash_str.parse::<tesseras_core::ContentHash>() {
-        Ok(h) => Ok(h),
-        Err(_) => {
-            // Try prefix lookup
-            match repo.find_by_hex_prefix(hash_str) {
-                Ok(matches) if matches.len() == 1 => Ok(matches[0].hash),
-                Ok(matches) if matches.is_empty() => Err(Response::Error {
-                    code: ErrorCode::NotFound,
-                    message: format!("tessera not found: {hash_str}"),
-                }),
-                Ok(matches) => Err(Response::Error {
-                    code: ErrorCode::InvalidInput,
-                    message: format!(
-                        "ambiguous prefix '{hash_str}': {} matches",
-                        matches.len()
-                    ),
-                }),
+    use tesseras_core::types::HashPrefix;
+
+    let prefix = HashPrefix::parse(hash_str).map_err(|_| Response::Error {
+        code: ErrorCode::InvalidInput,
+        message: format!("invalid hash: {hash_str}"),
+    })?;
+
+    match prefix {
+        HashPrefix::Exact(h) => Ok(h),
+        HashPrefix::HexPrefix(hex) => match repo.find_by_hex_prefix(&hex) {
+            Ok(matches) if matches.len() == 1 => Ok(matches[0].hash),
+            Ok(matches) if matches.is_empty() => Err(Response::Error {
+                code: ErrorCode::NotFound,
+                message: format!("tessera not found: {hash_str}"),
+            }),
+            Ok(matches) => Err(Response::Error {
+                code: ErrorCode::InvalidInput,
+                message: format!("ambiguous prefix '{hash_str}': {} matches", matches.len()),
+            }),
+            Err(e) => Err(Response::Error {
+                code: ErrorCode::Internal,
+                message: format!("storage error: {e}"),
+            }),
+        },
+        HashPrefix::Base32Prefix {
+            hex_prefix,
+            base32_prefix,
+        } => {
+            match repo.find_by_hex_prefix(&hex_prefix) {
+                Ok(matches) => {
+                    // Post-filter: only keep matches whose base32 starts with the prefix
+                    let filtered: Vec<_> = matches
+                        .into_iter()
+                        .filter(|t| t.hash.to_base32().starts_with(&base32_prefix))
+                        .collect();
+                    match filtered.len() {
+                        1 => Ok(filtered[0].hash),
+                        0 => Err(Response::Error {
+                            code: ErrorCode::NotFound,
+                            message: format!("tessera not found: {hash_str}"),
+                        }),
+                        n => Err(Response::Error {
+                            code: ErrorCode::InvalidInput,
+                            message: format!("ambiguous prefix '{hash_str}': {n} matches"),
+                        }),
+                    }
+                }
                 Err(e) => Err(Response::Error {
                     code: ErrorCode::Internal,
                     message: format!("storage error: {e}"),

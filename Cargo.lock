@@ -3136,6 +3136,7 @@ dependencies = [
  "lru 0.12.5",
  "prometheus",
  "proptest",
+ "rmp-serde",
  "rusqlite",
  "serde",
  "serde_json",
