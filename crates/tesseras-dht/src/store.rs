@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
 use tesseras_core::{ContentHash, NodeId, TesseraPointer};
@@ -30,6 +30,7 @@ struct StoreEntry {
 pub struct PointerStore {
     local_id: NodeId,
     entries: HashMap<ContentHash, StoreEntry>,
+    tombstones: HashSet<ContentHash>,
     config: StoreConfig,
 }
 
@@ -38,13 +39,37 @@ impl PointerStore {
         Self {
             local_id,
             entries: HashMap::new(),
+            tombstones: HashSet::new(),
             config,
         }
     }
 
+    /// Record a tombstone: removes the pointer and blocks future stores.
+    pub fn add_tombstone(&mut self, hash: ContentHash) {
+        self.tombstones.insert(hash);
+        self.entries.remove(&hash);
+    }
+
+    /// Check whether a hash has been tombstoned.
+    pub fn is_tombstoned(&self, hash: &ContentHash) -> bool {
+        self.tombstones.contains(hash)
+    }
+
+    /// All tombstoned hashes (for republishing retract messages).
+    pub fn tombstoned_hashes(&self) -> Vec<ContentHash> {
+        self.tombstones.iter().cloned().collect()
+    }
+
     /// Store or refresh a pointer. Returns true if accepted.
+    /// Rejects pointers for tombstoned hashes.
     pub fn store(&mut self, pointer: TesseraPointer) -> bool {
         let key = pointer.tessera_hash;
+
+        // Reject stores for tombstoned hashes
+        if self.tombstones.contains(&key) {
+            return false;
+        }
+
         let now = Instant::now();
 
         // If key exists, refresh it
@@ -225,5 +250,24 @@ mod tests {
         store.store(make_pointer(0xaa));
         std::thread::sleep(Duration::from_millis(10));
         assert!(store.get(&ContentHash::new([0xaa; 32])).is_none());
+    }
+
+    #[test]
+    fn store_rejected_after_tombstone() {
+        let mut store = PointerStore::new(NodeId::new([0x00; 20]), StoreConfig::default());
+        store.add_tombstone(ContentHash::new([0xaa; 32]));
+        assert!(!store.store(make_pointer(0xaa)));
+        assert!(store.get(&ContentHash::new([0xaa; 32])).is_none());
+    }
+
+    #[test]
+    fn retract_removes_existing_pointer() {
+        let mut store = PointerStore::new(NodeId::new([0x00; 20]), StoreConfig::default());
+        assert!(store.store(make_pointer(0xaa)));
+        assert!(store.get(&ContentHash::new([0xaa; 32])).is_some());
+
+        store.add_tombstone(ContentHash::new([0xaa; 32]));
+        assert!(store.get(&ContentHash::new([0xaa; 32])).is_none());
+        assert!(store.is_tombstoned(&ContentHash::new([0xaa; 32])));
     }
 }

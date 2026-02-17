@@ -139,6 +139,17 @@ pub enum Message {
         signature: Vec<u8>,
     },
 
+    // --- Tombstone retraction ---
+    /// Creator requests deletion of a tessera from the network.
+    Retract {
+        tombstone: tesseras_core::Tombstone,
+    },
+    /// Acknowledgement of a retraction request.
+    RetractAck {
+        hash: ContentHash,
+        accepted: bool,
+    },
+
     // --- Institutional Search (Phase 5) ---
     /// Full-text search request forwarded to institutional nodes with SEARCH_INDEX capability.
     Search {
@@ -536,6 +547,45 @@ mod tests {
             } => {
                 assert_eq!(nat_type, None);
                 assert_eq!(relay_slots_available, None);
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    // --- Tombstone retraction message round-trips ---
+
+    #[test]
+    fn retract_roundtrip() {
+        let msg = Message::Retract {
+            tombstone: tesseras_core::Tombstone {
+                hash: ContentHash::new([0xaa; 32]),
+                retracted_at: chrono::Utc::now(),
+                creator_pubkey: "ed25519:abc123".to_string(),
+                ed25519_signature: vec![0xDE; 64],
+                mldsa_signature: vec![0xAD; 128],
+            },
+        };
+        let decoded = roundtrip(&msg);
+        match decoded {
+            Message::Retract { tombstone } => {
+                assert_eq!(tombstone.hash, ContentHash::new([0xaa; 32]));
+                assert_eq!(tombstone.ed25519_signature.len(), 64);
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn retract_ack_roundtrip() {
+        let msg = Message::RetractAck {
+            hash: ContentHash::new([0xbb; 32]),
+            accepted: true,
+        };
+        let decoded = roundtrip(&msg);
+        match decoded {
+            Message::RetractAck { hash, accepted } => {
+                assert_eq!(hash, ContentHash::new([0xbb; 32]));
+                assert!(accepted);
             }
             _ => panic!("wrong variant"),
         }

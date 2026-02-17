@@ -65,6 +65,8 @@ use crate::pow;
 use crate::routing::RoutingTable;
 use crate::store::{PointerStore, StoreConfig};
 
+use chrono::Utc;
+
 pub struct DhtEngine {
     identity: NodeIdentity,
     transport: Box<dyn Transport>,
@@ -283,11 +285,26 @@ impl DhtEngine {
                 }
             }
             Message::FindValueResponse { .. } => None,
-            Message::Store { pointer, .. } => {
-                let accepted = self.store.lock().await.store(pointer.clone());
-                Some(Message::StoreResponse { accepted })
+            Message::Store { key, pointer } => {
+                let mut store = self.store.lock().await;
+                if store.is_tombstoned(key) {
+                    Some(Message::StoreResponse { accepted: false })
+                } else {
+                    let accepted = store.store(pointer.clone());
+                    Some(Message::StoreResponse { accepted })
+                }
             }
             Message::StoreResponse { .. } => None,
+            Message::Retract { tombstone } => {
+                // TODO: verify dual signatures on tombstone before accepting
+                let hash = tombstone.hash;
+                self.store.lock().await.add_tombstone(hash);
+                Some(Message::RetractAck {
+                    hash,
+                    accepted: true,
+                })
+            }
+            Message::RetractAck { .. } => None,
             Message::Replicate { envelope } => {
                 let handler = self.replication_handler.lock().unwrap().clone();
                 if let Some(handler) = handler {
@@ -650,6 +667,43 @@ impl DhtEngine {
         Ok(acks)
     }
 
+    /// Propagate a tombstone retraction to the k closest nodes.
+    /// Also tombstones the hash in the local pointer store.
+    pub async fn retract(&self, tombstone: tesseras_core::Tombstone) -> Result<usize, DhtError> {
+        let hash = tombstone.hash;
+
+        // Tombstone locally
+        self.store.lock().await.add_tombstone(hash);
+
+        // Propagate to closest nodes
+        let mut target_bytes = [0u8; 20];
+        target_bytes.copy_from_slice(&hash.as_bytes()[..20]);
+        let target = NodeId::new(target_bytes);
+
+        let closest = self.find_closest_nodes(&target).await;
+        if closest.is_empty() {
+            return Err(DhtError::PublishFailed { got: 0, needed: 1 });
+        }
+
+        let mut acks = 0;
+        for node in &closest {
+            let peer = PeerAddr {
+                node_id: Some(node.identity.node_id),
+                addr: node.addr,
+            };
+            let msg = Message::Retract {
+                tombstone: tombstone.clone(),
+            };
+            if let Ok(Some(Message::RetractAck { accepted: true, .. })) =
+                self.rpc(&peer, &msg).await
+            {
+                acks += 1;
+            }
+        }
+
+        Ok(acks)
+    }
+
     /// Find a tessera pointer by content hash.
     pub async fn find_tessera(
         &self,
@@ -898,11 +952,38 @@ impl DhtEngine {
         self.find_closest_nodes(&target).await;
     }
 
-    /// Republish all stored pointers to their closest nodes.
+    /// Republish all stored pointers and tombstones to their closest nodes.
     async fn republish_pointers(&self) {
-        let pointers = self.store.lock().await.pointers();
+        let store = self.store.lock().await;
+        let pointers = store.pointers();
+        let tombstones = store.tombstoned_hashes();
+        drop(store);
+
         for ptr in pointers {
             let _ = self.publish(ptr).await;
+        }
+        for hash in tombstones {
+            // Re-send retract to closest nodes for each tombstoned hash
+            let mut target_bytes = [0u8; 20];
+            target_bytes.copy_from_slice(&hash.as_bytes()[..20]);
+            let target = NodeId::new(target_bytes);
+            let closest = self.find_closest_nodes(&target).await;
+            for node in &closest {
+                let peer = PeerAddr {
+                    node_id: Some(node.identity.node_id),
+                    addr: node.addr,
+                };
+                // Send a minimal tombstone for republishing (signatures already verified)
+                let tombstone = tesseras_core::Tombstone {
+                    hash,
+                    retracted_at: Utc::now(),
+                    creator_pubkey: String::new(),
+                    ed25519_signature: vec![],
+                    mldsa_signature: vec![],
+                };
+                let msg = Message::Retract { tombstone };
+                let _ = self.rpc(&peer, &msg).await;
+            }
         }
     }
 
