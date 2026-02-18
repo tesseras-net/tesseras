@@ -2,7 +2,7 @@ use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 
 use quinn::{Endpoint, ServerConfig};
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 use crate::dht::DhtMessage;
 
@@ -237,6 +237,59 @@ pub async fn receive_blob(recv: &mut quinn::RecvStream) -> Result<Vec<u8>, NetEr
         .map_err(|e| NetError::Read(e.to_string()))?;
 
     Ok(data)
+}
+
+// --- DNS SRV bootstrap ---
+
+/// Resolve bootstrap node addresses via DNS SRV records.
+///
+/// Queries `_tesseras._udp.<domain>` for SRV records, then resolves each
+/// target hostname to A/AAAA records. Returns all discovered `SocketAddr`s.
+/// On any failure (DNS unavailable, no records, etc.) returns an empty vec.
+pub async fn resolve_bootstrap_dns(domain: &str) -> Vec<SocketAddr> {
+    use hickory_resolver::TokioAsyncResolver;
+
+    let resolver = match TokioAsyncResolver::tokio_from_system_conf() {
+        Ok(r) => r,
+        Err(e) => {
+            debug!("DNS resolver init failed: {e}");
+            return Vec::new();
+        }
+    };
+
+    let srv_name = format!("_tesseras._udp.{domain}.");
+    let srv_lookup = match resolver.srv_lookup(&srv_name).await {
+        Ok(l) => l,
+        Err(e) => {
+            debug!("DNS SRV lookup for {srv_name} failed: {e}");
+            return Vec::new();
+        }
+    };
+
+    let mut addrs = Vec::new();
+    for srv in srv_lookup.iter() {
+        let target = srv.target().to_string();
+        let port = srv.port();
+
+        match resolver.lookup_ip(&target).await {
+            Ok(ips) => {
+                for ip in ips.iter() {
+                    addrs.push(SocketAddr::new(ip, port));
+                }
+            }
+            Err(e) => {
+                debug!("DNS A/AAAA lookup for {target} failed: {e}");
+            }
+        }
+    }
+
+    if addrs.is_empty() {
+        debug!("DNS SRV resolved zero addresses for {domain}");
+    } else {
+        info!("DNS SRV resolved {} bootstrap addresses for {domain}", addrs.len());
+    }
+
+    addrs
 }
 
 // --- STUN client ---
@@ -568,6 +621,18 @@ mod tests {
 
         let result = parse_mapped_address(&data).unwrap();
         assert_eq!(result, "10.0.0.1:8080".parse::<SocketAddr>().unwrap());
+    }
+
+    #[tokio::test]
+    async fn resolve_bootstrap_dns_invalid_domain_returns_empty() {
+        let addrs = super::resolve_bootstrap_dns("invalid.domain.that.does.not.exist.example").await;
+        assert!(addrs.is_empty());
+    }
+
+    #[tokio::test]
+    async fn resolve_bootstrap_dns_empty_domain_returns_empty() {
+        let addrs = super::resolve_bootstrap_dns("").await;
+        assert!(addrs.is_empty());
     }
 
     #[test]

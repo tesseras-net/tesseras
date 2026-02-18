@@ -35,6 +35,7 @@ reed-solomon-erasure = "6"
 
 # Network
 quinn = "0.11"
+hickory-resolver = { version = "0.24", features = ["tokio-runtime"] }
 rustls = { version = "0.23", features = ["ring", "std"] }
 rcgen = "0.13"
 

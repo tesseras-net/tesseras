@@ -18,6 +18,7 @@ if [ -n "${TES_LISTEN:-}" ]; then
     cat > "$DATA_DIR/config.toml" <<EOF
 listen = "${TES_LISTEN}"
 bootstrap = [$([ -n "${TES_BOOTSTRAP:-}" ] && echo "\"${TES_BOOTSTRAP}\"" || echo "")]
+bootstrap_dns = ""
 data_shards = 3
 parity_shards = 2
 stun_servers = []

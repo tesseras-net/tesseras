@@ -202,6 +202,8 @@ impl Node {
     }
 
     /// Bootstrap the DHT by contacting configured bootstrap nodes.
+    /// Resolves DNS SRV records (if `bootstrap_dns` is set) and merges
+    /// with hardcoded `bootstrap` addresses, deduplicating by SocketAddr.
     pub async fn bootstrap(&self) -> Result<usize, NodeError> {
         let transport = self
             .transport
@@ -211,15 +213,32 @@ impl Node {
         let node_id = self.identity.node_id();
         let mut discovered = 0usize;
 
+        // Collect all bootstrap addresses: DNS SRV + hardcoded
+        let mut bootstrap_addrs: Vec<SocketAddr> = Vec::new();
+
+        // Resolve DNS SRV if configured
+        if let Some(ref domain) = self.config.bootstrap_dns {
+            if !domain.is_empty() {
+                let dns_addrs = net::resolve_bootstrap_dns(domain).await;
+                bootstrap_addrs.extend(dns_addrs);
+            }
+        }
+
+        // Parse hardcoded bootstrap addresses
         for addr_str in &self.config.bootstrap {
-            let addr: SocketAddr = match addr_str.parse() {
-                Ok(a) => a,
+            match addr_str.parse::<SocketAddr>() {
+                Ok(a) => bootstrap_addrs.push(a),
                 Err(e) => {
                     warn!("invalid bootstrap address {addr_str}: {e}");
-                    continue;
                 }
-            };
+            }
+        }
 
+        // Dedup by SocketAddr
+        bootstrap_addrs.sort();
+        bootstrap_addrs.dedup();
+
+        for &addr in &bootstrap_addrs {
             let msg = DhtMessage::FindNode {
                 sender: node_id,
                 target: node_id,
@@ -1604,6 +1623,7 @@ mod tests {
         let identity = Identity::generate();
         let mut config = NodeConfig::default();
         config.stun_servers = Vec::new(); // disable STUN in tests
+        config.bootstrap_dns = None; // disable DNS in tests
         let node = Node::new(data_dir, identity, config).unwrap();
         (tmp, node)
     }
@@ -1798,6 +1818,7 @@ mod tests {
         config_b.listen = "127.0.0.1:0".parse().unwrap();
         config_b.bootstrap = vec![addr_a.to_string()];
         config_b.stun_servers = Vec::new();
+        config_b.bootstrap_dns = None;
         let mut node_b = Node::new(data_dir_b, identity_b, config_b).unwrap();
         let _addr_b = node_b.start().await.unwrap();
 
@@ -1838,6 +1859,7 @@ mod tests {
         config_b.listen = "127.0.0.1:0".parse().unwrap();
         config_b.bootstrap = vec![addr_a.to_string()];
         config_b.stun_servers = Vec::new();
+        config_b.bootstrap_dns = None;
         let mut node_b = Node::new(data_dir_b, identity_b, config_b).unwrap();
         let _addr_b = node_b.start().await.unwrap();
 
@@ -1940,6 +1962,7 @@ mod tests {
         config_b.listen = "127.0.0.1:0".parse().unwrap();
         config_b.bootstrap = vec![addr_a.to_string()];
         config_b.stun_servers = Vec::new();
+        config_b.bootstrap_dns = None;
         let mut node_b = Node::new(data_dir_b, identity_b, config_b).unwrap();
         let _addr_b = node_b.start().await.unwrap();
         node_b.bootstrap().await.unwrap();
@@ -1998,6 +2021,7 @@ mod tests {
         config_b.listen = "127.0.0.1:0".parse().unwrap();
         config_b.bootstrap = vec![addr_a.to_string()];
         config_b.stun_servers = Vec::new();
+        config_b.bootstrap_dns = None;
         let mut node_b = Node::new(data_dir_b, identity_b, config_b).unwrap();
         let addr_b = node_b.start().await.unwrap();
         node_b.bootstrap().await.unwrap();
@@ -2009,6 +2033,7 @@ mod tests {
         config_c.listen = "127.0.0.1:0".parse().unwrap();
         config_c.bootstrap = vec![addr_b.to_string()];
         config_c.stun_servers = Vec::new();
+        config_c.bootstrap_dns = None;
         let mut node_c = Node::new(data_dir_c, identity_c, config_c).unwrap();
         let _addr_c = node_c.start().await.unwrap();
         node_c.bootstrap().await.unwrap();

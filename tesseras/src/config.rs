@@ -14,6 +14,11 @@ pub struct NodeConfig {
     #[serde(default)]
     pub bootstrap: Vec<String>,
 
+    /// DNS domain for SRV bootstrap discovery (_tesseras._udp.<domain>).
+    /// Default: "tesseras.net". Set to empty string to disable.
+    #[serde(default = "default_bootstrap_dns")]
+    pub bootstrap_dns: Option<String>,
+
     /// Reed-Solomon erasure coding: data shards.
     #[serde(default = "default_data_shards")]
     pub data_shards: usize,
@@ -47,6 +52,10 @@ fn default_parity_shards() -> usize {
     2
 }
 
+fn default_bootstrap_dns() -> Option<String> {
+    Some("tesseras.net".into())
+}
+
 fn default_stun_servers() -> Vec<String> {
     vec![
         "stun.l.google.com:19302".into(),
@@ -59,6 +68,7 @@ impl Default for NodeConfig {
         Self {
             listen: default_listen(),
             bootstrap: Vec::new(),
+            bootstrap_dns: default_bootstrap_dns(),
             data_shards: default_data_shards(),
             parity_shards: default_parity_shards(),
             stun_servers: default_stun_servers(),
@@ -170,6 +180,36 @@ mod tests {
 
         let loaded = dir.load_config().unwrap();
         assert_eq!(loaded.bootstrap, vec!["1.2.3.4:4433"]);
+    }
+
+    #[test]
+    fn config_bootstrap_dns_default() {
+        let config: NodeConfig = toml::from_str("").unwrap();
+        assert_eq!(config.bootstrap_dns, Some("tesseras.net".into()));
+    }
+
+    #[test]
+    fn config_bootstrap_dns_custom_domain() {
+        let config: NodeConfig =
+            toml::from_str("bootstrap_dns = \"example.org\"").unwrap();
+        assert_eq!(config.bootstrap_dns, Some("example.org".into()));
+    }
+
+    #[test]
+    fn config_bootstrap_dns_disabled() {
+        let config: NodeConfig = toml::from_str("bootstrap_dns = \"\"").unwrap();
+        assert_eq!(config.bootstrap_dns, Some(String::new()));
+    }
+
+    #[test]
+    fn config_backwards_compat_no_bootstrap_dns() {
+        let toml_str = r#"
+listen = "0.0.0.0:4433"
+bootstrap = ["1.2.3.4:4433"]
+"#;
+        let config: NodeConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.bootstrap_dns, Some("tesseras.net".into()));
+        assert_eq!(config.bootstrap, vec!["1.2.3.4:4433"]);
     }
 
     #[test]
