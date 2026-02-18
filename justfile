@@ -41,8 +41,12 @@ alpine:
 openbsd:
     sh packaging/openbsd/create-package.sh
 
-# Build OpenBSD package via QEMU/SSH
-openbsd-remote host="localhost" port="2222":
+# Build OpenBSD package via QEMU (starts VM, builds, stops)
+openbsd-qemu image="$HOME/vms/openbsd77/openbsd77.qcow2":
+    OPENBSD_IMAGE={{image}} sh packaging/openbsd/qemu-build.sh --start-vm --stop-vm
+
+# Build OpenBSD package via remote SSH host
+openbsd-remote host="obsd-build" port="7722":
     OPENBSD_HOST={{host}} OPENBSD_PORT={{port}} sh packaging/openbsd/qemu-build.sh
 
 # Build Windows binary and installer via SSH
