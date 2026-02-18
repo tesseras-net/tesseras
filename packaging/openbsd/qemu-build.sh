@@ -48,55 +48,70 @@ for arg in "$@"; do
     esac
 done
 
+# Port flags differ: ssh uses -p, scp uses -P
 if [ "$OPENBSD_PORT" != "22" ]; then
-    SSH_OPTS="$SSH_OPTS -p $OPENBSD_PORT"
-    SCP_OPTS="-P $OPENBSD_PORT"
+    SSH_PORT_OPT="-p $OPENBSD_PORT"
+    SCP_PORT_OPT="-P $OPENBSD_PORT"
 else
-    SCP_OPTS=""
+    SSH_PORT_OPT=""
+    SCP_PORT_OPT=""
 fi
 
-SSH_CMD="ssh $SSH_OPTS ${OPENBSD_USER}@${OPENBSD_HOST}"
-SCP_CMD="scp $SSH_OPTS $SCP_OPTS"
+SSH_CMD="ssh $SSH_OPTS $SSH_PORT_OPT ${OPENBSD_USER}@${OPENBSD_HOST}"
+SCP_CMD="scp $SSH_OPTS $SCP_PORT_OPT"
 
 # Start QEMU VM if requested
 if [ "$START_VM" = true ]; then
-    if ! [ -f "$OPENBSD_IMAGE" ]; then
-        echo "Error: OpenBSD image not found: $OPENBSD_IMAGE"
-        exit 1
-    fi
-    echo "==> Starting OpenBSD VM ($QEMU_MEM RAM, $QEMU_SMP CPUs, KVM)..."
-    qemu-system-x86_64 \
-        -m "$QEMU_MEM" -smp "$QEMU_SMP" -enable-kvm \
-        -drive "file=$OPENBSD_IMAGE,format=qcow2" \
-        -device virtio-net-pci,netdev=net0 \
-        -netdev "user,id=net0,hostfwd=tcp::${OPENBSD_PORT}-:22" \
-        -display none -daemonize
-
-    echo "==> Waiting for VM to boot..."
-    for i in $(seq 1 30); do
-        if $SSH_CMD "true" 2>/dev/null; then
-            break
+    # Check if VM is already running (reachable via SSH)
+    if $SSH_CMD "true" 2>/dev/null; then
+        echo "==> VM already running and reachable"
+    else
+        if ! [ -f "$OPENBSD_IMAGE" ]; then
+            echo "Error: OpenBSD image not found: $OPENBSD_IMAGE"
+            exit 1
         fi
-        sleep 2
-    done
 
-    if ! $SSH_CMD "true" 2>/dev/null; then
-        echo "Error: VM did not become reachable via SSH after 60s"
-        exit 1
+        # Check if QEMU is already running on this image (stale/unreachable)
+        if pgrep -f "qemu.*$(basename "$OPENBSD_IMAGE")" >/dev/null 2>&1; then
+            echo "Error: QEMU process already running for this image but SSH unreachable"
+            echo "Kill it first: pkill -f 'qemu.*$(basename "$OPENBSD_IMAGE")'"
+            exit 1
+        fi
+
+        echo "==> Starting OpenBSD VM ($QEMU_MEM RAM, $QEMU_SMP CPUs, KVM)..."
+        qemu-system-x86_64 \
+            -m "$QEMU_MEM" -smp "$QEMU_SMP" -enable-kvm \
+            -drive "file=$OPENBSD_IMAGE,format=qcow2" \
+            -device virtio-net-pci,netdev=net0 \
+            -netdev "user,id=net0,hostfwd=tcp::${OPENBSD_PORT}-:22" \
+            -display none -daemonize
+
+        echo "==> Waiting for VM to boot..."
+        for i in $(seq 1 30); do
+            if $SSH_CMD "true" 2>/dev/null; then
+                break
+            fi
+            sleep 2
+        done
+
+        if ! $SSH_CMD "true" 2>/dev/null; then
+            echo "Error: VM did not become reachable via SSH after 60s"
+            exit 1
+        fi
+
+        # Enable SMT for better build performance
+        $SSH_CMD "doas sysctl hw.smt=1" 2>/dev/null || true
+        echo "==> VM ready"
     fi
-
-    # Enable SMT for better build performance
-    $SSH_CMD "doas sysctl hw.smt=1" 2>/dev/null || true
-    echo "==> VM ready"
 fi
 
 echo "==> Cross-building tesseras for OpenBSD via ${OPENBSD_HOST}:${OPENBSD_PORT}"
 
-# 1. Sync source to OpenBSD machine
+# 1. Sync source to OpenBSD machine (preserves remote target/ for incremental builds)
 echo "==> Syncing source..."
-$SSH_CMD "rm -rf $REMOTE_DIR && mkdir -p $REMOTE_DIR"
+$SSH_CMD "mkdir -p $REMOTE_DIR"
 rsync -az --delete \
-    -e "ssh $SSH_OPTS" \
+    -e "ssh $SSH_OPTS $SSH_PORT_OPT" \
     --exclude 'target/' \
     --exclude '.git/' \
     --exclude '.claude/' \

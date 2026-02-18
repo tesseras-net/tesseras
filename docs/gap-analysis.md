@@ -30,7 +30,7 @@ Cenário: 3 usuários reais querem compartilhar memórias na rede.
 
 ### ~~Bloco 1 — Rede~~ CONCLUÍDO
 
-1. ~~**Bootstrap nodes rodando**~~ — **FEITO**. 2 VPS Hetzner (bootstrap1/bootstrap2.tesseras.net), DNS SRV `_tesseras._udp.tesseras.net`, fallback hardcoded.
+1. ~~**Bootstrap nodes rodando**~~ — **FEITO**. 2 VPS OpenBSD 7.7 (bootstrap1=hetzner, bootstrap2=m0x), DNS SRV `_tesseras._udp.tesseras.net`, fallback hardcoded. Cada servidor roda bootstrap + nós de usuário em portas diferentes.
 
 2. ~~**Daemon empacotado**~~ — **FEITO**. .deb, .pkg.tar.zst, .exe, APKBUILD, rc.d. Falta apenas macOS (.dmg).
 
@@ -62,7 +62,7 @@ Cenário: 3 usuários reais querem compartilhar memórias na rede.
 
 12. **Circles (grupos de compartilhamento)** — **PENDENTE**. `Visibility::Circle` existe como enum, zero lógica de membership, sem lista de membros no manifest.
 
-13. **Feed/Timeline de rede** — **PENDENTE**. GraphQL API (`tesseras-api`) completamente vazio (só CLAUDE.md com spec).
+13. **Feed/Timeline de rede** — **PENDENTE**. GraphQL API module not yet implemented.
 
 14. **Notificações** — **PENDENTE**. Sem implementação.
 

@@ -16,11 +16,11 @@ Post-simplification rewrite (2-crate workspace: `tesseras` lib + `tes` binary).
 - Implement fragment distribution: publish fragment pointers to DHT peers
 - Build the repair loop that checks fragment availability and re-replicates missing ones
 
-## 3. Daemon Mode (`tesd`)
+## 3. Daemon Mode (`tes admin daemon`)
 
-- Implement `admin daemon start` — fork/daemonize with PID file
+- Implement `tes admin daemon start` — fork/daemonize with PID file
 - Run the QUIC accept loop, DHT maintenance, and replication repair as background tasks
-- Add Unix socket RPC so `tes` commands can talk to the running daemon
+- Add Unix socket RPC so `tes` CLI commands can talk to the running daemon
 
 ## 4. Peer-to-Peer Tessera Fetch
 
@@ -60,7 +60,7 @@ Post-simplification rewrite (2-crate workspace: `tesseras` lib + `tes` binary).
 
 ## 10. Packaging & Distribution
 
-- Update Debian/Alpine/Arch packages for the new binary names
+- Update Debian/Alpine/Arch/OpenBSD packages for the single `tes` binary
 - Update CI pipelines (SourceHut + GitHub Actions)
 - Add shell completions generation to the build
 

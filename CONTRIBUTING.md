@@ -79,7 +79,7 @@ push your branch, and open a PR against `main`.
 - **Language**: all code, comments, and docs in English.
 - **Architecture**: hexagonal (Ports, Adapters, Application, Domain) where it
   makes sense.
-- **Errors**: `thiserror` for library crates, `anyhow` for binaries.
+- **Errors**: `thiserror` for `tesseras` lib, `anyhow` for `tes` binary.
 - **Async**: `tokio` runtime for I/O in service layer; storage traits are sync.
 - **Trait objects**: prefer `Box<dyn Trait + Send + Sync>` over generics.
 - **Naming**: Rust conventions — `snake_case` for functions, `PascalCase` for
@@ -89,27 +89,18 @@ push your branch, and open a PR against `main`.
 - **Dependencies**: additions must pass `cargo deny check`.
 - **License**: ISC — all contributions are licensed under the same terms.
 
-## Crate Structure
+## Workspace Structure
 
-The workspace is split into focused crates:
+The workspace uses a simplified 2-crate layout:
 
 | Crate | Purpose |
 |-------|---------|
-| `tesseras-core` | Domain types, tessera format, serialization |
-| `tesseras-crypto` | Cryptography: Ed25519, ML-DSA, BLAKE3, AES-GCM, erasure coding, Shamir |
-| `tesseras-dht` | Kademlia DHT: routing table, RPCs, peer management |
-| `tesseras-net` | QUIC transport (quinn), NAT traversal, relay protocol |
-| `tesseras-storage` | SQLite index, blob filesystem, import/export |
-| `tesseras-replication` | Active replication, repair loop, reciprocity ledger |
-| `tesseras-api` | GraphQL API (axum + async-graphql) |
-| `tesd` | Full node binary |
+| `tesseras` | Library — all domain logic (types, crypto, storage, DHT, net, replication, RPC) |
+| `tes` | Single binary — CLI + daemon management via `tes admin daemon` |
 | `tesseras-embedded` | Mobile/desktop FFI (flutter_rust_bridge) |
-| `tesseras-wasm` | Browser build (wasm-bindgen) |
-| `tesseras-iot` | ESP32 passive storage node (no_std) |
-| `tesseras-cli` | CLI interface (clap) |
 
-When contributing, keep changes scoped to the relevant crate. Domain types
-belong in `tesseras-core` — other crates depend on core, never the reverse.
+When contributing, keep domain logic in the `tesseras` library. The `tes`
+binary is a thin CLI layer — subcommands live in `tes/src/commands/`.
 
 ## Commit Messages
 
@@ -123,8 +114,8 @@ The routing table accepted duplicate entries during concurrent bootstrap
 requests. Add a uniqueness check before inserting new peers.
 ```
 
-Prefix with the affected crate when applicable: `fix(crypto):`, `feat(net):`,
-`docs(book):`, `test(storage):`, `chore:`.
+Prefix with the affected module when applicable: `fix(crypto):`, `feat(net):`,
+`docs(book):`, `test(storage):`, `chore:`, `feat(cli):`.
 
 ## Reporting Issues
 

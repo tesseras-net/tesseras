@@ -4,16 +4,15 @@
 
 **Goal**: working CLI that creates, verifies, and exports tesseras offline.
 
-**Crates**: `tesseras-core`, `tesseras-crypto`, `tesseras-storage`, `tesseras-cli`
-**Tools**: `tessera-export`, `tessera-import`, `tessera-verify`
+**Crates**: `tesseras` (lib), `tes` (binary)
 
 Tasks:
 
-1. **tesseras-core**: domain types (Tessera, Memory, MemoryType, Visibility, Manifest, NodeId, ContentHash). Serialization of tessera directory format. Manifest parser/generator.
-2. **tesseras-crypto**: BLAKE3 hashing. Ed25519 keygen/sign/verify. ML-DSA keygen/sign/verify. Dual signature creation and verification.
-3. **tesseras-storage**: SQLite schema and migrations. CRUD for tesseras and memories. Blob storage on filesystem. Integrity verification.
-4. **tesseras-cli**: `init` (generate identity, config, db), `create` (import directory, prompt context, convert formats, generate manifest/checksums/signatures), `verify` (check checksums and signatures), `export` (to open directory), `list`.
-5. **tessera-import**: batch import from directories, WhatsApp exports, Google Photos takeout. Media format conversion (HEIC→JPEG, H.265→WebM+JPEG, AAC→WAV).
+1. **types**: domain types (Tessera, Memory, MemoryType, Visibility, Manifest, NodeId, ContentHash). Serialization of tessera directory format. Manifest parser/generator.
+2. **crypto**: BLAKE3 hashing. Ed25519 keygen/sign/verify. ML-DSA keygen/sign/verify. Dual signature creation and verification.
+3. **storage**: SQLite schema and migrations. CRUD for tesseras and memories. Blob storage on filesystem. Integrity verification.
+4. **tes**: `add` (import files, generate manifest/checksums/signatures), `get` (fetch by hash), `rm`, `ls`, `cat`, `export` (to open directory), `admin` (daemon, bootstrap, identity).
+5. **Import tools**: batch import from directories, WhatsApp exports, Google Photos takeout. Media format conversion (HEIC→JPEG, H.265→WebM+JPEG, AAC→WAV).
 6. **README.decode**: multilingual self-describing document + format decoding instructions in `decode/`. Minimum: English, Mandarin, Spanish, Arabic, Hindi, Portuguese.
 7. **Tests**: serialization roundtrip, full create→verify→export cycle, property-based manifest parsing.
 
@@ -23,13 +22,13 @@ Tasks:
 
 **Goal**: functional DHT where nodes discover each other and publish/find tessera pointers.
 
-**Crates**: `tesseras-net`, `tesseras-dht`, update `tesd`
+**Crates**: `tesseras` (net, dht modules), `tes` (daemon commands)
 
 Tasks:
 
-1. **tesseras-net**: QUIC transport (quinn), connection manager, TLS 1.3 with self-signed certs, pooling, NAT detection, mDNS local discovery.
-2. **tesseras-dht**: Kademlia routing table (k=20, 160 buckets), XOR distance, iterative lookup (alpha=3), PING/FIND_NODE/FIND_VALUE/STORE RPCs, bucket refresh, eviction policy, bootstrap process.
-3. **tesd**: main binary with QUIC listener, DHT init, local storage. Publish pointers on startup, respond to queries, background tasks, graceful shutdown.
+1. **net**: QUIC transport (quinn), connection manager, TLS 1.3 with self-signed certs, pooling, NAT detection, mDNS local discovery.
+2. **dht**: Kademlia routing table (k=20, 160 buckets), XOR distance, iterative lookup (alpha=3), PING/FIND_NODE/FIND_VALUE/STORE RPCs, bucket refresh, eviction policy, bootstrap process.
+3. **tes admin daemon start**: QUIC listener, DHT init, local storage. Publish pointers on startup, respond to queries, background tasks, graceful shutdown.
 4. **Wire protocol**: MessagePack serialization, request/response correlation over QUIC streams, timeouts.
 5. **Bootstrap infra**: 3-5 nodes (2x Hetzner EU, 1x DO São Paulo, 1x RPi). DNS TXT records.
 6. **Tests**: routing table correctness, 10+ node integration, lookup convergence, NAT traversal.
@@ -40,12 +39,12 @@ Tasks:
 
 **Goal**: tesseras are fragmented, distributed, and automatically repaired.
 
-**Crates**: `tesseras-replication`, update `tesseras-crypto`, `tesseras-dht`
+**Crates**: `tesseras` (replication, crypto, dht modules)
 
 Tasks:
 
-1. **tesseras-crypto**: Reed-Solomon erasure coding. Fragment/reconstruct API.
-2. **tesseras-replication**: fragment manager, distribution engine, repair loop, reciprocity ledger, attestation, repair budget.
+1. **crypto**: Reed-Solomon erasure coding. Fragment/reconstruct API.
+2. **replication**: fragment manager, distribution engine, repair loop, reciprocity ledger, attestation, repair budget.
 3. **REPLICATE and ATTEST RPCs** in DHT message handling.
 4. **Prometheus metrics** for replication and network.
 5. **Tests**: erasure roundtrip, replication under churn, reciprocity accounting, attestation verification.
@@ -56,12 +55,12 @@ Tasks:
 
 **Goal**: normal people can use Tesseras through a beautiful interface.
 
-**Crates**: `tesseras-api`, `tesseras-embedded`. **Apps**: Flutter.
+**Crates**: `tesseras` (API module), `tesseras-embedded`. **Apps**: Flutter.
 
 Tasks:
 
-1. **tesseras-api**: GraphQL schema (queries, mutations, subscriptions), auth, file upload.
-2. **tesseras-embedded**: flutter_rust_bridge integration, all core functionality via FFI, compile to Android/iOS/Linux/macOS/Windows.
+1. **API module**: GraphQL schema (queries, mutations, subscriptions), auth, file upload.
+2. **tesseras-embedded**: flutter_rust_bridge FFI over the `tesseras` library, compile to Android/iOS/Linux/macOS/Windows.
 3. **Flutter app**: camera, memory creation flow, timeline, explorer, network dashboard, settings, offline mode, background sync, adaptive layout, export.
 4. **Onboarding**: download → create identity (auto) → record first memory → done. No mention of P2P internals.
 5. **Tests**: GraphQL integration, FFI roundtrip, widget tests.

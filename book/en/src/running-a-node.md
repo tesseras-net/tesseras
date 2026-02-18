@@ -1,11 +1,11 @@
 # Running a Node
 
-The `tesd` binary runs a full Tesseras node that participates in the peer-to-peer network. It listens for connections over QUIC, joins the distributed hash table (DHT), and enables other nodes to discover and find tessera pointers.
+The `tes` binary includes a built-in daemon that runs a full Tesseras node participating in the peer-to-peer network. It listens for connections over QUIC, joins the distributed hash table (DHT), and enables other nodes to discover and find tessera pointers.
 
 ## Starting the daemon
 
 ```bash
-tesd
+tes admin daemon start
 ```
 
 On first run, the daemon:
@@ -19,7 +19,7 @@ On first run, the daemon:
 ## Command-line options
 
 ```
-tesd [OPTIONS]
+tes admin daemon start [OPTIONS]
 ```
 
 | Option | Description | Default |
@@ -36,31 +36,31 @@ CLI options override values from the config file.
 Run with defaults (join the public network):
 
 ```bash
-tesd
+tes admin daemon start
 ```
 
 Run as a seed node (no bootstrap, other nodes connect to you):
 
 ```bash
-tesd --bootstrap ""
+tes admin daemon start --bootstrap ""
 ```
 
 Run on a custom port with a specific data directory:
 
 ```bash
-tesd --listen 0.0.0.0:5000 --data-dir /var/lib/tesseras
+tes admin daemon start --listen 0.0.0.0:5000 --data-dir /var/lib/tesseras
 ```
 
 Bootstrap from a specific node:
 
 ```bash
-tesd --bootstrap "192.168.1.50:4433"
+tes admin daemon start --bootstrap "192.168.1.50:4433"
 ```
 
 Join a local network of multiple nodes:
 
 ```bash
-tesd --bootstrap "192.168.1.10:4433,192.168.1.11:4433"
+tes admin daemon start --bootstrap "192.168.1.10:4433,192.168.1.11:4433"
 ```
 
 ## Node identity
@@ -77,16 +77,16 @@ The daemon uses structured logging via `tracing`. Control the log level with the
 
 ```bash
 # Default (info level)
-tesd
+tes admin daemon start
 
 # Debug logging
-RUST_LOG=debug tesd
+RUST_LOG=debug tes admin daemon start
 
 # Only show warnings and errors
-RUST_LOG=warn tesd
+RUST_LOG=warn tes admin daemon start
 
 # Debug for DHT, info for everything else
-RUST_LOG=info,tesseras_dht=debug tesd
+RUST_LOG=info,tesseras_dht=debug tes admin daemon start
 ```
 
 ## Shutting down

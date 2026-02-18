@@ -7,10 +7,10 @@ Tesseras provides a Docker image for running the daemon in containers. This is u
 From the repository root:
 
 ```bash
-docker build -t tesd .
+docker build -t tes .
 ```
 
-The multi-stage Dockerfile uses `rust:1.85` to compile and `debian:bookworm-slim` as the runtime base. The resulting image is small and contains only the daemon binary and CA certificates.
+The multi-stage Dockerfile uses `rust:1.85` to compile and `debian:bookworm-slim` as the runtime base. The resulting image is small and contains only the `tes` binary and CA certificates.
 
 ## Running a single node
 
@@ -18,7 +18,7 @@ The multi-stage Dockerfile uses `rust:1.85` to compile and `debian:bookworm-slim
 docker run -d \
   --name tesseras \
   -p 4433:4433/udp \
-  tesd
+  tes admin daemon start --foreground
 ```
 
 This starts a node that:
@@ -33,7 +33,7 @@ docker run -d \
   --name tesseras \
   -p 4433:4433/udp \
   -v tesseras-data:/root/.local/share/tesseras \
-  tesd
+  tes admin daemon start --foreground
 ```
 
 ## Running as a seed node
@@ -44,7 +44,7 @@ To run a seed node that doesn't bootstrap from anyone else:
 docker run -d \
   --name tesseras-seed \
   -p 4433:4433/udp \
-  tesd --listen 0.0.0.0:4433 --bootstrap ""
+  tes admin daemon start --foreground --listen 0.0.0.0:4433 --bootstrap ""
 ```
 
 ## Multi-node network with Docker Compose
@@ -55,17 +55,17 @@ The repository includes a Docker Compose file for testing a 3-node network:
 services:
   boot1:
     build: ../..
-    command: ["--listen", "0.0.0.0:4433", "--bootstrap", ""]
+    command: ["admin", "daemon", "start", "--foreground", "--listen", "0.0.0.0:4433", "--bootstrap", ""]
     ports: ["4433:4433/udp"]
 
   boot2:
     build: ../..
-    command: ["--listen", "0.0.0.0:4433", "--bootstrap", "boot1:4433"]
+    command: ["admin", "daemon", "start", "--foreground", "--listen", "0.0.0.0:4433", "--bootstrap", "boot1:4433"]
     depends_on: [boot1]
 
   client:
     build: ../..
-    command: ["--listen", "0.0.0.0:4433", "--bootstrap", "boot2:4433"]
+    command: ["admin", "daemon", "start", "--foreground", "--listen", "0.0.0.0:4433", "--bootstrap", "boot2:4433"]
     depends_on: [boot2]
 ```
 
@@ -100,7 +100,7 @@ docker run -d \
   -p 4433:4433/udp \
   -v ./config.toml:/etc/tesseras/config.toml:ro \
   -v tesseras-data:/root/.local/share/tesseras \
-  tesd --config /etc/tesseras/config.toml
+  tes admin daemon start --foreground --config /etc/tesseras/config.toml
 ```
 
 See the [Configuration](./configuration.md) chapter for all available options.

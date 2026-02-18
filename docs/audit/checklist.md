@@ -1,12 +1,12 @@
 # Pre-Release Security Checklist
 
-Complete before each tagged release of `tesseras-crypto`.
+Complete before each tagged release of the `tesseras` library (crypto module).
 
 ## Automated (CI covers these)
 
 - [ ] `cargo audit` — no known CVEs
 - [ ] `cargo deny check` — licenses, duplicates, bans all clean
-- [ ] All KATs pass (`cargo test -p tesseras-crypto --test kat_tests --all-features`)
+- [ ] All KATs pass (`cargo test -p tesseras --test kat_tests --all-features`)
 - [ ] All fuzz targets pass (`just audit-fuzz`)
 
 ## Manual (developer runs before tagging)
@@ -23,7 +23,7 @@ Complete before each tagged release of `tesseras-crypto`.
   - `Ed25519KeyPair` in `ed25519.rs` (SigningKey has internal ZeroizeOnDrop)
   - `HybridKeyPair` in `kem.rs`
   - `HeirShare` in `shamir/mod.rs`
-  - `KeyMaterial` in `tesseras-core/ports.rs`
+  - `KeyMaterial` in `tesseras/src/crypto.rs`
 - [ ] Error oracle review: crypto error variants don't leak timing or content info
   - `CryptoError::DecryptFailed` — generic, no details (correct)
   - `CryptoError::VerificationFailed` — generic, no details (correct)

@@ -1,11 +1,11 @@
 # Executando um No
 
-O binario `tesd` executa um no completo do Tesseras que participa da rede peer-to-peer. Ele escuta conexoes sobre QUIC, entra na tabela hash distribuida (DHT) e permite que outros nos descubram e encontrem ponteiros de tesseras.
+O binario `tes` inclui um daemon integrado que executa um no completo do Tesseras que participa da rede peer-to-peer. Ele escuta conexoes sobre QUIC, entra na tabela hash distribuida (DHT) e permite que outros nos descubram e encontrem ponteiros de tesseras.
 
 ## Iniciando o daemon
 
 ```bash
-tesd
+tes admin daemon start
 ```
 
 Na primeira execucao, o daemon:
@@ -19,7 +19,7 @@ Na primeira execucao, o daemon:
 ## Opcoes de linha de comando
 
 ```
-tesd [OPTIONS]
+tes admin daemon start [OPTIONS]
 ```
 
 | Opcao | Descricao | Padrao |
@@ -36,31 +36,31 @@ Opcoes CLI sobrescrevem valores do arquivo de configuracao.
 Executar com padroes (entrar na rede publica):
 
 ```bash
-tesd
+tes admin daemon start
 ```
 
 Executar como no semente (sem bootstrap, outros nos conectam a voce):
 
 ```bash
-tesd --bootstrap ""
+tes admin daemon start --bootstrap ""
 ```
 
 Executar em uma porta personalizada com um diretorio de dados especifico:
 
 ```bash
-tesd --listen 0.0.0.0:5000 --data-dir /var/lib/tesseras
+tes admin daemon start --listen 0.0.0.0:5000 --data-dir /var/lib/tesseras
 ```
 
 Fazer bootstrap a partir de um no especifico:
 
 ```bash
-tesd --bootstrap "192.168.1.50:4433"
+tes admin daemon start --bootstrap "192.168.1.50:4433"
 ```
 
 Entrar em uma rede local com multiplos nos:
 
 ```bash
-tesd --bootstrap "192.168.1.10:4433,192.168.1.11:4433"
+tes admin daemon start --bootstrap "192.168.1.10:4433,192.168.1.11:4433"
 ```
 
 ## Identidade do no
@@ -77,16 +77,16 @@ O daemon usa logging estruturado via `tracing`. Controle o nivel de log com a va
 
 ```bash
 # Padrao (nivel info)
-tesd
+tes admin daemon start
 
 # Logging de debug
-RUST_LOG=debug tesd
+RUST_LOG=debug tes admin daemon start
 
 # Mostrar apenas avisos e erros
-RUST_LOG=warn tesd
+RUST_LOG=warn tes admin daemon start
 
 # Debug para DHT, info para o resto
-RUST_LOG=info,tesseras_dht=debug tesd
+RUST_LOG=info,tesseras_dht=debug tes admin daemon start
 ```
 
 ## Desligamento
