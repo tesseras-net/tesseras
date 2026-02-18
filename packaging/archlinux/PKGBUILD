@@ -1,7 +1,7 @@
 # Maintainer: tesseras maintainers
 pkgname=tesseras
 pkgver=0.1.0
-pkgrel=2
+pkgrel=3
 pkgdesc="P2P network for preserving human memories across millennia"
 arch=('x86_64' 'aarch64')
 url="https://tesseras.net"

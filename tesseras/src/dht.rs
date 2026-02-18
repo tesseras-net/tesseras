@@ -139,6 +139,32 @@ impl DhtMessage {
     pub fn from_bytes(data: &[u8]) -> Result<Self, rmp_serde::decode::Error> {
         rmp_serde::from_slice(data)
     }
+
+    /// Extract the sender NodeId from any message variant.
+    pub fn sender(&self) -> NodeId {
+        match self {
+            Self::Ping { sender }
+            | Self::Pong { sender }
+            | Self::FindNode { sender, .. }
+            | Self::FindNodeResponse { sender, .. }
+            | Self::FindValue { sender, .. }
+            | Self::FindValueResponse { sender, .. }
+            | Self::Store { sender, .. }
+            | Self::StoreResponse { sender, .. }
+            | Self::Retract { sender, .. }
+            | Self::RetractResponse { sender, .. }
+            | Self::FetchBlob { sender, .. }
+            | Self::FetchBlobResponse { sender, .. }
+            | Self::FetchTessera { sender, .. }
+            | Self::FetchTesseraResponse { sender, .. }
+            | Self::RelayRequest { sender, .. }
+            | Self::RelayBiRequest { sender, .. }
+            | Self::RelayBiResponse { sender, .. } => *sender,
+            Self::RelayedMessage { origin, .. } => *origin,
+            Self::HolePunchRequest { sender, .. } => *sender,
+            Self::HolePunchNotify { peer_id, .. } => *peer_id,
+        }
+    }
 }
 
 /// Authenticated envelope wrapping a DhtMessage with sender's Ed25519 signature.
@@ -300,6 +326,11 @@ impl PointerStore {
     /// Remove all pointers for a content hash.
     pub fn retract(&mut self, key: &ContentHash) {
         self.store.remove(key);
+    }
+
+    /// Number of stored keys.
+    pub fn key_count(&self) -> usize {
+        self.store.len()
     }
 
     /// Remove a specific provider for a content hash.

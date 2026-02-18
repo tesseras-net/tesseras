@@ -285,6 +285,24 @@ async fn run_daemon_async(data_dir: &DataDir) -> Result<()> {
     let discovered = node.bootstrap().await?;
     eprintln!("Bootstrap: discovered {discovered} peers");
 
+    // Establish persistent connections to bootstrap peers for NAT relay
+    let persistent = node.establish_persistent_connections(5).await;
+    eprintln!("Persistent connections: {persistent}");
+
+    // Start keepalive BEFORE announce so relay peers register us in their pools.
+    // Send an immediate keepalive ping, then start the periodic loop.
+    node.keepalive_now().await;
+    node.start_keepalive_loop();
+
+    // Give relay peers a moment to process the Ping and register our connection
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+    // Re-announce all local tesseras so they're discoverable after restart
+    let announced = node.announce_all_tesseras().await.unwrap_or(0);
+    if announced > 0 {
+        eprintln!("Re-announced tesseras: {announced} store operations");
+    }
+
     // Start background maintenance tasks
     node.start_refresh_loop();
     node.start_repair_loop();

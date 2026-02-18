@@ -288,6 +288,59 @@ impl Node {
         Ok(seen.len())
     }
 
+    /// Establish persistent connections to peers in the routing table.
+    /// Called after bootstrap to enable relay and keepalive.
+    /// Connects to up to `max` peers and registers them in the connection pool.
+    pub async fn establish_persistent_connections(&self, max: usize) -> usize {
+        let transport = match self.transport.as_ref() {
+            Some(t) => t,
+            None => return 0,
+        };
+
+        let peers: Vec<PeerInfo> = {
+            let dht = self.dht.lock().unwrap();
+            dht.routing_table
+                .all_peers()
+                .into_iter()
+                .take(max)
+                .collect()
+        };
+
+        for peer in peers {
+            // Skip if already in pool
+            {
+                let pool = self.connections.lock().unwrap();
+                if pool.contains_key(&peer.node_id) {
+                    continue;
+                }
+            }
+
+            match transport.connect(peer.addr).await {
+                Ok(conn) => {
+                    self.register_connection(peer.node_id, conn);
+                }
+                Err(e) => {
+                    debug!("failed to establish persistent connection to {}: {e}", peer.addr);
+                }
+            }
+        }
+
+        let count = self.connections.lock().unwrap().len();
+        info!("persistent connections: {count} active");
+        count
+    }
+
+    /// Send an immediate keepalive ping to all persistent connections.
+    /// Used at startup to register ourselves in relay peers' connection pools
+    /// before announcing tesseras.
+    pub async fn keepalive_now(&self) {
+        let transport = match self.transport.as_ref() {
+            Some(t) => t,
+            None => return,
+        };
+        keepalive_connections(&self.connections, transport, self.identity.node_id()).await;
+    }
+
     /// Spawn a periodic keepalive task that pings all persistent connections
     /// to keep NAT mappings alive and evicts dead connections.
     pub fn start_keepalive_loop(&self) {
@@ -418,6 +471,30 @@ impl Node {
         Ok(stored)
     }
 
+    /// Re-announce all local tesseras to the DHT.
+    /// Should be called after bootstrap to ensure providers are discoverable.
+    pub async fn announce_all_tesseras(&self) -> Result<usize, NodeError> {
+        let hashes: Vec<ContentHash> = {
+            let storage = self.storage.lock().unwrap();
+            storage
+                .list_tesseras()
+                .map_err(|e| NodeError::Storage(e.to_string()))?
+                .iter()
+                .map(|t| t.hash)
+                .collect()
+        };
+
+        let mut total_stored = 0usize;
+        for hash in &hashes {
+            match self.announce_tessera(hash).await {
+                Ok(n) => total_stored += n,
+                Err(e) => debug!("failed to re-announce {hash}: {e}"),
+            }
+        }
+
+        Ok(total_stored)
+    }
+
     /// Look up providers for a content hash via DHT FindValue.
     pub async fn find_providers(&self, hash: &ContentHash) -> Result<Vec<PeerInfo>, NodeError> {
         {
@@ -438,7 +515,6 @@ impl Node {
             let dht = self.dht.lock().unwrap();
             dht.routing_table.find_closest(&target_id, K)
         };
-
         for peer in &closest {
             let msg = DhtMessage::FindValue {
                 sender: node_id,
@@ -466,7 +542,8 @@ impl Node {
                         dht.routing_table.insert(p);
                     }
                 }
-                _ => {}
+                Ok(_other) => {}
+                Err(_e) => {}
             }
         }
 
@@ -612,16 +689,22 @@ impl Node {
 
         match result {
             Ok(inner) => inner,
-            Err(_) => {
-                debug!("RPC to {addr} timed out");
-                Ok(None)
-            }
+            Err(_) => Ok(None),
         }
     }
 
     /// Check if a provider needs relay (its node_id doesn't match any peer at that address).
     /// This happens when a NAT'd node announces via a relay peer's address.
+    /// Check if a provider requires relay to reach.
+    /// Returns true if the provider's node_id differs from the peer known at that address,
+    /// indicating the provider is behind NAT and announced via a relay peer.
     fn needs_relay(&self, provider: &PeerInfo) -> bool {
+        // If the provider address is our own, we ARE the relay for this NAT'd node
+        if Some(provider.addr) == self.public_addr() || Some(provider.addr) == self.local_addr() {
+            // We're the relay — provider is behind NAT and connected to us
+            return provider.node_id != self.identity.node_id();
+        }
+
         let dht = self.dht.lock().unwrap();
         // Check if the routing table has a different node at this address
         let peer_at_addr = dht
@@ -633,6 +716,14 @@ impl Node {
             Some(p) => p.node_id != provider.node_id,
             None => false, // unknown address, try direct
         }
+    }
+
+    /// Check if we are the relay peer for this provider (provider.addr is our own address).
+    fn is_self_relay(&self, provider: &PeerInfo) -> bool {
+        let our_addr = self.public_addr();
+        let our_local = self.local_addr();
+        (Some(provider.addr) == our_addr || Some(provider.addr) == our_local)
+            && provider.node_id != self.identity.node_id()
     }
 
     /// Send an RPC to a NAT'd peer via relay using RelayBiRequest.
@@ -651,7 +742,8 @@ impl Node {
             payload,
         };
 
-        match self.send_rpc(transport, relay_addr, &msg).await? {
+        let relay_result = self.send_rpc(transport, relay_addr, &msg).await?;
+        match relay_result {
             Some(DhtMessage::RelayBiResponse {
                 payload: Some(data),
                 ..
@@ -660,14 +752,8 @@ impl Node {
                     .map_err(|e| NodeError::Serialization(e.to_string()))?;
                 Ok(Some(inner))
             }
-            Some(DhtMessage::RelayBiResponse { payload: None, .. }) => {
-                debug!("relay returned no response for target {target}");
-                Ok(None)
-            }
-            other => {
-                debug!("unexpected relay response: {other:?}");
-                Ok(None)
-            }
+            Some(DhtMessage::RelayBiResponse { payload: None, .. }) => Ok(None),
+            _other => Ok(None),
         }
     }
 
@@ -906,9 +992,35 @@ impl Node {
         let node_id = self.identity.node_id();
         let mut tessera: Option<Tessera> = None;
         let mut source_addr = None;
+        let mut source_conn: Option<quinn::Connection> = None;
         for provider in &providers {
-            if self.needs_relay(provider) {
-                // Provider is behind NAT — use relay
+            if self.is_self_relay(provider) {
+                // We ARE the relay peer — use our connection pool to reach the NAT'd provider
+                let inner = DhtMessage::FetchTessera {
+                    sender: node_id,
+                    hash: *hash,
+                };
+                let target_conn = {
+                    let pool = self.connections.lock().unwrap();
+                    pool.get(&provider.node_id).cloned()
+                };
+                if let Some(conn) = target_conn {
+                    if conn.close_reason().is_none() {
+                        match send_rpc_on_connection(&conn, &inner).await {
+                            Ok(Some(DhtMessage::FetchTesseraResponse {
+                                tessera: Some(t),
+                                ..
+                            })) => {
+                                tessera = Some(t);
+                                source_conn = Some(conn);
+                                break;
+                            }
+                            _ => continue,
+                        }
+                    }
+                }
+            } else if self.needs_relay(provider) {
+                // Provider is behind NAT — send relay request to a different relay peer
                 let inner = DhtMessage::FetchTessera {
                     sender: node_id,
                     hash: *hash,
@@ -968,7 +1080,55 @@ impl Node {
 
             // Try to fetch full blob from the source provider first
             let mut got_blob = false;
-            if let Some(addr) = source_addr {
+
+            // If we have a direct pool connection (self-relay case), use it
+            if let Some(ref conn) = source_conn {
+                let msg = DhtMessage::FetchBlob {
+                    sender: node_id,
+                    hash: memory.blob_hash,
+                };
+                let fetch_result: Result<Option<Vec<u8>>, NodeError> = async {
+                    let (mut send, mut recv) = conn
+                        .open_bi()
+                        .await
+                        .map_err(|e| NodeError::Network(e.to_string()))?;
+                    net::send_message(&mut send, &msg)
+                        .await
+                        .map_err(|e| NodeError::Network(e.to_string()))?;
+                    send.finish()
+                        .map_err(|e| NodeError::Network(e.to_string()))?;
+                    let response = net::receive_message(&mut recv)
+                        .await
+                        .map_err(|e| NodeError::Network(e.to_string()))?;
+                    if let DhtMessage::FetchBlobResponse {
+                        found: true, size, ..
+                    } = response
+                    {
+                        let data = net::receive_blob(&mut recv)
+                            .await
+                            .map_err(|e| NodeError::Network(e.to_string()))?;
+                        if data.len() as u64 != size {
+                            return Err(NodeError::Network("blob size mismatch".into()));
+                        }
+                        Ok(Some(data))
+                    } else {
+                        Ok(None)
+                    }
+                }
+                .await;
+                if let Ok(Some(data)) = fetch_result {
+                    let actual_hash = crate::crypto::hash_bytes(&data);
+                    if actual_hash == memory.blob_hash {
+                        if !self.check_storage_quota(data.len() as u64) {
+                            debug!("storage quota exceeded, skipping blob {}", memory.blob_hash);
+                            continue;
+                        }
+                        let storage = self.storage.lock().unwrap();
+                        let _ = storage.store_blob_bytes(&data);
+                        got_blob = true;
+                    }
+                }
+            } else if let Some(addr) = source_addr {
                 if let Ok(Some(data)) = self.fetch_blob(addr, &memory.blob_hash).await {
                     let actual_hash = crate::crypto::hash_bytes(&data);
                     if actual_hash == memory.blob_hash {
@@ -1283,7 +1443,6 @@ impl Node {
 
     /// Store a connection in the pool and spawn a handler for the reverse direction.
     /// Used for persistent connections (relay setup), not for one-shot RPCs.
-    #[allow(dead_code)]
     fn register_connection(&self, node_id: NodeId, conn: quinn::Connection) {
         {
             let mut pool = self.connections.lock().unwrap();
@@ -1326,12 +1485,21 @@ impl Node {
     /// Returns the address of the first live persistent connection peer.
     fn best_relay_addr(&self) -> Option<SocketAddr> {
         let pool = self.connections.lock().unwrap();
-        for conn in pool.values() {
+        let mut fallback = None;
+        // Prefer peers on standard port 4433 (likely dedicated/public nodes)
+        // over peers on random ports (likely behind NAT).
+        for (_id, conn) in pool.iter() {
             if conn.close_reason().is_none() {
-                return Some(conn.remote_address());
+                let addr = conn.remote_address();
+                if addr.port() == 4433 && !addr.ip().is_loopback() {
+                    return Some(addr);
+                }
+                if fallback.is_none() {
+                    fallback = Some(addr);
+                }
             }
         }
-        None
+        fallback
     }
 
     /// Check whether storing `additional` bytes of foreign data is within quota.
@@ -1367,8 +1535,9 @@ impl Node {
         self.dht.lock().unwrap().routing_table.len()
     }
 
-    /// Spawn a periodic repair loop that checks fragment availability
-    /// and re-replicates missing fragments by fetching from DHT peers.
+    /// Spawn a periodic repair loop that checks fragment availability,
+    /// re-replicates missing fragments, and re-announces local tesseras
+    /// to the DHT so providers remain discoverable after restarts.
     pub fn start_repair_loop(&self) {
         let transport = match self.transport.as_ref() {
             Some(t) => t.clone(),
@@ -1381,6 +1550,8 @@ impl Node {
         let parity_shards = self.config.parity_shards;
         let max_foreign = self.config.max_foreign_storage_bytes;
         let max_total = self.config.max_total_storage_bytes;
+        let external_addr = self.external_addr;
+        let connections = self.connections.clone();
         let mut shutdown_rx = self
             .shutdown_tx
             .as_ref()
@@ -1394,6 +1565,10 @@ impl Node {
             loop {
                 tokio::select! {
                     _ = interval.tick() => {
+                        reannounce_tesseras(
+                            &transport, &dht, &storage, node_id,
+                            external_addr, &connections,
+                        ).await;
                         repair_fragments(
                             &transport, &dht, &storage, node_id,
                             data_shards, parity_shards,
@@ -1449,6 +1624,14 @@ impl Node {
             }
         }
 
+        // Close all persistent connections in the pool
+        {
+            let mut pool = self.connections.lock().unwrap();
+            for (_, conn) in pool.drain() {
+                conn.close(0u32.into(), b"shutdown");
+            }
+        }
+
         if let Some(tx) = &self.shutdown_tx {
             let _ = tx.send(true);
         }
@@ -1486,6 +1669,28 @@ pub fn verify_signed_envelope(
     DhtMessage::from_bytes(&envelope.payload).map_err(|e| NodeError::Serialization(e.to_string()))
 }
 
+/// Send an RPC message on an existing connection and receive the response.
+/// Unlike send_rpc(), this uses an already-established connection.
+#[allow(dead_code)]
+async fn send_rpc_on_connection(
+    conn: &quinn::Connection,
+    msg: &DhtMessage,
+) -> Result<Option<DhtMessage>, NodeError> {
+    let (mut send, mut recv) = conn
+        .open_bi()
+        .await
+        .map_err(|e| NodeError::Network(e.to_string()))?;
+    net::send_message(&mut send, msg)
+        .await
+        .map_err(|e| NodeError::Network(e.to_string()))?;
+    send.finish()
+        .map_err(|e| NodeError::Network(e.to_string()))?;
+    let response = net::receive_message(&mut recv)
+        .await
+        .map_err(|e| NodeError::Network(e.to_string()))?;
+    Ok(Some(response))
+}
+
 /// Handle a single incoming QUIC connection.
 async fn handle_connection(
     conn: quinn::Connection,
@@ -1519,14 +1724,34 @@ async fn handle_connection(
         let storage = storage.clone();
         let transport = transport.clone();
         let connections = connections.clone();
+        let conn_for_pool = conn.clone();
 
         tokio::spawn(async move {
-            let msg = match net::receive_message(&mut recv).await {
+            let raw_msg = match net::receive_message(&mut recv).await {
                 Ok(m) => m,
                 Err(e) => {
                     debug!("receive error from {remote_addr}: {e}");
                     return;
                 }
+            };
+
+            // Unwrap RelayedMessage: deserialize inner payload and process as
+            // a regular message so FetchTessera, FetchBlob, etc. handlers fire.
+            let msg = if let DhtMessage::RelayedMessage {
+                origin: _,
+                relay: _,
+                payload,
+            } = &raw_msg
+            {
+                match DhtMessage::from_bytes(payload) {
+                    Ok(inner) => inner,
+                    Err(e) => {
+                        debug!("relayed message: failed to deserialize inner payload: {e}");
+                        return;
+                    }
+                }
+            } else {
+                raw_msg
             };
 
             // Handle RelayRequest — forward payload to the target peer
@@ -1804,6 +2029,16 @@ async fn handle_connection(
                 return;
             }
 
+            // Register persistent connection on Ping (from keepalive loop).
+            // This means only peers with active keepalive get into the pool,
+            // avoiding stale one-shot RPC connections.
+            if matches!(&msg, DhtMessage::Ping { .. }) {
+                let peer_id = msg.sender();
+                let mut pool = connections.lock().unwrap();
+                pool.entry(peer_id)
+                    .or_insert_with(|| conn_for_pool.clone());
+            }
+
             // All other messages go through normal DHT handling
             let response = {
                 let mut dht = dht.lock().unwrap();
@@ -1820,6 +2055,117 @@ async fn handle_connection(
     }
 
     Ok(())
+}
+
+/// Re-announce all local tesseras to the DHT so they remain discoverable.
+/// DHT pointer stores are in-memory, so announcements are lost when peers restart.
+async fn reannounce_tesseras(
+    transport: &QuicTransport,
+    dht: &Arc<Mutex<Dht>>,
+    storage: &Arc<Mutex<Storage>>,
+    node_id: NodeId,
+    external_addr: Option<SocketAddr>,
+    connections: &Arc<Mutex<HashMap<NodeId, quinn::Connection>>>,
+) {
+    let tesseras = {
+        let storage = storage.lock().unwrap();
+        match storage.list_tesseras() {
+            Ok(t) => t,
+            Err(e) => {
+                warn!("reannounce: failed to list tesseras: {e}");
+                return;
+            }
+        }
+    };
+
+    if tesseras.is_empty() {
+        return;
+    }
+
+    // Determine provider address (same logic as announce_tessera)
+    let local_addr = transport.local_addr().ok();
+    let is_nat = match (local_addr, external_addr) {
+        (Some(local), Some(ext)) => local.ip() != ext.ip(),
+        _ => false,
+    };
+
+    let relay_addr = if is_nat {
+        let pool = connections.lock().unwrap();
+        pool.values()
+            .find(|c| c.close_reason().is_none())
+            .map(|c| c.remote_address())
+    } else {
+        None
+    };
+
+    let addr = if is_nat {
+        match relay_addr.or(external_addr).or(local_addr) {
+            Some(a) => a,
+            None => {
+                warn!("reannounce: no reachable address");
+                return;
+            }
+        }
+    } else {
+        match external_addr.or(local_addr) {
+            Some(a) => a,
+            None => {
+                warn!("reannounce: no local address");
+                return;
+            }
+        }
+    };
+
+    let provider = PeerInfo { node_id, addr };
+    let mut announced = 0usize;
+
+    for tessera in &tesseras {
+        let target_id = NodeId::new(*tessera.hash.as_bytes());
+        let closest = {
+            let dht_guard = dht.lock().unwrap();
+            dht_guard.routing_table.find_closest(&target_id, K)
+        };
+
+        for peer in &closest {
+            let msg = DhtMessage::Store {
+                sender: node_id,
+                key: tessera.hash,
+                provider: provider.clone(),
+            };
+
+            let result = tokio::time::timeout(RPC_TIMEOUT, async {
+                let conn = transport
+                    .connect(peer.addr)
+                    .await
+                    .map_err(|e| NodeError::Network(e.to_string()))?;
+                let (mut send, mut recv) = conn
+                    .open_bi()
+                    .await
+                    .map_err(|e| NodeError::Network(e.to_string()))?;
+                net::send_message(&mut send, &msg)
+                    .await
+                    .map_err(|e| NodeError::Network(e.to_string()))?;
+                send.finish()
+                    .map_err(|e| NodeError::Network(e.to_string()))?;
+                let response = net::receive_message(&mut recv)
+                    .await
+                    .map_err(|e| NodeError::Network(e.to_string()))?;
+                Ok::<_, NodeError>(response)
+            })
+            .await;
+
+            if let Ok(Ok(DhtMessage::StoreResponse { success: true, .. })) = result {
+                announced += 1;
+            }
+        }
+    }
+
+    if announced > 0 {
+        info!(
+            "reannounced {} tesseras ({announced} store operations)",
+            tesseras.len()
+        );
+    }
 }
 
 /// Check and repair missing fragments by fetching from DHT peers.
@@ -2050,7 +2396,6 @@ async fn keepalive_connections(
             dead.push(*peer_id);
             continue;
         }
-
         // Send a keepalive ping
         let ping = DhtMessage::Ping { sender: node_id };
         let result = tokio::time::timeout(Duration::from_secs(5), async {

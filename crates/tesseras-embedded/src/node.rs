@@ -74,6 +74,9 @@ impl EmbeddedNode {
             node.start_refresh_loop();
             node.start_repair_loop();
             let _ = node.bootstrap().await;
+            node.establish_persistent_connections(5).await;
+            let _ = node.announce_all_tesseras().await;
+            node.start_keepalive_loop();
             Ok::<(), EmbeddedError>(())
         })?;
 
