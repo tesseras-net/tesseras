@@ -60,11 +60,11 @@ docker compose -f tests/e2e/docker-compose.yml exec -T alice \
 LS_AFTER=$(docker compose -f tests/e2e/docker-compose.yml exec -T alice \
     tes --identity=/data ls 2>&1)
 
-if echo "$LS_AFTER" | grep -q "No tesseras found"; then
-    echo "PASS: Tessera removed successfully"
-else
+if echo "$LS_AFTER" | grep -q "$HASH"; then
     echo "FAIL: Tessera still exists after rm"
     exit 1
+else
+    echo "PASS: Tessera removed successfully"
 fi
 
 echo "=== Basic test PASSED ==="

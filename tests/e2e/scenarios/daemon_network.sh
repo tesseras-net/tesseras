@@ -55,11 +55,11 @@ fi
 # Remove tessera
 $COMPOSE exec -T alice tes --identity=/data rm "$HASH" 2>/dev/null
 LS_AFTER=$($COMPOSE exec -T alice tes --identity=/data ls 2>&1)
-if echo "$LS_AFTER" | grep -q "No tesseras found"; then
-    echo "PASS: Tessera removed via daemon"
-else
+if echo "$LS_AFTER" | grep -q "$HASH"; then
     echo "FAIL: Tessera still exists after rm"
     exit 1
+else
+    echo "PASS: Tessera removed via daemon"
 fi
 
 # Stop the daemon
