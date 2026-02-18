@@ -143,7 +143,7 @@ impl Node {
 
         // Discover external address via STUN (non-blocking, best-effort)
         if !self.config.stun_servers.is_empty() {
-            if let Some(ext) = net::discover_external_addr(&self.config.stun_servers).await {
+            if let Some(ext) = net::discover_external_addr(&self.config.stun_servers, self.config.listen.port()).await {
                 info!("external address: {ext}");
                 self.external_addr = Some(ext);
             }
@@ -211,7 +211,7 @@ impl Node {
             .ok_or_else(|| NodeError::Network("transport not started".into()))?;
 
         let node_id = self.identity.node_id();
-        let mut discovered = 0usize;
+        let mut seen = std::collections::HashSet::new();
 
         // Collect all bootstrap addresses: DNS SRV + hardcoded
         let mut bootstrap_addrs: Vec<SocketAddr> = Vec::new();
@@ -251,11 +251,12 @@ impl Node {
                         node_id: sender,
                         addr,
                     });
+                    seen.insert(sender);
                     for peer in &closest {
                         dht.routing_table.insert(peer.clone());
+                        seen.insert(peer.node_id);
                     }
-                    discovered += closest.len() + 1;
-                    info!(
+                    debug!(
                         "bootstrapped from {addr}: learned {} peers",
                         closest.len() + 1
                     );
@@ -272,7 +273,10 @@ impl Node {
             }
         }
 
-        Ok(discovered)
+        if !seen.is_empty() {
+            info!("bootstrap: discovered {} unique peers", seen.len());
+        }
+        Ok(seen.len())
     }
 
     /// Spawn a periodic routing table refresh task.

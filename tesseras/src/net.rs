@@ -306,10 +306,11 @@ const STUN_ATTR_MAPPED_ADDRESS: u16 = 0x0001;
 
 /// Discover external address via STUN Binding Request.
 /// Tries each STUN server in order, returns the first successful result.
-pub async fn discover_external_addr(stun_servers: &[String]) -> Option<SocketAddr> {
+pub async fn discover_external_addr(stun_servers: &[String], listen_port: u16) -> Option<SocketAddr> {
     for server in stun_servers {
         match stun_binding_request(server).await {
-            Ok(addr) => {
+            Ok(mut addr) => {
+                addr.set_port(listen_port);
                 debug!("STUN discovered external address: {addr} (via {server})");
                 return Some(addr);
             }
