@@ -1,48 +1,17 @@
-resource "hcloud_ssh_key" "tesseras" {
-  name       = "tesseras-bootstrap"
-  public_key = var.ssh_public_key
-}
+# Bootstrap node addresses.
+# Servers are managed externally (not provisioned by OpenTofu).
 
-resource "hcloud_server" "boot1" {
-  name        = "tesseras-boot1"
-  server_type = "cx23"
-  image       = "debian-13"
-  location    = "fsn1"
-  ssh_keys    = [hcloud_ssh_key.tesseras.id]
-
-  labels = {
-    role    = "bootstrap"
-    project = "tesseras"
+locals {
+  bootstrap_nodes = {
+    boot1 = {
+      hostname = "bootstrap1"
+      ipv4     = "157.90.160.207"        # hetzner (Falkenstein, DE)
+      ipv6     = "2a01:4f8:1c1e:7c11::1"
+    }
+    boot2 = {
+      hostname = "bootstrap2"
+      ipv4     = "46.23.94.11"           # m0x (OpenBSD)
+      ipv6     = "2a03:6000:6f66:601::11"
+    }
   }
-
-  user_data = templatefile("${path.module}/scripts/provision.sh", {
-    node_name       = "boot1"
-    bootstrap_peers = ""
-    daemon_version  = var.daemon_version
-  })
-
-  lifecycle {
-    ignore_changes = [user_data]
-  }
-}
-
-resource "hcloud_server" "boot2" {
-  name        = "tesseras-boot2"
-  server_type = "cx23"
-  image       = "debian-13"
-  location    = "hel1"
-  ssh_keys    = [hcloud_ssh_key.tesseras.id]
-
-  labels = {
-    role    = "bootstrap"
-    project = "tesseras"
-  }
-
-  user_data = templatefile("${path.module}/scripts/provision.sh", {
-    node_name       = "boot2"
-    bootstrap_peers = "${hcloud_server.boot1.ipv4_address}:4433"
-    daemon_version  = var.daemon_version
-  })
-
-  depends_on = [hcloud_server.boot1]
 }
