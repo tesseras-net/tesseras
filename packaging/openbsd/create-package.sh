@@ -48,6 +48,8 @@ cat > "$STAGING/packing-list" <<PLIST
 @exec install -d -o root -g wheel -m 0755 /etc/tesseras
 @unexec-delete rcctl stop tesd 2>/dev/null || true
 @unexec-delete rcctl disable tesd 2>/dev/null || true
+@unexec-delete rm -f /var/lib/tesseras/daemon.pid /var/lib/tesseras/daemon.sock
+@unexec-delete rm -f /var/run/rc.d/tesd
 usr/local/bin/tes
 etc/tesseras/
 etc/tesseras/config.toml.dist

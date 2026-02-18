@@ -7,7 +7,7 @@ daemon_user="_tesseras"
 
 . /etc/rc.d/rc.subr
 
-pexp="/usr/local/bin/tes.*admin daemon"
+pexp="/usr/local/bin/tes.*admin daemon.*"
 rc_bg=YES
 rc_reload=NO
 

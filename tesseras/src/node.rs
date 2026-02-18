@@ -8,7 +8,7 @@ use tracing::{debug, info, warn};
 
 use crate::config::{DataDir, NodeConfig};
 use crate::crypto::{self, Identity};
-use crate::dht::{Dht, DhtMessage, PeerInfo};
+use crate::dht::{Dht, DhtMessage, InsertResult, PeerInfo};
 use crate::net::{self, QuicTransport};
 use crate::replication;
 use crate::storage::Storage;
@@ -122,7 +122,7 @@ impl Node {
         // Restore persisted peers into the routing table
         if let Ok(peers) = storage.load_peers() {
             for peer in peers {
-                dht.routing_table.insert(peer);
+                let _ = dht.routing_table.insert(peer);
             }
         }
 
@@ -265,13 +265,13 @@ impl Node {
             match self.send_rpc(transport, addr, &msg).await {
                 Ok(Some(DhtMessage::FindNodeResponse { sender, closest })) => {
                     let mut dht = self.dht.lock().unwrap();
-                    dht.routing_table.insert(PeerInfo {
+                    let _ = dht.routing_table.insert(PeerInfo {
                         node_id: sender,
                         addr,
                     });
                     seen.insert(sender);
                     for peer in &closest {
-                        dht.routing_table.insert(peer.clone());
+                        let _ = dht.routing_table.insert(peer.clone());
                         seen.insert(peer.node_id);
                     }
                     debug!(
@@ -407,6 +407,7 @@ impl Node {
                 tokio::select! {
                     _ = interval.tick() => {
                         refresh_routing_table(&transport, &dht, node_id).await;
+                        evict_dead_routing_peers(&transport, &dht, node_id).await;
                     }
                     _ = shutdown_rx.changed() => {
                         info!("refresh loop shutting down");
@@ -543,12 +544,12 @@ impl Node {
                     ..
                 })) => {
                     let mut dht = self.dht.lock().unwrap();
-                    dht.routing_table.insert(PeerInfo {
+                    let _ = dht.routing_table.insert(PeerInfo {
                         node_id: sender,
                         addr: peer.addr,
                     });
                     for p in new_closest {
-                        dht.routing_table.insert(p);
+                        let _ = dht.routing_table.insert(p);
                     }
                 }
                 Ok(_other) => {}
@@ -1834,7 +1835,7 @@ async fn handle_connection(
             {
                 {
                     let mut dht = dht.lock().unwrap();
-                    dht.routing_table.insert(PeerInfo {
+                    let _ = dht.routing_table.insert(PeerInfo {
                         node_id: *sender,
                         addr: remote_addr,
                     });
@@ -1879,7 +1880,7 @@ async fn handle_connection(
             {
                 {
                     let mut dht = dht.lock().unwrap();
-                    dht.routing_table.insert(PeerInfo {
+                    let _ = dht.routing_table.insert(PeerInfo {
                         node_id: *sender,
                         addr: remote_addr,
                     });
@@ -1963,7 +1964,7 @@ async fn handle_connection(
             {
                 {
                     let mut dht = dht.lock().unwrap();
-                    dht.routing_table.insert(PeerInfo {
+                    let _ = dht.routing_table.insert(PeerInfo {
                         node_id: *sender,
                         addr: remote_addr,
                     });
@@ -2034,7 +2035,7 @@ async fn handle_connection(
             if let DhtMessage::FetchTessera { sender, hash } = &msg {
                 {
                     let mut dht = dht.lock().unwrap();
-                    dht.routing_table.insert(PeerInfo {
+                    let _ = dht.routing_table.insert(PeerInfo {
                         node_id: *sender,
                         addr: remote_addr,
                     });
@@ -2061,7 +2062,7 @@ async fn handle_connection(
                 // Update routing table
                 {
                     let mut dht = dht.lock().unwrap();
-                    dht.routing_table.insert(PeerInfo {
+                    let _ = dht.routing_table.insert(PeerInfo {
                         node_id: *sender,
                         addr: remote_addr,
                     });
@@ -2548,13 +2549,34 @@ async fn refresh_routing_table(transport: &QuicTransport, dht: &Arc<Mutex<Dht>>,
 
         match result {
             Ok(Ok(DhtMessage::FindNodeResponse { sender, closest })) => {
-                let mut dht = dht.lock().unwrap();
-                dht.routing_table.insert(PeerInfo {
-                    node_id: sender,
-                    addr: peer.addr,
-                });
-                for p in closest {
-                    dht.routing_table.insert(p);
+                // Insert the responder and learned peers, handling full buckets
+                let mut pending_evictions: Vec<(PeerInfo, PeerInfo)> = Vec::new();
+                {
+                    let mut dht_guard = dht.lock().unwrap();
+                    let _ = dht_guard.routing_table.insert(PeerInfo {
+                        node_id: sender,
+                        addr: peer.addr,
+                    });
+                    for p in closest {
+                        match dht_guard.routing_table.insert(p.clone()) {
+                            InsertResult::Inserted => {}
+                            InsertResult::BucketFull { incumbent } => {
+                                pending_evictions.push((incumbent, p));
+                            }
+                        }
+                    }
+                }
+                // Handle evictions outside the lock (async ping)
+                for (incumbent, new_peer) in pending_evictions {
+                    if ping_peer(transport, node_id, &incumbent).await {
+                        let mut dht_guard = dht.lock().unwrap();
+                        dht_guard.routing_table.touch_incumbent(&incumbent.node_id);
+                    } else {
+                        let mut dht_guard = dht.lock().unwrap();
+                        dht_guard
+                            .routing_table
+                            .evict_and_insert(&incumbent.node_id, new_peer);
+                    }
                 }
                 debug!("refresh: learned peers from {}", peer.addr);
             }
@@ -2566,6 +2588,64 @@ async fn refresh_routing_table(transport: &QuicTransport, dht: &Arc<Mutex<Dht>>,
                 debug!("refresh RPC to {} timed out", peer.addr);
             }
         }
+    }
+}
+
+/// Ping a peer and return true if it responds with Pong.
+async fn ping_peer(transport: &QuicTransport, node_id: NodeId, peer: &PeerInfo) -> bool {
+    let ping = DhtMessage::Ping { sender: node_id };
+    let result = tokio::time::timeout(RPC_TIMEOUT, async {
+        let conn = transport.connect(peer.addr).await?;
+        let (mut send, mut recv) = conn
+            .open_bi()
+            .await
+            .map_err(|e| net::NetError::Connection(e.to_string()))?;
+        net::send_message(&mut send, &ping).await?;
+        send.finish()
+            .map_err(|e| net::NetError::Write(e.to_string()))?;
+        net::receive_message(&mut recv).await
+    })
+    .await;
+    matches!(result, Ok(Ok(DhtMessage::Pong { .. })))
+}
+
+/// Ping every peer in the routing table and evict those that don't respond.
+/// Follows Kademlia: prefer incumbents (long-lived peers are more reliable).
+async fn evict_dead_routing_peers(
+    transport: &QuicTransport,
+    dht: &Arc<Mutex<Dht>>,
+    node_id: NodeId,
+) {
+    let all_peers: Vec<PeerInfo> = {
+        let dht = dht.lock().unwrap();
+        dht.routing_table.all_peers()
+    };
+
+    if all_peers.is_empty() {
+        return;
+    }
+
+    let mut dead: Vec<NodeId> = Vec::new();
+
+    for peer in &all_peers {
+        if ping_peer(transport, node_id, peer).await {
+            let mut dht = dht.lock().unwrap();
+            dht.routing_table.touch_incumbent(&peer.node_id);
+        } else {
+            debug!("eviction: {} at {} is dead", peer.node_id, peer.addr);
+            dead.push(peer.node_id);
+        }
+    }
+
+    if !dead.is_empty() {
+        let mut dht = dht.lock().unwrap();
+        for id in &dead {
+            dht.routing_table.remove(id);
+        }
+        info!(
+            "eviction: removed {} dead peers from routing table",
+            dead.len()
+        );
     }
 }
 

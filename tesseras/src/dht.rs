@@ -185,6 +185,16 @@ pub struct SignedEnvelope {
     pub signature: Vec<u8>,
 }
 
+/// Result of attempting to insert a peer into a k-bucket.
+#[derive(Debug)]
+pub enum InsertResult {
+    /// Peer was inserted (new) or updated (existing, moved to tail).
+    Inserted,
+    /// Bucket is full. Caller should ping the incumbent (head of bucket)
+    /// and call `evict_and_insert()` if it's dead, or ignore the new peer.
+    BucketFull { incumbent: PeerInfo },
+}
+
 /// A single k-bucket in the routing table.
 #[derive(Debug, Clone, Default)]
 struct KBucket {
@@ -192,15 +202,37 @@ struct KBucket {
 }
 
 impl KBucket {
-    fn insert(&mut self, peer: PeerInfo) {
+    fn insert(&mut self, peer: PeerInfo) -> InsertResult {
         // If already present, move to tail (most recently seen)
         if let Some(pos) = self.peers.iter().position(|p| p.node_id == peer.node_id) {
             self.peers.remove(pos);
             self.peers.push(peer);
+            InsertResult::Inserted
         } else if self.peers.len() < K {
             self.peers.push(peer);
+            InsertResult::Inserted
+        } else {
+            InsertResult::BucketFull {
+                incumbent: self.peers[0].clone(), // head = least recently seen
+            }
         }
-        // If full, ignore (in real Kademlia, would ping head and evict if unresponsive)
+    }
+
+    /// Evict the least-recently-seen peer and insert a new one.
+    /// Called after pinging the incumbent and finding it dead.
+    fn evict_and_insert(&mut self, dead_id: &NodeId, new_peer: PeerInfo) {
+        self.peers.retain(|p| &p.node_id != dead_id);
+        if self.peers.len() < K {
+            self.peers.push(new_peer);
+        }
+    }
+
+    /// Move a peer to tail (it responded to ping, it's alive).
+    fn touch_incumbent(&mut self, node_id: &NodeId) {
+        if let Some(pos) = self.peers.iter().position(|p| &p.node_id == node_id) {
+            let peer = self.peers.remove(pos);
+            self.peers.push(peer);
+        }
     }
 
     fn remove(&mut self, node_id: &NodeId) {
@@ -241,12 +273,24 @@ impl RoutingTable {
     }
 
     /// Insert or update a peer in the routing table.
-    pub fn insert(&mut self, peer: PeerInfo) {
+    pub fn insert(&mut self, peer: PeerInfo) -> InsertResult {
         if peer.node_id == self.local_id {
-            return; // Don't insert ourselves
+            return InsertResult::Inserted; // no-op
         }
         let idx = self.bucket_index(&peer.node_id);
-        self.buckets[idx].insert(peer);
+        self.buckets[idx].insert(peer)
+    }
+
+    /// Evict a dead peer and insert a new one in its bucket.
+    pub fn evict_and_insert(&mut self, dead_id: &NodeId, new_peer: PeerInfo) {
+        let idx = self.bucket_index(dead_id);
+        self.buckets[idx].evict_and_insert(dead_id, new_peer);
+    }
+
+    /// Move a peer to tail of its bucket (mark as most recently seen).
+    pub fn touch_incumbent(&mut self, node_id: &NodeId) {
+        let idx = self.bucket_index(node_id);
+        self.buckets[idx].touch_incumbent(node_id);
     }
 
     /// Remove a peer from the routing table.
@@ -370,7 +414,7 @@ impl Dht {
     pub fn handle_message(&mut self, msg: DhtMessage, from_addr: SocketAddr) -> Option<DhtMessage> {
         match msg {
             DhtMessage::Ping { sender } => {
-                self.routing_table.insert(PeerInfo {
+                let _ = self.routing_table.insert(PeerInfo {
                     node_id: sender,
                     addr: from_addr,
                 });
@@ -379,14 +423,14 @@ impl Dht {
                 })
             }
             DhtMessage::Pong { sender } => {
-                self.routing_table.insert(PeerInfo {
+                let _ = self.routing_table.insert(PeerInfo {
                     node_id: sender,
                     addr: from_addr,
                 });
                 None
             }
             DhtMessage::FindNode { sender, target } => {
-                self.routing_table.insert(PeerInfo {
+                let _ = self.routing_table.insert(PeerInfo {
                     node_id: sender,
                     addr: from_addr,
                 });
@@ -397,17 +441,17 @@ impl Dht {
                 })
             }
             DhtMessage::FindNodeResponse { sender, closest } => {
-                self.routing_table.insert(PeerInfo {
+                let _ = self.routing_table.insert(PeerInfo {
                     node_id: sender,
                     addr: from_addr,
                 });
                 for peer in closest {
-                    self.routing_table.insert(peer);
+                    let _ = self.routing_table.insert(peer);
                 }
                 None
             }
             DhtMessage::FindValue { sender, key } => {
-                self.routing_table.insert(PeerInfo {
+                let _ = self.routing_table.insert(PeerInfo {
                     node_id: sender,
                     addr: from_addr,
                 });
@@ -430,13 +474,13 @@ impl Dht {
             DhtMessage::FindValueResponse {
                 sender, closest, ..
             } => {
-                self.routing_table.insert(PeerInfo {
+                let _ = self.routing_table.insert(PeerInfo {
                     node_id: sender,
                     addr: from_addr,
                 });
                 if let Some(peers) = closest {
                     for peer in peers {
-                        self.routing_table.insert(peer);
+                        let _ = self.routing_table.insert(peer);
                     }
                 }
                 None
@@ -446,7 +490,7 @@ impl Dht {
                 key,
                 provider,
             } => {
-                self.routing_table.insert(PeerInfo {
+                let _ = self.routing_table.insert(PeerInfo {
                     node_id: sender,
                     addr: from_addr,
                 });
@@ -457,14 +501,14 @@ impl Dht {
                 })
             }
             DhtMessage::StoreResponse { sender, .. } => {
-                self.routing_table.insert(PeerInfo {
+                let _ = self.routing_table.insert(PeerInfo {
                     node_id: sender,
                     addr: from_addr,
                 });
                 None
             }
             DhtMessage::Retract { sender, key } => {
-                self.routing_table.insert(PeerInfo {
+                let _ = self.routing_table.insert(PeerInfo {
                     node_id: sender,
                     addr: from_addr,
                 });
@@ -475,7 +519,7 @@ impl Dht {
                 })
             }
             DhtMessage::RetractResponse { sender, .. } => {
-                self.routing_table.insert(PeerInfo {
+                let _ = self.routing_table.insert(PeerInfo {
                     node_id: sender,
                     addr: from_addr,
                 });
@@ -490,7 +534,7 @@ impl Dht {
             | DhtMessage::RelayBiRequest { sender, .. }
             | DhtMessage::RelayBiResponse { sender, .. }
             | DhtMessage::RelayedMessage { origin: sender, .. } => {
-                self.routing_table.insert(PeerInfo {
+                let _ = self.routing_table.insert(PeerInfo {
                     node_id: sender,
                     addr: from_addr,
                 });
@@ -500,7 +544,7 @@ impl Dht {
             DhtMessage::HolePunchRequest { sender, .. }
             | DhtMessage::HolePunchResponse { sender, .. }
             | DhtMessage::HolePunchNotify { peer_id: sender, .. } => {
-                self.routing_table.insert(PeerInfo {
+                let _ = self.routing_table.insert(PeerInfo {
                     node_id: sender,
                     addr: from_addr,
                 });
@@ -606,6 +650,79 @@ mod tests {
         });
 
         assert_eq!(rt.len(), 2);
+    }
+
+    #[test]
+    fn kbucket_full_returns_incumbent() {
+        let local = make_node_id(0x00);
+        let mut rt = RoutingTable::new(local);
+
+        // Fill a bucket with K peers (all in the same bucket — high bit differs)
+        for i in 1..=K as u8 {
+            let mut bytes = [0u8; 32];
+            bytes[0] = 0x80; // same bucket (highest bit set)
+            bytes[31] = i; // unique peers
+            let result = rt.insert(PeerInfo {
+                node_id: NodeId::new(bytes),
+                addr: make_addr(3000 + i as u16),
+            });
+            assert!(matches!(result, InsertResult::Inserted));
+        }
+
+        // Next insert in the same bucket should return BucketFull
+        let mut bytes = [0u8; 32];
+        bytes[0] = 0x80;
+        bytes[31] = 0xFF;
+        let result = rt.insert(PeerInfo {
+            node_id: NodeId::new(bytes),
+            addr: make_addr(4000),
+        });
+        assert!(matches!(result, InsertResult::BucketFull { .. }));
+
+        // The incumbent should be the first peer inserted (head)
+        if let InsertResult::BucketFull { incumbent } = result {
+            let mut expected = [0u8; 32];
+            expected[0] = 0x80;
+            expected[31] = 1;
+            assert_eq!(incumbent.node_id, NodeId::new(expected));
+        }
+    }
+
+    #[test]
+    fn evict_and_insert_replaces_dead_peer() {
+        let local = make_node_id(0x00);
+        let mut rt = RoutingTable::new(local);
+
+        // Fill a bucket
+        for i in 1..=K as u8 {
+            let mut bytes = [0u8; 32];
+            bytes[0] = 0x80;
+            bytes[31] = i;
+            rt.insert(PeerInfo {
+                node_id: NodeId::new(bytes),
+                addr: make_addr(3000 + i as u16),
+            });
+        }
+
+        // Evict first peer and insert new one
+        let mut dead_bytes = [0u8; 32];
+        dead_bytes[0] = 0x80;
+        dead_bytes[31] = 1;
+        let dead_id = NodeId::new(dead_bytes);
+
+        let mut new_bytes = [0u8; 32];
+        new_bytes[0] = 0x80;
+        new_bytes[31] = 0xFF;
+        let new_peer = PeerInfo {
+            node_id: NodeId::new(new_bytes),
+            addr: make_addr(4000),
+        };
+
+        rt.evict_and_insert(&dead_id, new_peer);
+
+        assert!(!rt.contains(&dead_id));
+        assert!(rt.contains(&NodeId::new(new_bytes)));
+        assert_eq!(rt.len(), K);
     }
 
     #[test]
