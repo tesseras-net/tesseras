@@ -26,6 +26,12 @@ const REPAIR_INTERVAL: Duration = Duration::from_secs(300);
 /// Timeout for a single DHT RPC round-trip.
 const RPC_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// Minimum interval between hole punch attempts to the same peer.
+const HOLE_PUNCH_RETRY_INTERVAL: Duration = Duration::from_secs(300);
+
+/// Timeout for a single hole punch attempt.
+const HOLE_PUNCH_TIMEOUT: Duration = Duration::from_secs(3);
+
 /// Maximum messages per IP per window (Sybil protection).
 const RATE_LIMIT_MAX: u32 = 100;
 
@@ -98,6 +104,8 @@ pub struct Node {
     external_addr: Option<SocketAddr>,
     /// Persistent connections keyed by NodeId.
     connections: ConnectionPool,
+    /// Cache of failed hole punch attempts: NodeId -> last failure time.
+    hole_punch_failures: Arc<Mutex<HashMap<NodeId, Instant>>>,
 }
 
 impl Node {
@@ -129,6 +137,7 @@ impl Node {
             shutdown_tx: None,
             external_addr: None,
             connections: Arc::new(Mutex::new(HashMap::new())),
+            hole_punch_failures: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -758,14 +767,36 @@ impl Node {
     }
 
     /// Attempt to establish a direct connection to a NAT'd peer via hole punching.
-    /// Sends a HolePunchRequest to the relay peer, which notifies the target.
-    /// Both sides then try to connect to each other simultaneously.
-    /// Falls back to relay if hole punching fails.
+    /// Sends a HolePunchRequest to the relay peer, which notifies the target
+    /// and returns the target's external address. Both sides then simultaneously
+    /// call `net::hole_punch()` to establish a direct QUIC connection.
+    /// Returns `Ok(true)` if a direct connection was established, `Ok(false)` if not.
     pub async fn attempt_hole_punch(
         &self,
         relay_addr: SocketAddr,
         target: NodeId,
     ) -> Result<bool, NodeError> {
+        // Check failure cache — skip if we failed recently
+        {
+            let cache = self.hole_punch_failures.lock().unwrap();
+            if let Some(last_failure) = cache.get(&target) {
+                if last_failure.elapsed() < HOLE_PUNCH_RETRY_INTERVAL {
+                    debug!("hole punch: skipping {target}, failed recently");
+                    return Ok(false);
+                }
+            }
+        }
+
+        // Check if we already have a live connection
+        {
+            let pool = self.connections.lock().unwrap();
+            if let Some(conn) = pool.get(&target) {
+                if conn.close_reason().is_none() {
+                    return Ok(true);
+                }
+            }
+        }
+
         let transport = self
             .transport
             .as_ref()
@@ -776,30 +807,37 @@ impl Node {
             .public_addr()
             .ok_or_else(|| NodeError::Network("no public address".into()))?;
 
-        // Send hole punch request to relay
+        // Send HolePunchRequest to relay and get HolePunchResponse with target's address
         let msg = DhtMessage::HolePunchRequest {
             sender: node_id,
             target,
             sender_addr,
         };
-        let _ = self.send_rpc(transport, relay_addr, &msg).await;
 
-        // Now attempt to connect to the target's external address
-        // The relay has told the target our address, so both sides are punching
-        // We need to get the target's external address - it should be in the routing table
-        // or we need to get it from the relay response. For now, this is initiated
-        // by the HolePunchNotify handler on the target side.
-        // We just wait briefly for the target to punch back to us.
-        tokio::time::sleep(Duration::from_millis(500)).await;
+        let target_addr = match self.send_rpc(transport, relay_addr, &msg).await {
+            Ok(Some(DhtMessage::HolePunchResponse { target_addr, .. })) => target_addr,
+            _ => {
+                debug!("hole punch: no response from relay for {target}");
+                let mut cache = self.hole_punch_failures.lock().unwrap();
+                cache.insert(target, Instant::now());
+                return Ok(false);
+            }
+        };
 
-        // Check if we got a connection from the target
-        let pool = self.connections.lock().unwrap();
-        if pool.contains_key(&target) {
-            info!("hole punch: direct connection established to {target}");
-            Ok(true)
-        } else {
-            debug!("hole punch: no direct connection to {target}, using relay");
-            Ok(false)
+        // Both sides punch simultaneously — the relay already sent HolePunchNotify to target
+        debug!("hole punch: punching toward {target} at {target_addr}");
+        match net::hole_punch(transport.endpoint(), target_addr, HOLE_PUNCH_TIMEOUT).await {
+            Ok(conn) => {
+                info!("hole punch: established direct connection to {target}");
+                self.register_connection(target, conn);
+                Ok(true)
+            }
+            Err(e) => {
+                debug!("hole punch: failed to reach {target} at {target_addr}: {e}");
+                let mut cache = self.hole_punch_failures.lock().unwrap();
+                cache.insert(target, Instant::now());
+                Ok(false)
+            }
         }
     }
 
@@ -1020,20 +1058,47 @@ impl Node {
                     }
                 }
             } else if self.needs_relay(provider) {
-                // Provider is behind NAT — send relay request to a different relay peer
+                // Try hole punch to establish direct connection first
+                let relay_addr = provider.addr;
+                if self.attempt_hole_punch(relay_addr, provider.node_id).await.unwrap_or(false) {
+                    // Hole punch succeeded — use pool connection directly
+                    let pool_conn = {
+                        let pool = self.connections.lock().unwrap();
+                        pool.get(&provider.node_id).cloned()
+                    };
+                    if let Some(conn) = pool_conn {
+                        if conn.close_reason().is_none() {
+                            let inner = DhtMessage::FetchTessera {
+                                sender: node_id,
+                                hash: *hash,
+                            };
+                            if let Ok(Some(DhtMessage::FetchTesseraResponse {
+                                tessera: Some(t),
+                                ..
+                            })) = send_rpc_on_connection(&conn, &inner).await
+                            {
+                                tessera = Some(t);
+                                source_conn = Some(conn);
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // Fall back to relay
                 let inner = DhtMessage::FetchTessera {
                     sender: node_id,
                     hash: *hash,
                 };
                 match self
-                    .send_rpc_via_relay(transport, provider.addr, provider.node_id, &inner)
+                    .send_rpc_via_relay(transport, relay_addr, provider.node_id, &inner)
                     .await
                 {
                     Ok(Some(DhtMessage::FetchTesseraResponse {
                         tessera: Some(t), ..
                     })) => {
                         tessera = Some(t);
-                        source_addr = Some(provider.addr);
+                        source_addr = Some(relay_addr);
                         break;
                     }
                     _ => continue,
@@ -1552,6 +1617,7 @@ impl Node {
         let max_total = self.config.max_total_storage_bytes;
         let external_addr = self.external_addr;
         let connections = self.connections.clone();
+        let hole_punch_failures = self.hole_punch_failures.clone();
         let mut shutdown_rx = self
             .shutdown_tx
             .as_ref()
@@ -1565,6 +1631,11 @@ impl Node {
             loop {
                 tokio::select! {
                     _ = interval.tick() => {
+                        // Prune expired hole punch failure entries
+                        {
+                            let mut cache = hole_punch_failures.lock().unwrap();
+                            cache.retain(|_, t| t.elapsed() < HOLE_PUNCH_RETRY_INTERVAL);
+                        }
                         reannounce_tesseras(
                             &transport, &dht, &storage, node_id,
                             external_addr, &connections,
@@ -1910,11 +1981,18 @@ async fn handle_connection(
                             peer_id: *sender,
                             peer_addr: *sender_addr,
                         };
-                        // Best-effort: tell target to start punching
+                        // Tell target to start punching
                         if let Ok((mut fwd_send, _)) = target_conn.open_bi().await {
                             let _ = net::send_message(&mut fwd_send, &notify).await;
                             let _ = fwd_send.finish();
                         }
+
+                        // Send target's external address back to the initiator
+                        let response = DhtMessage::HolePunchResponse {
+                            sender: local_node_id,
+                            target_addr: target_conn.remote_address(),
+                        };
+                        let _ = net::send_message(&mut send, &response).await;
                     }
                 } else {
                     debug!("hole punch: target {target} not in connection pool");

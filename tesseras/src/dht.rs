@@ -127,6 +127,11 @@ pub enum DhtMessage {
         peer_id: NodeId,
         peer_addr: SocketAddr,
     },
+    /// Relay sends target's external address back to the initiator.
+    HolePunchResponse {
+        sender: NodeId,
+        target_addr: SocketAddr,
+    },
 }
 
 impl DhtMessage {
@@ -161,7 +166,8 @@ impl DhtMessage {
             | Self::RelayBiRequest { sender, .. }
             | Self::RelayBiResponse { sender, .. } => *sender,
             Self::RelayedMessage { origin, .. } => *origin,
-            Self::HolePunchRequest { sender, .. } => *sender,
+            Self::HolePunchRequest { sender, .. }
+            | Self::HolePunchResponse { sender, .. } => *sender,
             Self::HolePunchNotify { peer_id, .. } => *peer_id,
         }
     }
@@ -492,6 +498,7 @@ impl Dht {
             }
             // Hole punch messages are handled at the connection level.
             DhtMessage::HolePunchRequest { sender, .. }
+            | DhtMessage::HolePunchResponse { sender, .. }
             | DhtMessage::HolePunchNotify { peer_id: sender, .. } => {
                 self.routing_table.insert(PeerInfo {
                     node_id: sender,
