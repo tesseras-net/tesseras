@@ -82,6 +82,10 @@ impl RateLimiter {
     }
 }
 
+/// Persistent connection pool: maps NodeId to an active QUIC connection.
+/// Connections from both directions (outbound and inbound) are stored here.
+type ConnectionPool = Arc<Mutex<HashMap<NodeId, quinn::Connection>>>;
+
 /// The Node orchestrator: ties storage, DHT, QUIC, and replication together.
 pub struct Node {
     pub storage: Arc<Mutex<Storage>>,
@@ -92,6 +96,8 @@ pub struct Node {
     shutdown_tx: Option<watch::Sender<bool>>,
     /// External (public) address as discovered via STUN.
     external_addr: Option<SocketAddr>,
+    /// Persistent connections keyed by NodeId.
+    connections: ConnectionPool,
 }
 
 impl Node {
@@ -122,6 +128,7 @@ impl Node {
             transport: None,
             shutdown_tx: None,
             external_addr: None,
+            connections: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
@@ -155,6 +162,7 @@ impl Node {
         let accept_transport = transport.clone();
         let node_id = self.identity.node_id();
         let rate_limiter = RateLimiter::new();
+        let connections = self.connections.clone();
         let mut rx = shutdown_rx.clone();
         tokio::spawn(async move {
             let mut cleanup_interval = tokio::time::interval(RATE_LIMIT_WINDOW * 2);
@@ -174,8 +182,9 @@ impl Node {
                                 let storage = storage.clone();
                                 let relay_transport = accept_transport.clone();
                                 let rl = rate_limiter.clone();
+                                let conns = connections.clone();
                                 tokio::spawn(async move {
-                                    if let Err(e) = handle_connection(conn, dht, storage, node_id, relay_transport, rl).await {
+                                    if let Err(e) = handle_connection(conn, dht, storage, node_id, relay_transport, rl, conns).await {
                                         debug!("connection handler error: {e}");
                                     }
                                 });
@@ -279,6 +288,41 @@ impl Node {
         Ok(seen.len())
     }
 
+    /// Spawn a periodic keepalive task that pings all persistent connections
+    /// to keep NAT mappings alive and evicts dead connections.
+    pub fn start_keepalive_loop(&self) {
+        let transport = match self.transport.as_ref() {
+            Some(t) => t.clone(),
+            None => return,
+        };
+        let connections = self.connections.clone();
+        let node_id = self.identity.node_id();
+        let interval_secs = self.config.keepalive_interval;
+        let mut shutdown_rx = self
+            .shutdown_tx
+            .as_ref()
+            .expect("start() must be called first")
+            .subscribe();
+
+        tokio::spawn(async move {
+            let mut interval =
+                tokio::time::interval(Duration::from_secs(interval_secs));
+            interval.tick().await; // skip immediate first tick
+
+            loop {
+                tokio::select! {
+                    _ = interval.tick() => {
+                        keepalive_connections(&connections, &transport, node_id).await;
+                    }
+                    _ = shutdown_rx.changed() => {
+                        info!("keepalive loop shutting down");
+                        break;
+                    }
+                }
+            }
+        });
+    }
+
     /// Spawn a periodic routing table refresh task.
     pub fn start_refresh_loop(&self) {
         let transport = match self.transport.as_ref() {
@@ -313,6 +357,8 @@ impl Node {
 
     /// Announce a tessera to the DHT by publishing Store messages to the
     /// K closest nodes to the tessera's content hash.
+    /// When behind NAT, announces via a relay peer's address so others can
+    /// use RelayBiRequest to reach us through that peer.
     pub async fn announce_tessera(&self, hash: &ContentHash) -> Result<usize, NodeError> {
         let transport = self
             .transport
@@ -320,9 +366,17 @@ impl Node {
             .ok_or_else(|| NodeError::Network("transport not started".into()))?;
 
         let node_id = self.identity.node_id();
-        let addr = self
-            .public_addr()
-            .ok_or_else(|| NodeError::Network("no local address".into()))?;
+
+        // When behind NAT, use a relay peer's address so others know to relay through it.
+        // The provider.node_id being different from the node at provider.addr signals relay needed.
+        let addr = if self.is_behind_nat() {
+            self.best_relay_addr()
+                .or_else(|| self.public_addr())
+                .ok_or_else(|| NodeError::Network("no reachable address".into()))?
+        } else {
+            self.public_addr()
+                .ok_or_else(|| NodeError::Network("no local address".into()))?
+        };
 
         let target_id = NodeId::new(*hash.as_bytes());
         let closest = {
@@ -437,10 +491,29 @@ impl Node {
         };
 
         let result = tokio::time::timeout(RPC_TIMEOUT, async {
-            let conn = transport
-                .connect(addr)
-                .await
-                .map_err(|e| NodeError::Network(e.to_string()))?;
+            // Check pool for existing persistent connection
+            let pooled_conn = {
+                let dht = self.dht.lock().unwrap();
+                let peer = dht
+                    .routing_table
+                    .all_peers()
+                    .into_iter()
+                    .find(|p| p.addr == addr);
+                peer.and_then(|p| {
+                    let pool = self.connections.lock().unwrap();
+                    pool.get(&p.node_id)
+                        .filter(|c| c.close_reason().is_none())
+                        .cloned()
+                })
+            };
+            let conn = if let Some(conn) = pooled_conn {
+                conn
+            } else {
+                transport
+                    .connect(addr)
+                    .await
+                    .map_err(|e| NodeError::Network(e.to_string()))?
+            };
 
             let (mut send, mut recv) = conn
                 .open_bi()
@@ -484,6 +557,8 @@ impl Node {
     }
 
     /// Send a DHT RPC to a peer and wait for a response.
+    /// Uses the connection pool when a NodeId is known (via peer info in routing table),
+    /// otherwise falls back to a fresh connection by address.
     async fn send_rpc(
         &self,
         transport: &QuicTransport,
@@ -491,10 +566,30 @@ impl Node {
         msg: &DhtMessage,
     ) -> Result<Option<DhtMessage>, NodeError> {
         let result = tokio::time::timeout(RPC_TIMEOUT, async {
-            let conn = transport
-                .connect(addr)
-                .await
-                .map_err(|e| NodeError::Network(e.to_string()))?;
+            // Check connection pool for an existing persistent connection to this peer
+            let pooled_conn = {
+                let dht = self.dht.lock().unwrap();
+                let peer = dht
+                    .routing_table
+                    .all_peers()
+                    .into_iter()
+                    .find(|p| p.addr == addr);
+                peer.and_then(|p| {
+                    let pool = self.connections.lock().unwrap();
+                    pool.get(&p.node_id)
+                        .filter(|c| c.close_reason().is_none())
+                        .cloned()
+                })
+            };
+
+            let conn = if let Some(conn) = pooled_conn {
+                conn
+            } else {
+                transport
+                    .connect(addr)
+                    .await
+                    .map_err(|e| NodeError::Network(e.to_string()))?
+            };
 
             let (mut send, mut recv) = conn
                 .open_bi()
@@ -521,6 +616,104 @@ impl Node {
                 debug!("RPC to {addr} timed out");
                 Ok(None)
             }
+        }
+    }
+
+    /// Check if a provider needs relay (its node_id doesn't match any peer at that address).
+    /// This happens when a NAT'd node announces via a relay peer's address.
+    fn needs_relay(&self, provider: &PeerInfo) -> bool {
+        let dht = self.dht.lock().unwrap();
+        // Check if the routing table has a different node at this address
+        let peer_at_addr = dht
+            .routing_table
+            .all_peers()
+            .into_iter()
+            .find(|p| p.addr == provider.addr);
+        match peer_at_addr {
+            Some(p) => p.node_id != provider.node_id,
+            None => false, // unknown address, try direct
+        }
+    }
+
+    /// Send an RPC to a NAT'd peer via relay using RelayBiRequest.
+    async fn send_rpc_via_relay(
+        &self,
+        transport: &QuicTransport,
+        relay_addr: SocketAddr,
+        target: NodeId,
+        inner_msg: &DhtMessage,
+    ) -> Result<Option<DhtMessage>, NodeError> {
+        let node_id = self.identity.node_id();
+        let payload = inner_msg.to_bytes();
+        let msg = DhtMessage::RelayBiRequest {
+            sender: node_id,
+            target,
+            payload,
+        };
+
+        match self.send_rpc(transport, relay_addr, &msg).await? {
+            Some(DhtMessage::RelayBiResponse {
+                payload: Some(data),
+                ..
+            }) => {
+                let inner = DhtMessage::from_bytes(&data)
+                    .map_err(|e| NodeError::Serialization(e.to_string()))?;
+                Ok(Some(inner))
+            }
+            Some(DhtMessage::RelayBiResponse { payload: None, .. }) => {
+                debug!("relay returned no response for target {target}");
+                Ok(None)
+            }
+            other => {
+                debug!("unexpected relay response: {other:?}");
+                Ok(None)
+            }
+        }
+    }
+
+    /// Attempt to establish a direct connection to a NAT'd peer via hole punching.
+    /// Sends a HolePunchRequest to the relay peer, which notifies the target.
+    /// Both sides then try to connect to each other simultaneously.
+    /// Falls back to relay if hole punching fails.
+    pub async fn attempt_hole_punch(
+        &self,
+        relay_addr: SocketAddr,
+        target: NodeId,
+    ) -> Result<bool, NodeError> {
+        let transport = self
+            .transport
+            .as_ref()
+            .ok_or_else(|| NodeError::Network("transport not started".into()))?;
+
+        let node_id = self.identity.node_id();
+        let sender_addr = self
+            .public_addr()
+            .ok_or_else(|| NodeError::Network("no public address".into()))?;
+
+        // Send hole punch request to relay
+        let msg = DhtMessage::HolePunchRequest {
+            sender: node_id,
+            target,
+            sender_addr,
+        };
+        let _ = self.send_rpc(transport, relay_addr, &msg).await;
+
+        // Now attempt to connect to the target's external address
+        // The relay has told the target our address, so both sides are punching
+        // We need to get the target's external address - it should be in the routing table
+        // or we need to get it from the relay response. For now, this is initiated
+        // by the HolePunchNotify handler on the target side.
+        // We just wait briefly for the target to punch back to us.
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        // Check if we got a connection from the target
+        let pool = self.connections.lock().unwrap();
+        if pool.contains_key(&target) {
+            info!("hole punch: direct connection established to {target}");
+            Ok(true)
+        } else {
+            debug!("hole punch: no direct connection to {target}, using relay");
+            Ok(false)
         }
     }
 
@@ -623,13 +816,18 @@ impl Node {
             .ok_or_else(|| NodeError::Network("transport not started".into()))?;
 
         let node_id = self.identity.node_id();
-        let local_addr = self
-            .local_addr()
-            .ok_or_else(|| NodeError::Network("no local address".into()))?;
+        let addr = if self.is_behind_nat() {
+            self.best_relay_addr()
+                .or_else(|| self.public_addr())
+                .ok_or_else(|| NodeError::Network("no reachable address".into()))?
+        } else {
+            self.public_addr()
+                .ok_or_else(|| NodeError::Network("no local address".into()))?
+        };
 
         let provider = PeerInfo {
             node_id,
-            addr: local_addr,
+            addr,
         };
 
         let mut total_announced = 0usize;
@@ -705,22 +903,44 @@ impl Node {
         }
 
         // 3. Try to fetch tessera metadata from each provider
+        let node_id = self.identity.node_id();
         let mut tessera: Option<Tessera> = None;
         let mut source_addr = None;
         for provider in &providers {
-            match self
-                .fetch_tessera_metadata(transport, provider.addr, hash)
-                .await
-            {
-                Ok(Some(t)) => {
-                    tessera = Some(t);
-                    source_addr = Some(provider.addr);
-                    break;
+            if self.needs_relay(provider) {
+                // Provider is behind NAT — use relay
+                let inner = DhtMessage::FetchTessera {
+                    sender: node_id,
+                    hash: *hash,
+                };
+                match self
+                    .send_rpc_via_relay(transport, provider.addr, provider.node_id, &inner)
+                    .await
+                {
+                    Ok(Some(DhtMessage::FetchTesseraResponse {
+                        tessera: Some(t), ..
+                    })) => {
+                        tessera = Some(t);
+                        source_addr = Some(provider.addr);
+                        break;
+                    }
+                    _ => continue,
                 }
-                Ok(None) => continue,
-                Err(e) => {
-                    debug!("fetch tessera metadata from {} failed: {e}", provider.addr);
-                    continue;
+            } else {
+                match self
+                    .fetch_tessera_metadata(transport, provider.addr, hash)
+                    .await
+                {
+                    Ok(Some(t)) => {
+                        tessera = Some(t);
+                        source_addr = Some(provider.addr);
+                        break;
+                    }
+                    Ok(None) => continue,
+                    Err(e) => {
+                        debug!("fetch tessera metadata from {} failed: {e}", provider.addr);
+                        continue;
+                    }
                 }
             }
         }
@@ -801,10 +1021,29 @@ impl Node {
         };
 
         let result = tokio::time::timeout(RPC_TIMEOUT, async {
-            let conn = transport
-                .connect(addr)
-                .await
-                .map_err(|e| NodeError::Network(e.to_string()))?;
+            // Check pool for existing persistent connection
+            let pooled_conn = {
+                let dht = self.dht.lock().unwrap();
+                let peer = dht
+                    .routing_table
+                    .all_peers()
+                    .into_iter()
+                    .find(|p| p.addr == addr);
+                peer.and_then(|p| {
+                    let pool = self.connections.lock().unwrap();
+                    pool.get(&p.node_id)
+                        .filter(|c| c.close_reason().is_none())
+                        .cloned()
+                })
+            };
+            let conn = if let Some(conn) = pooled_conn {
+                conn
+            } else {
+                transport
+                    .connect(addr)
+                    .await
+                    .map_err(|e| NodeError::Network(e.to_string()))?
+            };
             let (mut send, mut recv) = conn
                 .open_bi()
                 .await
@@ -1002,6 +1241,99 @@ impl Node {
         self.external_addr.or_else(|| self.local_addr())
     }
 
+    /// Check if this node appears to be behind NAT.
+    /// Compares local listen address with STUN-discovered external address.
+    pub fn is_behind_nat(&self) -> bool {
+        match (self.local_addr(), self.external_addr) {
+            (Some(local), Some(ext)) => local.ip() != ext.ip(),
+            _ => false,
+        }
+    }
+
+    /// Get or create a persistent connection to a peer.
+    /// Checks the connection pool first, falls back to transport.connect().
+    /// Used for establishing relay connections, not for one-shot RPCs.
+    #[allow(dead_code)]
+    async fn get_connection(
+        &self,
+        transport: &QuicTransport,
+        peer: &PeerInfo,
+    ) -> Result<quinn::Connection, NodeError> {
+        // Check pool first
+        {
+            let pool = self.connections.lock().unwrap();
+            if let Some(conn) = pool.get(&peer.node_id) {
+                // quinn::Connection reports closed via close_reason()
+                if conn.close_reason().is_none() {
+                    return Ok(conn.clone());
+                }
+            }
+        }
+
+        // Not in pool or dead — connect fresh
+        let conn = transport
+            .connect(peer.addr)
+            .await
+            .map_err(|e| NodeError::Network(e.to_string()))?;
+
+        // Register in pool and spawn bidirectional handler
+        self.register_connection(peer.node_id, conn.clone());
+        Ok(conn)
+    }
+
+    /// Store a connection in the pool and spawn a handler for the reverse direction.
+    /// Used for persistent connections (relay setup), not for one-shot RPCs.
+    #[allow(dead_code)]
+    fn register_connection(&self, node_id: NodeId, conn: quinn::Connection) {
+        {
+            let mut pool = self.connections.lock().unwrap();
+            // Evict old dead connection if any
+            if let Some(old) = pool.get(&node_id) {
+                if old.close_reason().is_some() {
+                    pool.remove(&node_id);
+                }
+            }
+            pool.insert(node_id, conn.clone());
+        }
+
+        // Spawn handler so the remote side can open streams back to us
+        let dht = self.dht.clone();
+        let storage = self.storage.clone();
+        let local_node_id = self.identity.node_id();
+        let transport = self.transport.clone();
+        let connections = self.connections.clone();
+
+        if let Some(transport) = transport {
+            tokio::spawn(async move {
+                if let Err(e) = handle_connection(
+                    conn,
+                    dht,
+                    storage,
+                    local_node_id,
+                    transport,
+                    RateLimiter::new(),
+                    connections,
+                )
+                .await
+                {
+                    debug!("outbound connection handler error for {node_id}: {e}");
+                }
+            });
+        }
+    }
+
+    /// Get the address of a connected peer to use as relay.
+    /// Returns the address of the first live persistent connection peer.
+    fn best_relay_addr(&self) -> Option<SocketAddr> {
+        let pool = self.connections.lock().unwrap();
+        for conn in pool.values() {
+            if conn.close_reason().is_none() {
+                return Some(conn.remote_address());
+            }
+        }
+        None
+    }
+
     /// Check whether storing `additional` bytes of foreign data is within quota.
     /// Returns true if allowed (quota not exceeded or quota is unlimited).
     pub fn check_storage_quota(&self, additional: u64) -> bool {
@@ -1162,6 +1494,7 @@ async fn handle_connection(
     local_node_id: NodeId,
     transport: Arc<QuicTransport>,
     rate_limiter: RateLimiter,
+    connections: ConnectionPool,
 ) -> Result<(), NodeError> {
     let remote_addr = conn.remote_address();
 
@@ -1185,6 +1518,7 @@ async fn handle_connection(
         let dht = dht.clone();
         let storage = storage.clone();
         let transport = transport.clone();
+        let connections = connections.clone();
 
         tokio::spawn(async move {
             let msg = match net::receive_message(&mut recv).await {
@@ -1236,6 +1570,159 @@ async fn handle_connection(
                 } else {
                     debug!("relay: target {target} not found in routing table");
                 }
+                let _ = send.finish();
+                return;
+            }
+
+            // Handle RelayBiRequest — bidirectional relay via connection pool
+            if let DhtMessage::RelayBiRequest {
+                sender,
+                target,
+                payload,
+            } = &msg
+            {
+                {
+                    let mut dht = dht.lock().unwrap();
+                    dht.routing_table.insert(PeerInfo {
+                        node_id: *sender,
+                        addr: remote_addr,
+                    });
+                }
+
+                // Find target in connection pool (not routing table)
+                let target_conn = {
+                    let pool = connections.lock().unwrap();
+                    pool.get(target).cloned()
+                };
+
+                if let Some(target_conn) = target_conn {
+                    if target_conn.close_reason().is_none() {
+                        // Forward payload to target via persistent connection
+                        let relayed = DhtMessage::RelayedMessage {
+                            origin: *sender,
+                            relay: local_node_id,
+                            payload: payload.clone(),
+                        };
+                        let relay_result = async {
+                            let (mut fwd_send, mut fwd_recv) = target_conn
+                                .open_bi()
+                                .await
+                                .map_err(|e| NodeError::Network(e.to_string()))?;
+                            net::send_message(&mut fwd_send, &relayed)
+                                .await
+                                .map_err(|e| NodeError::Network(e.to_string()))?;
+                            fwd_send
+                                .finish()
+                                .map_err(|e| NodeError::Network(e.to_string()))?;
+                            // Wait for target's response
+                            let response = net::receive_message(&mut fwd_recv)
+                                .await
+                                .map_err(|e| NodeError::Network(e.to_string()))?;
+                            Ok::<_, NodeError>(response)
+                        }
+                        .await;
+
+                        match relay_result {
+                            Ok(response) => {
+                                let resp = DhtMessage::RelayBiResponse {
+                                    sender: local_node_id,
+                                    payload: Some(response.to_bytes()),
+                                };
+                                let _ = net::send_message(&mut send, &resp).await;
+                            }
+                            Err(e) => {
+                                debug!("relay bi: forward to {target} failed: {e}");
+                                let resp = DhtMessage::RelayBiResponse {
+                                    sender: local_node_id,
+                                    payload: None,
+                                };
+                                let _ = net::send_message(&mut send, &resp).await;
+                            }
+                        }
+                    } else {
+                        let resp = DhtMessage::RelayBiResponse {
+                            sender: local_node_id,
+                            payload: None,
+                        };
+                        let _ = net::send_message(&mut send, &resp).await;
+                    }
+                } else {
+                    debug!("relay bi: target {target} not in connection pool");
+                    let resp = DhtMessage::RelayBiResponse {
+                        sender: local_node_id,
+                        payload: None,
+                    };
+                    let _ = net::send_message(&mut send, &resp).await;
+                }
+                let _ = send.finish();
+                return;
+            }
+
+            // Handle HolePunchRequest — coordinate hole punch between two NAT'd peers
+            if let DhtMessage::HolePunchRequest {
+                sender,
+                target,
+                sender_addr,
+            } = &msg
+            {
+                {
+                    let mut dht = dht.lock().unwrap();
+                    dht.routing_table.insert(PeerInfo {
+                        node_id: *sender,
+                        addr: remote_addr,
+                    });
+                }
+
+                // Find target in connection pool
+                let target_conn = {
+                    let pool = connections.lock().unwrap();
+                    pool.get(target).cloned()
+                };
+
+                if let Some(target_conn) = target_conn {
+                    if target_conn.close_reason().is_none() {
+                        let notify = DhtMessage::HolePunchNotify {
+                            peer_id: *sender,
+                            peer_addr: *sender_addr,
+                        };
+                        // Best-effort: tell target to start punching
+                        if let Ok((mut fwd_send, _)) = target_conn.open_bi().await {
+                            let _ = net::send_message(&mut fwd_send, &notify).await;
+                            let _ = fwd_send.finish();
+                        }
+                    }
+                } else {
+                    debug!("hole punch: target {target} not in connection pool");
+                }
+                let _ = send.finish();
+                return;
+            }
+
+            // Handle HolePunchNotify — attempt to connect to the specified peer
+            if let DhtMessage::HolePunchNotify { peer_id, peer_addr } = &msg {
+                let peer_id = *peer_id;
+                let peer_addr = *peer_addr;
+                let transport = transport.clone();
+                let connections = connections.clone();
+                debug!("hole punch: received notify, punching toward {peer_id} at {peer_addr}");
+                tokio::spawn(async move {
+                    match net::hole_punch(
+                        transport.endpoint(),
+                        peer_addr,
+                        Duration::from_secs(3),
+                    )
+                    .await
+                    {
+                        Ok(conn) => {
+                            info!("hole punch: established direct connection to {peer_id}");
+                            let mut pool = connections.lock().unwrap();
+                            pool.insert(peer_id, conn);
+                        }
+                        Err(e) => {
+                            debug!("hole punch: failed to reach {peer_id} at {peer_addr}: {e}");
+                        }
+                    }
+                });
                 let _ = send.finish();
                 return;
             }
@@ -1541,6 +2028,66 @@ async fn repair_fragments(
         "repair: recovered {recovered}/{} missing fragments",
         missing.len()
     );
+}
+
+/// Ping all persistent connections to keep NAT mappings alive.
+/// Evict connections that are dead.
+async fn keepalive_connections(
+    connections: &ConnectionPool,
+    _transport: &QuicTransport,
+    node_id: NodeId,
+) {
+    let peers: Vec<(NodeId, quinn::Connection)> = {
+        let pool = connections.lock().unwrap();
+        pool.iter()
+            .map(|(id, conn)| (*id, conn.clone()))
+            .collect()
+    };
+
+    let mut dead = Vec::new();
+    for (peer_id, conn) in &peers {
+        if conn.close_reason().is_some() {
+            dead.push(*peer_id);
+            continue;
+        }
+
+        // Send a keepalive ping
+        let ping = DhtMessage::Ping { sender: node_id };
+        let result = tokio::time::timeout(Duration::from_secs(5), async {
+            let (mut send, mut recv) = conn
+                .open_bi()
+                .await
+                .map_err(|e| NodeError::Network(e.to_string()))?;
+            net::send_message(&mut send, &ping)
+                .await
+                .map_err(|e| NodeError::Network(e.to_string()))?;
+            send.finish()
+                .map_err(|e| NodeError::Network(e.to_string()))?;
+            let _resp = net::receive_message(&mut recv)
+                .await
+                .map_err(|e| NodeError::Network(e.to_string()))?;
+            Ok::<_, NodeError>(())
+        })
+        .await;
+
+        match result {
+            Ok(Ok(())) => {
+                debug!("keepalive: {peer_id} alive");
+            }
+            _ => {
+                debug!("keepalive: {peer_id} dead, evicting");
+                dead.push(*peer_id);
+            }
+        }
+    }
+
+    if !dead.is_empty() {
+        let mut pool = connections.lock().unwrap();
+        for id in &dead {
+            pool.remove(id);
+        }
+        debug!("keepalive: evicted {} dead connections", dead.len());
+    }
 }
 
 /// Refresh the routing table by doing FindNode for a random ID.

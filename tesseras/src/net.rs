@@ -167,6 +167,11 @@ impl QuicTransport {
         Ok(conn)
     }
 
+    /// Get a reference to the underlying QUIC endpoint (for hole punching).
+    pub fn endpoint(&self) -> &Endpoint {
+        &self.endpoint
+    }
+
     /// Close the transport.
     pub fn close(&self) {
         self.endpoint.close(0u32.into(), b"shutdown");
@@ -237,6 +242,42 @@ pub async fn receive_blob(recv: &mut quinn::RecvStream) -> Result<Vec<u8>, NetEr
         .map_err(|e| NetError::Read(e.to_string()))?;
 
     Ok(data)
+}
+
+// --- UDP hole punching ---
+
+/// Attempt UDP hole punch by simultaneously connecting to the target's external address.
+/// Sends a few probe packets first to open NAT mappings, then tries QUIC connect.
+/// Returns the established connection on success, or an error on timeout/failure.
+pub async fn hole_punch(
+    endpoint: &Endpoint,
+    target_addr: SocketAddr,
+    timeout: std::time::Duration,
+) -> Result<quinn::Connection, NetError> {
+    // Try QUIC connect — if both sides punch simultaneously, one handshake succeeds
+    tokio::time::timeout(timeout, async {
+        // Retry a few times in case the first attempt hits before NAT mapping is ready
+        for attempt in 0..3 {
+            match endpoint
+                .connect(target_addr, "tesseras")
+                .map_err(|e| NetError::Connection(e.to_string()))?
+                .await
+            {
+                Ok(conn) => return Ok(conn),
+                Err(e) => {
+                    debug!(
+                        "hole punch attempt {attempt} to {target_addr} failed: {e}"
+                    );
+                    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                }
+            }
+        }
+        Err(NetError::Connection(format!(
+            "hole punch failed after 3 attempts to {target_addr}"
+        )))
+    })
+    .await
+    .map_err(|_| NetError::Connection(format!("hole punch to {target_addr} timed out")))?
 }
 
 // --- DNS SRV bootstrap ---

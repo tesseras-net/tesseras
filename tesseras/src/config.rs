@@ -38,6 +38,10 @@ pub struct NodeConfig {
     /// Maximum total storage bytes including own data (0 = unlimited).
     #[serde(default)]
     pub max_total_storage_bytes: u64,
+
+    /// Keepalive interval for persistent connections in seconds (default: 30).
+    #[serde(default = "default_keepalive_interval")]
+    pub keepalive_interval: u64,
 }
 
 fn default_listen() -> SocketAddr {
@@ -54,6 +58,10 @@ fn default_parity_shards() -> usize {
 
 fn default_bootstrap_dns() -> Option<String> {
     Some("tesseras.net".into())
+}
+
+fn default_keepalive_interval() -> u64 {
+    30
 }
 
 fn default_stun_servers() -> Vec<String> {
@@ -74,6 +82,7 @@ impl Default for NodeConfig {
             stun_servers: default_stun_servers(),
             max_foreign_storage_bytes: 0,
             max_total_storage_bytes: 0,
+            keepalive_interval: default_keepalive_interval(),
         }
     }
 }

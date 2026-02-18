@@ -100,6 +100,33 @@ pub enum DhtMessage {
         /// The inner message, serialized as MessagePack bytes.
         payload: Vec<u8>,
     },
+    /// Request to relay a full bidirectional RPC to a peer via persistent connection.
+    RelayBiRequest {
+        sender: NodeId,
+        target: NodeId,
+        /// The inner request message, serialized as MessagePack.
+        payload: Vec<u8>,
+    },
+    /// Response from a relayed bidirectional RPC.
+    RelayBiResponse {
+        sender: NodeId,
+        /// The inner response message from the target, serialized as MessagePack.
+        /// None if the target was not reachable via the relay's connection pool.
+        payload: Option<Vec<u8>>,
+    },
+    /// Request a relay to coordinate hole punch between two NAT'd peers.
+    HolePunchRequest {
+        sender: NodeId,
+        target: NodeId,
+        /// Sender's external address (from STUN).
+        sender_addr: SocketAddr,
+    },
+    /// Relay tells target to start punching toward sender.
+    HolePunchNotify {
+        /// The peer to punch toward.
+        peer_id: NodeId,
+        peer_addr: SocketAddr,
+    },
 }
 
 impl DhtMessage {
@@ -423,7 +450,18 @@ impl Dht {
             | DhtMessage::FetchTessera { sender, .. }
             | DhtMessage::FetchTesseraResponse { sender, .. }
             | DhtMessage::RelayRequest { sender, .. }
+            | DhtMessage::RelayBiRequest { sender, .. }
+            | DhtMessage::RelayBiResponse { sender, .. }
             | DhtMessage::RelayedMessage { origin: sender, .. } => {
+                self.routing_table.insert(PeerInfo {
+                    node_id: sender,
+                    addr: from_addr,
+                });
+                None
+            }
+            // Hole punch messages are handled at the connection level.
+            DhtMessage::HolePunchRequest { sender, .. }
+            | DhtMessage::HolePunchNotify { peer_id: sender, .. } => {
                 self.routing_table.insert(PeerInfo {
                     node_id: sender,
                     addr: from_addr,
